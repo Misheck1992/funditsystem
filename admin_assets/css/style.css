@@ -1,0 +1,14 @@
+element.style {
+    border: thin #0268bc solid;
+    padding: 1em;
+    background-color: #0268bc;
+    color: white;
+}
+
+.dashboard-stat.green {
+    background-color: #0268bc;
+}
+
+hr.dash {
+    border: 1px solid #0268bc;
+}
