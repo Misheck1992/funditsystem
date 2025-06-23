@@ -49,13 +49,13 @@
                         }
                         ?>
                     </select> Date from:
-                    <input type="date" name="from"> Date to: <input type="date" name="to"> <input type="submit" value="filter" name="search"><input type="submit" value="export excel" name="search"><input type="submit" name="search" value="export pdf">
+                    <input type="date" name="from"> Date to: <input type="date" name="to"> <input type="submit" value="filter" name="search">
                 </form>
             </div>
             <br>
             <hr>
             <div class="double-scroll">
-            <table  id="data-table" class="tableCss">
+            <table  id="data-table1" class="tableCss">
                 <thead>
                 <tr>
 
@@ -115,7 +115,7 @@
 
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
-                        <td><a href="<?php echo base_url('loan/view/'). urlencode($loan->loan_id);?>">View  </a> <a href="<?php echo base_url('loan/client_summary/'). urlencode($loan->loan_id);?>">Client summary  </a> </td>
+                        <td><a href="<?php echo base_url('loan/view/'). urlencode($loan->loan_id);?>">View Loan Summary| </a> <a href="<?php echo base_url('loan/client_summary/'). urlencode($loan->loan_id);?>">Client summary  </a> </td>
                        
 
                     </tr>

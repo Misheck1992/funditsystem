@@ -53,7 +53,7 @@ if($make_count->tt==0){
  <li class="nav-item dropdown '.$is_active.' " style="'.$remove .'">
  <a class="dropdown-toggle " href="javascript:void(0);">
   <span class="icon-holder">
-                                    <i class="fa '.$row->icon.'"></i>
+                                    <i class="'.$row->icon.'"></i>
                                 </span>
 
 						<span class="title" >  ' . $row->label .'</span>

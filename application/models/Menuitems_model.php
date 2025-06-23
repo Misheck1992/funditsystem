@@ -31,6 +31,7 @@ class Menuitems_model extends CI_Model
     function get_menu($id)
     {
         $this->db->where('mid', $id);
+        $this->db->where('active', 1);
         return $this->db->get($this->table)->result();
     }
 

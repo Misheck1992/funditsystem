@@ -66,7 +66,7 @@ public function change_password(){
 			$this->change_password();
 		} else {
 			$data = array(
-				'Password' => md5($this->input->post('new_pass'))
+				'Password' => sha1($this->input->post('new_pass'))
 			);
 			$this->User_access_model->update($this->session->userdata('user_id'), $data);
 //			$data2 = array(

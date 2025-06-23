@@ -44,14 +44,15 @@
                         }
                         ?>
                     </select> Date from:
-                    <input type="date" name="from"> Date to: <input type="date" name="to"> <input type="submit" value="filter" name="search"><input type="submit" value="export excel" name="search"><input type="submit" name="search" value="export pdf">
+                    <input type="date" name="from"> Date to: <input type="date" name="to">
+					<input type="submit" value="filter" name="search">
                 </form>
             </div>
             <br>
             <hr>
             <div style="overflow-y: auto"">
           
-			<table  id="data-table" class="tableCss">
+			<table  id="data-table1" class="tableCss">
 				<thead>
 				<tr>
 
@@ -127,28 +128,8 @@
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
 						<td width="250">
-							<?php
 
-							if($mandate_fees==true && $pays== false) {
-							echo "<font color='red'>processing fees not paid</font>";
-
-							?>
-								<a href="#" onclick="pay_charge('<?php echo $loan->loan_id?>','<?php echo $loan->loan_number?>','<?php echo $loan->loan_product ?>')">Pay charge</a>
-									<?php
-
-							}
-							
-							
-							else{
-								?>
-
-
-							<a class="btn btn-sm btn-danger" href="#" onclick="disburse_loan('<?php echo $loan->loan_id; ?>','<?php echo $loan->loan_date?>')">Disburse</a>
-								<?php
-							}
-
-							?>
-								<a class="btn btn-sm btn-danger" href="#" onclick="disburse_loan_charge_pre_paid('<?php echo $loan->loan_id; ?>','<?php echo $loan->loan_date ?>')">Charge pre-paid</a>
+								<a class="btn btn-sm btn-danger" href="#" onclick="disburse_loan_charge_pre_paid('<?php echo $loan->loan_id; ?>','<?php echo $loan->loan_date ?>')">Disburse (processing fee charged)</a>
 						
 
 						<a href="<?php echo base_url('loan/view/').$loan->loan_id?>" class="btn btn-sm btn-info">View loan</a>

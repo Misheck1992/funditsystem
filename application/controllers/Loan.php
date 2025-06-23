@@ -31,7 +31,11 @@ class Loan extends CI_Controller
         $this->load->model('Masspayments_model');
         $this->load->model('Loan_customer_first_drafr_model');
         $this->load->library('form_validation');
+		$this->load->model('File_library_model');
+		$this->load->model('File_shares_model');
+		$this->load->model('File_folders_model');
 
+		$this->load->model('File_folder_mapping_model');
 
     }
     public function file_add(){
@@ -496,8 +500,7 @@ $request_id = $this->db->insert_id();
     function create_act(){
 
         $this->load->library('upload');//loading the library
-        $imagePath = realpath(APPPATH . '../uploads/');//this is your real path APPPATH means you are at the application folder
-        $number_of_files_uploaded = count($_FILES['loan_files']['name']);
+          $number_of_files_uploaded = count($_FILES['loan_files']['name']);
         $name = $this->input->post('file_name');
         $coname = $this->input->post('coname');
         $type = $this->input->post('type');
@@ -511,9 +514,50 @@ $request_id = $this->db->insert_id();
         $loan_number = str_replace(' ', '', $this->input->post('loan_number'));
         $result = $this->Loan_model->add_loan( $loan_number,$this->input->post('amount'), $this->input->post('months'),$this->input->post('interest'), $this->input->post('loan_type'), $this->input->post('loan_date'),$this->input->post('customer'),$this->input->post('customer_type'),$this->input->post('worthness_file'),$this->input->post('narration'),$this->session->userdata('user_id'), $this->input->post('payment_method'),$this->input->post('fee_amount'),$currency,$this->input->post('off_taker'),$this->input->post('processing_fee'));
         $data['result'] = $result;
+		$folder_data = [
+			'folder_name' => $result['loan_number'],
+			'parent_folder_id' => 10,
+			'owner_id' => $result['loan_id'],
+			'is_public' => 1,
+			'date_created' => date('Y-m-d H:i:s'),
+			'date_modified' => date('Y-m-d H:i:s'),
+			'description' => 'Loan folder'
+		];
 
-       
-        for ($i = 0; $i <  $number_of_files_uploaded; $i++) {
+		$folder_id = $this->File_folders_model->insert($folder_data);
+//loan files folder
+		$folder_data_loan_files = [
+			'folder_name' => $result['loan_number']." loan files",
+			'parent_folder_id' => $folder_id,
+			'owner_id' => $result['loan_id'],
+			'is_public' => 1,
+			'date_created' => date('Y-m-d H:i:s'),
+			'date_modified' => date('Y-m-d H:i:s'),
+			'description' => 'Loan files folder'
+		];
+
+		$folder_id_loan_files = $this->File_folders_model->insert($folder_data_loan_files);
+//collateral files folder
+		$folder_data_loan_collateral_files = [
+			'folder_name' => $result['loan_number']." loan collateral files",
+			'parent_folder_id' => $folder_id,
+			'owner_id' => $result['loan_id'],
+			'is_public' => 1,
+			'date_created' => date('Y-m-d H:i:s'),
+			'date_modified' => date('Y-m-d H:i:s'),
+			'description' => 'Loan collateral files folder'
+		];
+
+		$folder_id_loan_collateral_files = $this->File_folders_model->insert($folder_data_loan_collateral_files);
+
+		$imagePath = APPPATH . '../uploads/'.$result['loan_number'];
+// Create directory if it doesn't exist
+		if (!is_dir($imagePath)) {
+			mkdir($imagePath, 0777, true);
+		}
+		//this is your real path APPPATH means you are at the application folder
+
+		for ($i = 0; $i <  $number_of_files_uploaded; $i++) {
             $_FILES['userfile']['name']     = $_FILES['loan_files']['name'][$i];
             $_FILES['userfile']['type']     = $_FILES['loan_files']['type'][$i];
             $_FILES['userfile']['tmp_name'] = $_FILES['loan_files']['tmp_name'][$i];
@@ -521,12 +565,11 @@ $request_id = $this->db->insert_id();
             $_FILES['userfile']['size']     = $_FILES['loan_files']['size'][$i];
             //configuration for upload your images
             $config = array(
-                'file_name'     => rand(100,1000).$_FILES['userfile']['name'],
+                'file_name'     => $_FILES['userfile']['name'],
                 'allowed_types' => '*',
                 'max_size'      => 200000,
                 'overwrite'     => FALSE,
-                'upload_path'
-                =>$imagePath
+                'upload_path' => $imagePath
             );
             $this->upload->initialize($config);
             $errCount = 0;//counting errrs
@@ -540,19 +583,45 @@ $request_id = $this->db->insert_id();
             else
             {
 
-                $filename = $this->upload->data();
-
-
-
+				$uploaded_data = $this->upload->data();
 
                 $data = array(
-                    'loan_id' => $result,
-                    'file_name' => $name[$i],
+                    'loan_id' => $result['loan_id'],
+                    'file_name' => $uploaded_data['file_name'],
                     'real_file' => $config['file_name'],
 
                 );
 
                 $this->Loan_files_model->insert($data);
+
+				$insert_data = [
+					'owner_type' => 'loan',
+					'owner_id' => $result['loan_id'],
+					'file_category' => $this->input->post('file_category') ?: 'loan_files',
+					'file_type' => $_FILES['userfile']['type'] ,
+					'file_name' => $uploaded_data['file_name'],
+					'file_path' => "uploads/".$result['loan_number']."/".$uploaded_data['file_name'],
+					'file_size' => $_FILES['userfile']['size'],
+					'is_public' => 1,
+					'date_added' => date('Y-m-d H:i:s'),
+					'date_modified' => date('Y-m-d H:i:s'),
+					'added_by' => $this->session->userdata('user_id'),
+					'description' => "loan file for loan",
+					'tags' => ""
+				];
+
+				$file_id = $this->File_library_model->insert($insert_data);
+
+				if ($folder_id) {
+					$this->File_folder_mapping_model->insert([
+						'file_id' => $file_id,
+						'folder_id' => $folder_id_loan_files,
+						'date_added' => date('Y-m-d H:i:s')
+					]);
+				}
+
+
+
 
             }//if file uploaded
 
@@ -588,13 +657,13 @@ $request_id = $this->db->insert_id();
             else
             {
 
-                $filename = $this->upload->data();
+                $fileData = $this->upload->data();
 
 
 
 
                 $data = array(
-                    'collateral_loan_id' => $result,
+                    'collateral_loan_id' => $result['loan_id'],
                     'collateral_name' => $coname[$i],
                     'collateral_type' => $type[$i],
                     'collateral_serial' => $serial[$i],
@@ -606,7 +675,36 @@ $request_id = $this->db->insert_id();
 
                 $this->Loan_files_model->insert_collateral($data);
 
-            }//if file uploaded
+
+				$insert_data_collateral = [
+					'owner_type' => 'loan',
+					'owner_id' => $result['loan_id'],
+					'file_category' =>  'loan_files',
+					'file_type' => $_FILES['userfile']['type'] ,
+					'file_name' => $fileData['file_name'],
+					'file_path' => "uploads/".$result['loan_number']."/".$fileData['file_name'],
+					'file_size' => $_FILES['userfile']['size'],
+					'is_public' => 1,
+					'date_added' => date('Y-m-d H:i:s'),
+					'date_modified' => date('Y-m-d H:i:s'),
+					'added_by' => $this->session->userdata('user_id'),
+					'description' => "loan collateral file for loan",
+					'tags' => ""
+				];
+
+				$file_id_co = $this->File_library_model->insert($insert_data_collateral);
+
+				if ($folder_id) {
+					$this->File_folder_mapping_model->insert([
+						'file_id' => $file_id_co,
+						'folder_id' => $folder_id_loan_collateral_files,
+						'date_added' => date('Y-m-d H:i:s')
+					]);
+				}
+
+
+
+			}//if file uploaded
 
         }
 
@@ -1066,6 +1164,20 @@ exit();
         $this->load->view('loan/loan_list', $data);
         $this->load->view('admin/footer');
     }
+	function get_approved_first(){
+		$data['loan_data'] = $this->Loan_model->get_all('APPROVED_FIRST');
+		$menu_toggle['toggles'] = 23;
+		$this->load->view('admin/header', $menu_toggle);
+		$this->load->view('loan/to_approve_second', $data);
+		$this->load->view('admin/footer');
+	}
+	function get_approved_second(){
+		$data['loan_data'] = $this->Loan_model->get_all('APPROVED_SECOND');
+		$menu_toggle['toggles'] = 23;
+		$this->load->view('admin/header', $menu_toggle);
+		$this->load->view('loan/to_approve_third', $data);
+		$this->load->view('admin/footer');
+	}
     function recommend(){
         $data['loan_data'] = $this->Loan_model->get_all('INITIATED');
         $menu_toggle['toggles'] = 23;
@@ -1709,7 +1821,7 @@ exit();
             redirect($_SERVER['HTTP_REFERER']);
         }
     }
-    public function pay_loan(){
+    public function pay_loan_latest(){
         $loan_number = $this->input->post('loan_id');
         $pay_number = $this->input->post('payment_number');
         $pay_number_r = $this->input->post('payment_numberr');
@@ -1729,6 +1841,280 @@ exit();
         $this->toaster->success('Success, payment was successful');
         redirect($_SERVER['HTTP_REFERER']);
     }
+	public function pay_loan_l()
+	{
+		$loan_id = $this->input->post('loan_id');
+		$payment_number = $this->input->post('payment_number');
+		$amount = $this->input->post('amount');
+		$acrued_amount = $this->input->post('acrued_amount');
+		$paid_date = $this->input->post('paid_date');
+
+
+		// Process regular payment if not a bullet payment
+
+			$this->Payement_schedules_model->new_pay($loan_id, $payment_number, $amount, $paid_date, $acrued_amount);
+			$logger = array(
+				'user_id' => $this->session->userdata('user_id'),
+				'activity' => 'Paid a loan, loan ID: ' . $loan_id . ' payment number: ' . $payment_number .
+					' amount: ' . $amount,
+				'activity_cate' => 'loan_repayment'
+			);
+			log_activity($logger);
+
+
+		$this->toaster->success('Success, payment was successful');
+		redirect($_SERVER['HTTP_REFERER']);
+	}
+	public function pay_loan(){
+		$loan_number = $this->input->post('loan_id');
+		$pay_number = $this->input->post('payment_number');
+		$amount = $this->input->post('amount');
+		$acrued_amount = $this->input->post('acrued_amount');
+		$paid_date = $this->input->post('paid_date');
+
+		$unique_name = "";
+
+		$config['upload_path']   = './uploads/';
+
+		$config['allowed_types'] = 'jpg|png|jpeg|gif|pdf|docx|txt|zip';
+		$config['max_size']      = 2048; // 2MB
+		$config['remove_spaces'] = TRUE;
+
+		// Load the upload library
+		$this->load->library('upload', $config);
+
+		if (!empty($_FILES['pay_proof']['name'])) {
+			$file_name = pathinfo($_FILES['pay_proof']['name'], PATHINFO_FILENAME);
+			$file_ext = pathinfo($_FILES['pay_proof']['name'], PATHINFO_EXTENSION);
+
+			// Generate a unique file name
+			$unique_name =  'file_' . time() . '_' . uniqid() . '.' . $file_ext;
+			$config['file_name'] = $unique_name;
+
+			// Reinitialize with new config
+			$this->upload->initialize($config);
+
+			if (!$this->upload->do_upload('pay_proof')) {
+//                $error = array('error' => $this->upload->display_errors());
+//                $this->load->view('upload_form', $error);
+			} else {
+
+			}
+		}
+		$tid = "TR-S" . rand(100, 9999) . date('Y') . date('m') . date('d');
+
+		$loan_account = get_by_id('loan', 'loan_id', $loan_number);
+		$recepientt = get_by_id('account', 'collection_account', 'Yes');
+
+		if($this->input->post('payment_method')=="0") {
+			$get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+			if(empty($get_account)){
+
+
+				$this->toaster->error('You are not authorized to do this transaction, only cashiers');
+				redirect($_SERVER['HTTP_REFERER']);
+			}else {
+				$check = $this->Account_model->get_account($loan_account->loan_number);
+				if ($check->balance >= $amount) {
+					$do_transactions = $this->Account_model->transfer_funds($loan_account->loan_number, $recepientt->account_number, $amount, $tid, $paid_date, $unique_name);
+					if ($do_transactions == 'success') {
+
+
+						$result = $this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
+
+						if ($result == true) {
+
+							$logger = array(
+
+								'user_id' => $this->session->userdata('user_id'),
+								'activity' => 'Paid a loan, loan ID:' . ' ' . $loan_number . ' ' . ' payment number' . ' ' . $pay_number .
+									' ' . 'amount' . ' ' . $amount,
+								'activity_cate' => 'loan_repayment'
+
+							);
+							log_activity($logger);
+							$this->toaster->success('Success, payment was successful');
+							redirect($_SERVER['HTTP_REFERER']);
+						} else {
+							$this->toaster->error('Ops!, Sorry payment failed P2');
+							redirect($_SERVER['HTTP_REFERER']);
+						}
+					} else {
+						$this->toaster->error('Ops!, Sorry payment failed, Error P2');
+						redirect($_SERVER['HTTP_REFERER']);
+					}
+				} elseif ($check->balance > 0 && $check->balance < $amount) {
+					$topay_amount = $check->balance;
+					$this->Account_model->transfer_funds($loan_account->loan_number, $recepientt->account_number, $topay_amount, $tid, $paid_date);
+					$r = $this->Payement_schedules_model->new_pay($loan_number, $pay_number, $topay_amount, $paid_date);
+
+					$logger = array(
+
+						'user_id' => $this->session->userdata('user_id'),
+						'activity' => 'Paid a loan, loan ID:' . ' ' . $loan_number . ' ' . ' payment number' . ' ' . $pay_number .
+							' ' . 'amount' . ' ' . $topay_amount,
+						'activity_cate' => 'loan_repayment'
+
+					);
+					log_activity($logger);
+					$data = array(
+						'ref' => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
+						'loan_id' => $this->input->post('loan_id', TRUE),
+						'amount' => $topay_amount,
+						'transaction_type' => 2,
+						'payment_number' => $this->input->post('payment_number'),
+						'date_stamp' => $paid_date,
+						'added_by' => $this->session->userdata('user_id')
+
+					);
+
+					$this->Transactions_model->insert($data);
+					$this->toaster->success('Success, payment was successful');
+					redirect($_SERVER['HTTP_REFERER']);
+
+				} else {
+					$this->toaster->error('Ops!, Sorry payment failed loan account savings does not have enough funds');
+					redirect($_SERVER['HTTP_REFERER']);
+				}
+			}
+		}
+		else{
+			$get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+			if(empty($get_account)){
+
+
+				$this->toaster->error('You are not authorized to do this transaction, only cashiers');
+				redirect($_SERVER['HTTP_REFERER']);
+			}
+
+			else {
+				$teller_account = $get_account->account;
+				$mode='deposit';
+				$deposit_money = $this->Account_model->cash_transaction($teller_account, $loan_account->loan_number, $amount, $mode, $tid, $paid_date,$unique_name);
+
+
+				//
+				if($deposit_money){
+
+					$pay_late_first = $this->Account_model->transfer_funds($loan_account->loan_number, $recepientt->account_number, $amount, $tid, $paid_date,$unique_name);
+
+
+					if ($pay_late_first == 'success') {
+						$this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
+						// $this->Rescheduled_payments_model->new__late_pay($loan_number, $pay_number, $amount);
+						$logger = array(
+
+							'user_id' => $this->session->userdata('user_id'),
+							'activity' => 'Paid a loan, loan ID:' . $loan_number,
+							'activity_cate' => 'loan_repayment'
+
+						);
+						log_activity($logger);
+
+
+						$this->toaster->success('Success, payment was successful');
+						redirect($_SERVER['HTTP_REFERER']);
+					}
+				}
+				else{
+					echo "deposit failed";
+					exit();
+				}
+			}
+		}
+	}
+	/**
+	 * Process bullet payment
+	 */
+	private function processBulletPayment($loan_id, $payoff, $paid_date)
+	{
+		// Get loan details
+		$loan = $this->Loan_model->get_by_id($loan_id);
+
+		// Get payment schedule
+		$payment = $this->Payement_schedules_model->get_by_loan_payment($loan_id, 1);
+
+		if (!$payment) {
+			$this->toaster->error('Error: Payment schedule not found');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Update payment record
+		$data = array(
+			'status' => 'PAID',
+			'paid_amount' => $payoff['total_payoff'],
+			'interest' => $payoff['interest'], // Actual calculated interest
+			'paid_date' => $paid_date
+		);
+
+		$this->Payement_schedules_model->update($payment->id, $data);
+
+		// Update loan status if fully paid
+		$this->Loan_model->update($loan_id, array(
+			'loan_status' => 'CLOSED',
+			'next_payment_id' => 1
+		));
+
+		// Log the transaction
+		$logger = array(
+			'user_id' => $this->session->userdata('user_id'),
+			'activity' => 'Paid a bullet loan, loan ID: ' . $loan_id .
+				' Principal: ' . $payoff['principal'] .
+				' Interest: ' . $payoff['interest'] .
+				' Total: ' . $payoff['total_payoff'],
+			'activity_cate' => 'loan_repayment'
+		);
+		log_activity($logger);
+
+		// Record transaction details
+		$data = array(
+			'ref' => "BLT." . date('Y-m-d', strtotime($paid_date)) . '.' . rand(100, 999),
+			'loan_id' => $loan_id,
+			'amount' => $payoff['total_payoff'],
+			'principal' => $payoff['principal'],
+			'interest' => $payoff['interest'],
+			'transaction_type' => 1,
+			'payment_number' => 1,
+			'date_stamp' => $paid_date,
+			'added_by' => $this->session->userdata('user_id')
+		);
+
+		$this->Transactions_model->insert($data);
+	}
+	public function calculate_bullet_payoff()
+	{
+		// Check if this is an AJAX request
+		if (!$this->input->is_ajax_request()) {
+			exit('No direct script access allowed');
+		}
+
+		$loan_id = $this->input->post('loan_id');
+		$payment_date = $this->input->post('payment_date');
+
+		if (!$loan_id) {
+			echo json_encode([
+				'status' => 'error',
+				'message' => 'No loan ID provided'
+			]);
+			return;
+		}
+
+		// Calculate payoff
+		$payoff = $this->Loan_model->calculateBulletPayoff($loan_id, $payment_date);
+
+		if ($payoff) {
+			echo json_encode([
+				'status' => 'success',
+				'data' => $payoff
+			]);
+		} else {
+			echo json_encode([
+				'status' => 'error',
+				'message' => 'Could not calculate payoff amount'
+			]);
+		}
+	}
     public function pay_loan_r(){
         $loan_number = $this->input->post('loan_id');
         $pay_number = $this->input->post('payment_number');
@@ -2282,6 +2668,10 @@ exit();
             $customer_name = $inst->EntityName.' - '.$inst->RegistrationNumber.' ('.$inst->	entity_type.')';
             $preview_url = "Corporate_customers/read/";
         }
+		$acrued = array();
+		if($row->calculation_type=='Bullet Payment'){
+		$acrued = $this->calculate_payoff_inline($row->loan_id);
+		}
 
         $data = array(
             'loan_id' => $row->loan_id,
@@ -2309,6 +2699,8 @@ exit();
             'files'=>$files,
             'currency'=>$row->currency,
             'processing_fee'=>$row->processing_fee,
+            'calculation_type'=>$row->calculation_type,
+			'acrued' => $acrued
 
         );
         $menu_toggle['toggles'] = 23;
@@ -2497,6 +2889,14 @@ exit();
         $this->load->view('loan/edit_approve');
         $this->load->view('admin/footer');
     }
+
+	function loan_application(){
+		$menu_toggle['toggles'] = 23;
+		$data['customers'] =$this->Individual_customers_model->get_all_active();
+		$this->load->view('admin/header', $menu_toggle);
+		$this->load->view('loan/loan_application', $data);
+		$this->load->view('admin/footer');
+	}
     function create_act_edit(){
         $row = get_by_id('approval_edits','approval_edits_id',$this->session->userdata('loan_data'));
         $data_new = json_decode($row->new_info);
@@ -2763,7 +3163,10 @@ exit();
             $customer_name = $inst->EntityName.' - '.$inst->RegistrationNumber.' ('.$inst->	entity_type.')';
             $preview_url = "Corporate_customers/read/";
         }
-
+		$acrued = array();
+		if($row->calculation_type=='Bullet Payment'){
+			$acrued = $this->calculate_payoff_inline($row->loan_id);
+		}
         $data = array(
             'loan_id' => $row->loan_id,
             'loan_number' => $row->loan_number,
@@ -2790,6 +3193,8 @@ exit();
             'payments'=>$payments,
             'currency'=>$row->currency,
             'processing_fee'=>$row->processing_fee,
+            'calculation_type'=>$row->calculation_type,
+            'acrued'=>$acrued,
         );
         $menu_toggle['toggles'] = 52;
         $this->load->view('admin/header', $menu_toggle);
@@ -4396,4 +4801,492 @@ public function get_loan_product_details() {
     }
 }
 
+
+// Add these methods to the Loan controller
+
+	/**calculate_payoff
+	 * Calculate payoff amount for a loan
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	/**
+	 * Calculate payoff amount for a loan with special first month interest handling
+	 * This method handles AJAX requests to calculate the total payoff amount
+	 */
+	public function calculate_payoff() {
+		// Check if this is an AJAX request
+		if (!$this->input->is_ajax_request()) {
+			show_error('No direct script access allowed', 403);
+			return;
+		}
+
+		$loan_id = $this->input->post('loan_id');
+		$payoff_date = $this->input->post('payoff_date');
+
+		if (!$loan_id || !$payoff_date) {
+			echo json_encode([
+				'status' => 'error',
+				'message' => 'Missing required parameters'
+			]);
+			return;
+		}
+
+
+		$loan = $this->Loan_model->get_by_id($loan_id);
+
+
+		// Get all unpaid schedules
+		$unpaid_schedules = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
+
+		// Calculate remaining principal
+		$remaining_principal = 0;
+		$amount_paid = 0;
+		foreach ($unpaid_schedules as $schedule) {
+
+			//remaining principal is total after deducting current accrued interest and that current accrued interest is fully paid and the remainder or remaining is what is deducted to $loan->loan_principal to get the principal balance
+			$amount_paid += $schedule->paid_amount;
+			// Check if partial paid
+//			if ($schedule->partial_paid == 'YES') {
+//				// Calculate remaining amount
+//
+//				$remaining_principal += $schedule->principal * (1 - ($schedule->paid_amount / $schedule->amount));
+//			} else {
+//				$remaining_principal += $schedule->principal;
+//			}
+		}
+
+		// Convert loan date and payoff date to DateTime objects
+		$loan_date = new DateTime($loan->loan_date);
+		$payoff_date_obj = new DateTime($payoff_date);
+
+		// Calculate monthly interest amount
+		$monthly_interest_rate = $loan->loan_interest / 100; // Convert percentage to decimal
+		$full_monthly_interest = $loan->loan_principal * $monthly_interest_rate;
+		$daily_interest = $full_monthly_interest / 30; // Daily interest based on 30-day month
+
+		// Initialize interest amount
+		$accrued_interest = 0;
+
+		// Get the next month date (one month after loan date)
+		$next_month_date = clone $loan_date;
+		$next_month_date->modify('+1 month');
+
+		// Simple algorithm:
+		// 1. If payoff date is before or equal to loan date + 1 month: full interest
+		// 2. Otherwise: full interest + daily accruals for elapsed days beyond first month
+		$calculation_explanation = "";
+		$days_elapsed1 = 0;
+		$real_interest_balance = 0;
+
+		if ($payoff_date_obj <= $next_month_date) {
+			// Case 1: Payoff within first month - charge full interest
+			$accrued_interest = $full_monthly_interest;
+			$interest_balance = abs($amount_paid - $accrued_interest);
+			if($accrued_interest < $amount_paid){
+				$real_interest_balance = 0;
+				$remaining_principal = $loan->loan_principal - $interest_balance;
+			}else{
+				$real_interest_balance = $interest_balance;
+				$remaining_principal = $loan->loan_principal;
+			}
+
+
+			$calculation_explanation = "Payoff within first month - full interest applied: " .
+				"$remaining_principal × $monthly_interest_rate = $accrued_interest";
+			$days_elapsed1 = 0;
+		} else {
+			// Case 2: Payoff after first month
+			// Start with full interest for the first month
+			$accrued_interest = $full_monthly_interest;
+
+			// Calculate days elapsed after first month
+			$days_elapsed = $payoff_date_obj->diff($next_month_date)->days;
+			$days_elapsed1 = $days_elapsed;
+			// Add daily accruals for elapsed days
+			$daily_accrual = $daily_interest * $days_elapsed;
+			$accrued_interest += $daily_accrual;
+			$interest_balance = abs($amount_paid - $accrued_interest);
+			if($accrued_interest < $amount_paid){
+				$real_interest_balance = 0;
+				$remaining_principal = $loan->loan_principal - $interest_balance;
+			}else{
+				$real_interest_balance = $interest_balance;
+				$remaining_principal = $loan->loan_principal;
+			}
+			$calculation_explanation = "Payoff after first month:\n" .
+				"Full interest for first month: $loan->loan_principal × $monthly_interest_rate = $full_monthly_interest\n" .
+				"Days elapsed after first month: $days_elapsed\n" .
+				"Daily interest: $full_monthly_interest ÷ 30 = $daily_interest\n" .
+				"Daily accrual: $daily_interest × $days_elapsed = $daily_accrual\n" .
+				"Total interest: $full_monthly_interest + $daily_accrual = $accrued_interest\n".
+				"Total interest balance after payment of $amount_paid is : $amount_paid - $accrued_interest = $real_interest_balance \n";
+		}
+
+		// Total payoff amount
+		$total_payoff = $remaining_principal + $real_interest_balance;
+
+		echo json_encode( [
+			'status' => 'success',
+			'current_balance' => number_format($remaining_principal, 2, '.', ''),
+			'accrued_interest' => number_format($accrued_interest, 2, '.', ''),
+			'accrued_interest_balance' => number_format($real_interest_balance, 2, '.', ''),
+			'total_payoff' => number_format($total_payoff, 2, '.', ''),
+			'debug' => [
+				'loan_id' => $loan_id,
+				'payoff_date' => $payoff_date,
+				'loan_date' => $loan->loan_date,
+				'next_month_date' => $next_month_date->format('Y-m-d'),
+				'loan_principal' => $loan->loan_principal,
+				'monthly_interest_rate' => $monthly_interest_rate,
+				'full_monthly_interest' => $full_monthly_interest,
+				'daily_interest' => $daily_interest,
+				'remaining_principal' => $remaining_principal,
+				'calculation_explanation' => $calculation_explanation,
+				'elapsed_days' => $days_elapsed1
+			]
+		] );
+
+		
+	}
+	public function calculate_payoff_inline($lid) {
+
+
+		$loan_id = $lid;
+		$payoff_date = date('Y-m-d');
+//		$payoff_date = date('2025-8-5');
+
+
+
+		$loan = $this->Loan_model->get_by_id($loan_id);
+
+
+		// Get all unpaid schedules
+		$unpaid_schedules = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
+
+		// Calculate remaining principal
+		$remaining_principal = 0;
+		$amount_paid = 0;
+		foreach ($unpaid_schedules as $schedule) {
+
+			//remaining principal is total after deducting current accrued interest and that current accrued interest is fully paid and the remainder or remaining is what is deducted to $loan->loan_principal to get the principal balance
+           $amount_paid += $schedule->paid_amount;
+			// Check if partial paid
+//			if ($schedule->partial_paid == 'YES') {
+//				// Calculate remaining amount
+//
+//				$remaining_principal += $schedule->principal * (1 - ($schedule->paid_amount / $schedule->amount));
+//			} else {
+//				$remaining_principal += $schedule->principal;
+//			}
+		}
+
+		// Convert loan date and payoff date to DateTime objects
+		$loan_date = new DateTime($loan->loan_date);
+		$payoff_date_obj = new DateTime($payoff_date);
+
+		// Calculate monthly interest amount
+		$monthly_interest_rate = $loan->loan_interest / 100; // Convert percentage to decimal
+		$full_monthly_interest = $loan->loan_principal * $monthly_interest_rate;
+		$daily_interest = $full_monthly_interest / 30; // Daily interest based on 30-day month
+
+		// Initialize interest amount
+		$accrued_interest = 0;
+
+		// Get the next month date (one month after loan date)
+		$next_month_date = clone $loan_date;
+		$next_month_date->modify('+1 month');
+
+		// Simple algorithm:
+		// 1. If payoff date is before or equal to loan date + 1 month: full interest
+		// 2. Otherwise: full interest + daily accruals for elapsed days beyond first month
+		$calculation_explanation = "";
+		$days_elapsed1 = 0;
+		$real_interest_balance = 0;
+
+		if ($payoff_date_obj <= $next_month_date) {
+			// Case 1: Payoff within first month - charge full interest
+			$accrued_interest = $full_monthly_interest;
+			$interest_balance = abs($amount_paid - $accrued_interest);
+			if($accrued_interest < $amount_paid){
+				$real_interest_balance = 0;
+				$remaining_principal = $loan->loan_principal - $interest_balance;
+			}else{
+				$real_interest_balance = $interest_balance;
+				$remaining_principal = $loan->loan_principal;
+			}
+
+
+			$calculation_explanation = "Payoff within first month - full interest applied: " .
+				"$remaining_principal × $monthly_interest_rate = $accrued_interest";
+			$days_elapsed1 = 0;
+		} else {
+			// Case 2: Payoff after first month
+			// Start with full interest for the first month
+			$accrued_interest = $full_monthly_interest;
+
+			// Calculate days elapsed after first month
+			$days_elapsed = $payoff_date_obj->diff($next_month_date)->days;
+			$days_elapsed1 = $days_elapsed;
+			// Add daily accruals for elapsed days
+			$daily_accrual = $daily_interest * $days_elapsed;
+			$accrued_interest += $daily_accrual;
+			$interest_balance = abs($amount_paid - $accrued_interest);
+			if($accrued_interest < $amount_paid){
+				$real_interest_balance = 0;
+				$remaining_principal = $loan->loan_principal - $interest_balance;
+			}else{
+				$real_interest_balance = $interest_balance;
+				$remaining_principal = $loan->loan_principal;
+			}
+			$calculation_explanation = "Payoff after first month:\n" .
+				"Full interest for first month: $loan->loan_principal × $monthly_interest_rate = $full_monthly_interest\n" .
+				"Days elapsed after first month: $days_elapsed\n" .
+				"Daily interest: $full_monthly_interest ÷ 30 = $daily_interest\n" .
+				"Daily accrual: $daily_interest × $days_elapsed = $daily_accrual\n" .
+				"Total interest: $full_monthly_interest + $daily_accrual = $accrued_interest\n".
+				"Total interest balance after payment of $amount_paid is : $amount_paid - $accrued_interest = $real_interest_balance \n";
+		}
+
+		// Total payoff amount
+		$total_payoff = $remaining_principal + $real_interest_balance;
+
+		return [
+			'status' => 'success',
+			'current_balance' => number_format($remaining_principal, 2, '.', ''),
+			'accrued_interest' => number_format($accrued_interest, 2, '.', ''),
+			'accrued_interest_balance' => number_format($real_interest_balance, 2, '.', ''),
+			'total_payoff' => number_format($total_payoff, 2, '.', ''),
+			'debug' => [
+				'loan_id' => $loan_id,
+				'payoff_date' => $payoff_date,
+				'loan_date' => $loan->loan_date,
+				'next_month_date' => $next_month_date->format('Y-m-d'),
+				'loan_principal' => $loan->loan_principal,
+				'monthly_interest_rate' => $monthly_interest_rate,
+				'full_monthly_interest' => $full_monthly_interest,
+				'daily_interest' => $daily_interest,
+				'remaining_principal' => $remaining_principal,
+				'calculation_explanation' => $calculation_explanation,
+				'elapsed_days' => $days_elapsed1
+			]
+		 ] ;
+	}
+	/**
+	 * Process loan pay-off
+	 */
+	public function pay_off_loan() {
+		$loan_id = $this->input->post('loan_id');
+		$payoff_amount = $this->input->post('payoff_amount');
+		$payoff_date = $this->input->post('payoff_date');
+		$payment_method = $this->input->post('payment_method');
+		$payment_number = $this->input->post('payment_number');
+		$reference = $this->input->post('reference');
+
+		// Initialize upload for payment proof if any
+		$unique_name = "";
+		if (!empty($_FILES['pay_proof']['name'])) {
+			$config['upload_path'] = './uploads/';
+			$config['allowed_types'] = 'jpg|png|jpeg|gif|pdf|docx|txt|zip';
+			$config['max_size'] = 2048; // 2MB
+			$config['remove_spaces'] = TRUE;
+
+			$this->load->library('upload', $config);
+
+			$file_name = pathinfo($_FILES['pay_proof']['name'], PATHINFO_FILENAME);
+			$file_ext = pathinfo($_FILES['pay_proof']['name'], PATHINFO_EXTENSION);
+
+			// Generate a unique file name
+			$unique_name = 'file_' . time() . '_' . uniqid() . '.' . $file_ext;
+			$config['file_name'] = $unique_name;
+
+			// Reinitialize with new config
+			$this->upload->initialize($config);
+
+			if (!$this->upload->do_upload('pay_proof')) {
+				// Upload failed, but continue processing
+			}
+		}
+
+		// Get loan details
+		$loan = $this->Loan_model->get_by_id($loan_id);
+		if (!$loan) {
+			$this->toaster->error('Error: Loan not found.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Transaction reference
+		$tid = "PAYOFF-" . rand(1000, 9999) . date('Ymd');
+
+		// Get collection account
+		$recepientt = get_by_id('account', 'collection_account', 'Yes');
+		if (!$recepientt) {
+			$this->toaster->error('Error: Collection account not set up.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Process payment based on method
+		if ($payment_method == "0") {
+			// Payment from loan account savings
+			$check = $this->Account_model->get_account($loan->loan_number);
+			if (!$check) {
+				$this->toaster->error('Error: Loan account not found.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+
+			if ($check->balance < $payoff_amount) {
+				$this->toaster->error('Error: Insufficient funds in loan account.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+
+			// Transfer funds from loan account to collection account
+			$transfer_result = $this->Account_model->transfer_funds(
+				$loan->loan_number,
+				$recepientt->account_number,
+				$payoff_amount,
+				$tid,
+				$payoff_date,
+				$unique_name
+			);
+
+			if ($transfer_result != 'success') {
+				$this->toaster->error('Error: Fund transfer failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+		} else {
+			// Payment via teller/cashier
+			$get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+			if (empty($get_account)) {
+				$this->toaster->error('Error: You are not authorized to process this payment. Only cashiers can do this.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+
+			// Make cash deposit and then transfer
+			$teller_account = $get_account->account;
+			$mode = 'deposit';
+
+			// First deposit to loan account
+			$deposit_result = $this->Account_model->cash_transaction(
+				$teller_account,
+				$loan->loan_number,
+				$payoff_amount,
+				$mode,
+				$tid,
+				$payoff_date,
+				$unique_name
+			);
+
+			if (!$deposit_result) {
+				$this->toaster->error('Error: Deposit to loan account failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+
+			// Then transfer to collection account
+			$transfer_result = $this->Account_model->transfer_funds(
+				$loan->loan_number,
+				$recepientt->account_number,
+				$payoff_amount,
+				$tid,
+				$payoff_date,
+				$unique_name
+			);
+
+			if ($transfer_result != 'success') {
+				$this->toaster->error('Error: Fund transfer failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+		}
+
+		// Mark all unpaid schedules as paid
+		$unpaid_schedules = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
+		foreach ($unpaid_schedules as $schedule) {
+			$data = array(
+				'status' => 'PAID',
+				'paid_amount' => $schedule->amount,
+				'paid_date' => $payoff_date
+			);
+
+			$this->Payement_schedules_model->update($schedule->id, $data);
+		}
+
+		// Update loan status to CLOSED
+		$this->Loan_model->update($loan_id, array(
+			'loan_status' => 'CLOSED',
+			'closed_date' => $payoff_date,
+			'closed_by' => $this->session->userdata('user_id'),
+			'closing_notes' => 'Loan paid off in full on ' . $payoff_date
+		));
+
+		// Record transaction
+		$transaction_data = array(
+			'ref' => $tid,
+			'loan_id' => $loan_id,
+			'amount' => $payoff_amount,
+			'transaction_type' => 4, // Payoff transaction type
+			'payment_number' => 0,
+			'date_stamp' => $payoff_date,
+			'method' => $payment_method,
+			'payment_proof' => $unique_name,
+			'reference' => $reference,
+			'added_by' => $this->session->userdata('user_id')
+		);
+		$this->Transactions_model->insert($transaction_data);
+
+		// Log activity
+		$logger = array(
+			'user_id' => $this->session->userdata('user_id'),
+			'activity' => 'Completed loan payoff for loan ID: ' . $loan_id . ' (Loan #: ' . $loan->loan_number . ') with amount ' . $payoff_amount,
+			'activity_cate' => 'loan_payoff'
+		);
+		log_activity($logger);
+
+		$this->toaster->success('Success: Loan has been paid off and closed.');
+		redirect('loan/repayment_view/' . $loan_id);
+	}
 }

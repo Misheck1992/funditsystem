@@ -13,7 +13,7 @@
 		<div class="card-body" style="border: thick #153505 solid;border-radius: 14px;">
             <div style="overflow-y: auto"">
             <form name="frmUser" method="post" action="">
-            <table  id="data-table" class="tableCss">
+            <table  id="data-table1" class="tableCss">
                 <thead>
                 <tr>
                     <th><input type="checkbox" id="cc" onclick="javascript:checkAll(this)"/>
@@ -77,7 +77,7 @@
                         <td><?php echo $loan->loan_added_date ?></td>
                     
 
-                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id?>" class="btn btn-sm btn-info">View</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=APPROVED"?>"  onclick="return confirm('Are you sure you want to approve?')" class="btn btn-sm btn-warning">Approve</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=REJECT"?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to reject?')">Reject</a></td>
+                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id?>" class="btn btn-sm btn-info">View</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=APPROVED_FIRST"?>"  onclick="return confirm('Are you sure you want to approve?')" class="btn btn-sm btn-warning">Approve</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=REJECT"?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to reject?')">Reject</a></td>
 
                     </tr>
                     <?php

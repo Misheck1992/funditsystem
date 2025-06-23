@@ -10,14 +10,14 @@
 		</div>
 	</div>
 	<div class="card">
-		<div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
-
+		<div class="card-body" style="border: thick #153505 solid;border-radius: 14px;">
             <div style="overflow-y: auto"">
-            <div class="double-scroll">
-            <table  id="data-table1" class="tableCss">
+            <form name="frmUser" method="post" action="">
+            <table  id="data-table" class="tableCss">
                 <thead>
                 <tr>
-
+                    <th><input type="checkbox" id="cc" onclick="javascript:checkAll(this)"/>
+                        <label for="cc">Check All</label></th>
                     <th>#</th>
                     <th>Loan Number</th>
                     <th>Loan Product</th>
@@ -46,12 +46,9 @@
                         $customer_name = $group->group_name.'('.$group->group_code.')';
                         $preview_url = "Customer_groups/members/";
                     }elseif($loan->customer_type=='individual'){
-
-                            $indi = $this->Individual_customers_model->get_by_id($loan->loan_customer);
-                        if(!empty($indi)) {
-                            $customer_name = $indi->Firstname . ' ' . $indi->Lastname;
-                            $preview_url = "Individual_customers/view/";
-                        }
+                        $indi = $this->Individual_customers_model->get_by_id($loan->loan_customer);
+                        $customer_name = $indi->Firstname.' '.$indi->Lastname;
+                        $preview_url = "Individual_customers/view/";
                     }
                     elseif($loan->customer_type=='institution'){
                         $inst = get_by_id('corporate_customers','id',$loan->loan_customer);
@@ -61,7 +58,7 @@
                     $currency = get_by_id('currencies','currency_id',$loan->currency);
                     ?>
                     <tr>
-
+                        <td><input type="checkbox" name="loans[]" value="<?php  echo $loan->loan_id ?>"> </td>
                         <td><?php echo $n ?></td>
                         <td><?php echo $loan->loan_number ?></td>
                         <td><?php echo $loan->product_name ?></td>
@@ -74,11 +71,13 @@
                         <td><?php echo $loan->loan_interest ?>%</td>
                         <td><?php echo $currency->currency_code ?><?php echo number_format($loan->loan_amount_total,2) ?></td>
 
-                        <td><a href="<?php echo base_url('uploads/').$loan->worthness_file?>" download >Download file <i class="fa fa-download fa-flip"></i></a></td>
+                        <td><a href="#" onclick="get_loan_files('<?php  echo $loan->loan_id ;?>')" >Download file <i class="fa fa-download fa-flip"></i></a></td>
 
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
-                        <td><a href="<?php echo base_url('loan/repayment_view/').$loan->loan_id?>">Pay now</a></td>
+                    
+
+                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id?>" class="btn btn-sm btn-info">View</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=APPROVED"?>"  onclick="return confirm('Are you sure you want to approve?')" class="btn btn-sm btn-warning">Approve</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=REJECT"?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to reject?')">Reject</a></td>
 
                     </tr>
                     <?php
@@ -87,8 +86,12 @@
                 ?>
                 </tbody>
             </table>
-            </div>
+                <input type="text" name="minutes" id="minutes1" hidden>
+            <input type="button" name="Approve" value="approve" onClick="minutes_upload();" class="btn btn-danger"  /> <input type="button" name="Reject"
+                                                                                                                           value="Reject" onClick="reject_all_loans();"  class="btn btn-warning" />
+            </form>
         </div>
+
 		</div>
 	</div>
 </div>

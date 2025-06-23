@@ -15,21 +15,33 @@ class Loan_model extends CI_Model
 	{
 		parent::__construct();
 	}
-    function calculate($amount, $months, $loan_id, $loan_date, $interest)
-    {
-        // Get loan parameters
-        $this->db->where('loan_product_id', $loan_id);
-        $loan = $this->db->get('loan_products')->row();
+	function calculate($amount, $months, $loan_id, $loan_date, $interest)
+	{
+		// Get loan parameters
+		$this->db->where('loan_product_id', $loan_id);
+		$loan = $this->db->get('loan_products')->row();
 
-        // Check calculation type
-        if ($loan->calculation_type === 'Reducing Balance') {
-            return $this->calculateReducingBalance($amount, $months, $loan_id, $loan_date, $interest);
-        } elseif ($loan->calculation_type === 'Straight Line') {
-            return $this->calculateStraightLine($amount, $months, $loan, $loan_date, $interest);
-        } else {
-            return "Invalid calculation type.";
-        }
-    }
+		// Check calculation type
+		if ($loan->calculation_type === 'Reducing Balance') {
+			return $this->calculateReducingBalance($amount, $months, $loan_id, $loan_date, $interest);
+		} elseif ($loan->calculation_type === 'Straight Line') {
+			return $this->calculateStraightLine($amount, $months, $loan, $loan_date, $interest);
+		} elseif ($loan->calculation_type === 'Bullet Payment') {
+			return $this->calculateBulletPayment($amount, $months, $loan, $loan_date, $interest);
+		} else {
+			return "Invalid calculation type.";
+		}
+	}
+	/**
+	 * Calculate bullet payment with monthly interest
+	 *
+	 * @param float $amount Loan principal
+	 * @param int $months Loan term in months
+	 * @param object $loan Loan product details
+	 * @param string $loan_date Start date of loan
+	 * @param float $interest Annual interest rate
+	 * @return string HTML table with loan details
+	 */
 
     private function calculateStraightLine($amount, $months, $loan, $loan_date, $interest)
     {
@@ -539,7 +551,7 @@ class Loan_model extends CI_Model
         }
 		return $id;
 	}
-    function add_loan($loan_numberr, $lamount, $lmonths,$interest, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $method, $fee_amount, $currency,$offtaker,$processing_fee)
+    function add_loans($loan_numberr, $lamount, $lmonths,$interest, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $method, $fee_amount, $currency,$offtaker,$processing_fee)
     {
         // Set time zone
         date_default_timezone_set('Africa/Blantyre');
@@ -640,7 +652,139 @@ class Loan_model extends CI_Model
         return $loan_id;
     }
 
-    private function adjust_date_to_25th($date)
+	function add_loan($loan_number, $lamount, $lmonths, $interest, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $method, $fee_amount, $currency, $offtaker, $processing_fee)
+	{
+		// Retrieve loan product details
+		$loan = $this->db->select("*")->from('loan_products')->where('loan_product_id', $product_id)->get()->row();
+
+		if (!$loan) {
+			return "Invalid loan product.";
+		}
+
+		// Generate loan ID
+		$this->db->select('MAX(counter) as max_c')->where('loan_product', $product_id);
+		$result = $this->db->get('loan')->row();
+		$mxc = empty($result) ? 0 : $result->max_c;
+		$loan_number = $loan->abbreviation . '000' . ($mxc + 1) . '-' . date('y');
+		$fcounter = $mxc + 1;
+
+		// Adjust the loan date to the 25th of the month if needed
+		$customised_date = $this->adjust_date_to_25th($ldate);
+
+		// Calculate interest and payment details based on calculation type
+		$monthly_payment = 0;
+		$total_interest = 0;
+		$total_payment = 0;
+
+		// IMPORTANT: Special handling for Bullet Payment type
+		if ($loan->calculation_type === 'Bullet Payment') {
+			// For bullet loans, interest is principal × monthly rate × terms
+			$monthly_interest_rate = $interest / 100; // Convert percentage to decimal
+			$total_interest = $lamount * $monthly_interest_rate * $lmonths;
+			$total_payment = $lamount + $total_interest;
+			$monthly_payment = 0; // No monthly payments for bullet loans
+
+			// Log the calculation for debugging
+			error_log("Bullet Payment Calculation: Principal=$lamount, Rate=$interest%, Terms=$lmonths");
+			error_log("Interest Calculation: $lamount × " . ($interest/100) . " × $lmonths = $total_interest");
+		}
+		else if ($loan->calculation_type === 'Reducing Balance') {
+			// Use standard reducing balance calculation
+			$annual_interest_rate = $interest / 100; // Convert to decimal
+			$monthly_interest_rate = $annual_interest_rate / 12;
+			$monthly_payment = $lamount * $monthly_interest_rate * pow((1 + $monthly_interest_rate), $lmonths) / (pow((1 + $monthly_interest_rate), $lmonths) - 1);
+			$total_payment = $monthly_payment * $lmonths;
+			$total_interest = $total_payment - $lamount;
+		}
+		else if ($loan->calculation_type === 'Straight Line') {
+			// Use standard straight line calculation
+			$total_interest = ($lamount * ($interest / 100)) * $lmonths;
+			$total_payment = $lamount + $total_interest;
+			$monthly_payment = $total_payment / $lmonths;
+		}
+		else {
+			throw new Exception("Invalid calculation type: " . $loan->calculation_type);
+		}
+
+		// Prepare loan data for insertion
+		$data = [
+			'loan_number' => $loan_number,
+			'loan_product' => $product_id,
+			'loan_customer' => $loan_customer,
+			'customer_type' => $customer_type,
+			'loan_date' => $ldate,
+			'loan_principal' => $lamount,
+			'loan_period' => $lmonths,
+			'worthness_file' => $worthness_file,
+			'narration' => $narration,
+			'period_type' => $loan->frequency,
+			'loan_amount_term' => $monthly_payment,
+			'loan_interest' => $interest,
+			'loan_interest_amount' => $total_interest,
+			'loan_amount_total' => $total_payment,
+			'next_payment_id' => 1,
+			'loan_added_by' => $added_by,
+			'disbursed_amount' => 0,
+			'reg_fee' => $method === 01 ? $fee_amount : 0,
+			'counter' => $fcounter,
+			'currency' => $currency,
+			'off_taker' => $offtaker,
+			'processing_fee' => $processing_fee,
+			'calculation_type' => $loan->calculation_type
+		];
+
+		// Add maturity date for bullet loans
+		if ($loan->calculation_type === 'Bullet Payment') {
+			$maturity_date = date('Y-m-d', strtotime("+$lmonths months", strtotime($ldate)));
+			//$data['maturity_date'] = $maturity_date;
+		}
+
+		// Insert loan into the database
+		$this->db->insert($this->table, $data);
+
+		// Retrieve the inserted loan ID
+		$loan_id = $this->db->insert_id();
+
+		// Insert payment schedules based on calculation type
+		if ($loan->calculation_type === 'Bullet Payment') {
+			// For bullet payment, create a single payment record
+			$maturity_date = date('Y-m-d', strtotime("+$lmonths months", strtotime($ldate)));
+
+			$this->db->insert('payement_schedules', [
+				'customer' => $loan_customer,
+				'loan_id' => $loan_id,
+				'payment_schedule' => $maturity_date,
+				'payment_number' => 1,
+				'amount' => $total_payment, // Principal + Interest
+				'principal' => $lamount,
+				'interest' => $total_interest,
+				'paid_amount' => 0.00,
+				'loan_balance' => $lamount,
+				'loan_date' => $ldate,
+				'is_bullet_payment' => 1 // Flag for bullet payment
+			]);
+		} else {
+			// For regular loans, insert the usual payment schedules
+			$this->insert_payment_schedules($loan_id, $loan, $lamount, $lmonths, $interest, $ldate, $loan->calculation_type, $loan_customer);
+		}
+
+		// Create account
+		$data_account = array(
+			'client_id' => $loan_customer,
+			'account_number' => $loan_number,
+			'balance' => 0,
+			'account_type' => 2,
+			'account_type_product' => $product_id,
+		);
+
+		$this->db->insert('account', $data_account);
+		$re = array(
+			'loan_id' => $loan_id,
+			'loan_number' => $loan_number
+		);
+		return  $re;
+	}
+		  private function adjust_date_to_25th($date)
     {
         $day = date('d', strtotime($date));
         $month = date('m', strtotime($date));
@@ -1799,7 +1943,7 @@ $this->db->insert('rescheduled_payments',$data);
 
 
 
-	function add_loans($amount, $months,$interest, $loan_id, $loan_date,$loan_customer)
+	function add_loan_recent($amount, $months,$interest, $loan_id, $loan_date,$loan_customer)
 	{
 
 
@@ -2619,6 +2763,206 @@ function get_all_recomended_edit_loan()
 	{
 		$this->db->where($this->id, $id);
 		$this->db->delete($this->table_d);
+	}
+
+
+	/**
+	 * Calculate bullet payment with monthly interest rate
+	 *
+	 * @param float $amount Loan principal
+	 * @param int $months Loan term in months
+	 * @param object $loan Loan product details
+	 * @param string $loan_date Start date of loan
+	 * @param float $interest Interest rate (treated as monthly rate)
+	 * @return string HTML table with loan details
+	 */
+	private function calculateBulletPayment($amount, $months, $loan, $loan_date, $interest)
+	{
+		// Use interest directly as monthly rate (not annual)
+		$monthly_interest_rate = $interest / 100; // Convert percentage to decimal
+
+		// Calculate total interest (principal × monthly rate × terms)
+		$total_interest = $amount * $monthly_interest_rate * $months;
+
+		// Total payment at maturity
+		$total_payment = $amount + $total_interest;
+
+		// Calculate maturity date
+		$maturity_date = date('Y-m-d', strtotime("+$months months", strtotime($loan_date)));
+
+		// Generate HTML for display
+		$table = '<div id="calculator"><h3>Bullet Loan Info</h3>';
+		$table .= '<table border="1" class="table">';
+		$table .= '<tr><td>Loan Name:</td><td>' . $loan->product_name . '</td></tr>';
+		$table .= '<tr><td>Interest:</td><td>' . $interest . '% per month</td></tr>';
+		$table .= '<tr><td>Terms:</td><td>' . $months . ' months</td></tr>';
+		$table .= '<tr><td>Payment Type:</td><td>Bullet Payment</td></tr>';
+		$table .= '</table>';
+
+		$table .= '<h3>Computation</h3>';
+		$table .= '<table>';
+		$table .= '<tr><td>Loan Amount:</td><td>' . $this->config->item('currency_symbol') . number_format($amount, 2, '.', ',') . '</td></tr>';
+		$table .= '<tr><td>Monthly Interest Rate:</td><td>' . $interest . '%</td></tr>';
+		$table .= '<tr><td>Total Interest:</td><td>' . $this->config->item('currency_symbol') . number_format($total_interest, 2, '.', ',') . '</td></tr>';
+		$table .= '<tr><td>Total Payment at Maturity:</td><td>' . $this->config->item('currency_symbol') . number_format($total_payment, 2, '.', ',') . '</td></tr>';
+		$table .= '</table>';
+
+		// Display payment schedule (single payment at maturity)
+		$table .= '<h3>Payment Schedule</h3>';
+		$table .= '<table class="table">';
+		$table .= '<tr>
+        <th>Payment</th>
+        <th>Due Date</th>
+        <th>Principal</th>
+        <th>Interest</th>
+        <th>Total</th>
+    </tr>';
+
+		$table .= '<tr>';
+		$table .= '<td>Bullet Payment</td>';
+		$table .= '<td>' . $maturity_date . '</td>';
+		$table .= '<td>' . number_format($amount, 2, '.', ',') . '</td>';
+		$table .= '<td>' . number_format($total_interest, 2, '.', ',') . '</td>';
+		$table .= '<td>' . number_format($total_payment, 2, '.', ',') . '</td>';
+		$table .= '</tr>';
+
+		$table .= '</table>';
+
+		$table .= '<p><b>Note:</b> For bullet loans, the entire principal plus interest is paid at maturity.</p>';
+		$table .= '<p>Interest calculation: Principal ($' . number_format($amount, 2) . ') × Monthly Rate (' . $interest . '%) × Term (' . $months . ' months) = $' . number_format($total_interest, 2) . '</p>';
+
+		$table .= '</div>';
+
+		return $table;
+	}
+
+	/**
+	 * Calculate early payoff amount for a bullet loan using monthly interest
+	 *
+	 * @param int $loan_id Loan ID
+	 * @param string $payment_date Date of payment (YYYY-MM-DD)
+	 * @return array Payoff details
+	 */
+	public function calculateBulletPayoff($loan_id, $payment_date = null)
+	{
+		// If no payment date provided, use current date
+		if ($payment_date === null) {
+			$payment_date = date('Y-m-d');
+		}
+
+		// Get loan details
+		$loan = $this->get_by_id($loan_id);
+
+		if (!$loan) {
+			return false;
+		}
+
+		// Principal amount
+		$principal = $loan->loan_principal;
+
+		// Monthly interest rate (directly use the stored interest rate)
+		$monthly_interest_rate = $loan->loan_interest / 100;
+
+		// Calculate full term interest
+		$full_term_interest = $principal * $monthly_interest_rate * $loan->loan_period;
+
+		// Convert dates to DateTime objects
+		$loan_start_date = new DateTime($loan->loan_date);
+		$payment_datetime = new DateTime($payment_date);
+
+		// Calculate the number of complete months elapsed
+		$months_elapsed = 0;
+		$years_diff = $payment_datetime->format('Y') - $loan_start_date->format('Y');
+		$months_diff = $payment_datetime->format('m') - $loan_start_date->format('m');
+		$days_diff = $payment_datetime->format('d') - $loan_start_date->format('d');
+
+		// Calculate total months
+		$months_elapsed = ($years_diff * 12) + $months_diff;
+
+		// If we haven't reached the day of the month the loan started, it's not a complete month
+		if ($days_diff < 0) {
+			$months_elapsed--;
+		}
+
+		// Calculate days in current partial month
+		$days_in_current_month = date('t', strtotime($payment_date));
+		$day_of_month = (int)$payment_datetime->format('d');
+		$loan_start_day = (int)$loan_start_date->format('d');
+
+		// Calculate partial month as a fraction
+		$partial_month = 0;
+		if ($days_diff < 0) {
+			// If payment day is before loan start day, calculate partial month
+			$days_in_prev_month = date('t', strtotime('-1 month', strtotime($payment_date)));
+			$partial_month = (($days_in_prev_month - $loan_start_day) + $day_of_month) / $days_in_prev_month;
+		} else {
+			// If payment day is after or equal to loan start day, calculate partial month
+			$partial_month = ($day_of_month - $loan_start_day) / $days_in_current_month;
+		}
+
+		// Add partial month to elapsed months
+		$total_months_elapsed = $months_elapsed + $partial_month;
+
+		// Calculate interest proportion based on elapsed time
+		$interest_proportion = min(1, max(0, $total_months_elapsed / $loan->loan_period));
+		$payoff_interest = $full_term_interest * $interest_proportion;
+
+		// If at maturity or beyond, charge full interest
+		if ($total_months_elapsed >= $loan->loan_period) {
+			$payoff_interest = $full_term_interest;
+		}
+
+		// Total payoff amount
+		$total_payoff = $principal + $payoff_interest;
+
+		return [
+			'principal' => $principal,
+			'interest' => $payoff_interest,
+			'total_payoff' => $total_payoff,
+			'months_elapsed' => $total_months_elapsed,
+			'total_months' => $loan->loan_period,
+			'interest_proportion' => $interest_proportion,
+			'payment_date' => $payment_date,
+			'monthly_interest_rate' => $monthly_interest_rate,
+			'full_term_interest' => $full_term_interest
+		];
+	}
+
+	/**
+	 * Insert bullet payment schedule with the correct interest calculation
+	 *
+	 * @param int $loan_id Loan ID
+	 * @param object $loan Loan product details
+	 * @param float $amount Principal amount
+	 * @param int $months Loan term in months
+	 * @param float $interest Monthly interest rate
+	 * @param string $start_date Loan start date
+	 * @param int $loan_customer Customer ID
+	 */
+	private function insert_bullet_payment_schedule($loan_id, $loan, $amount, $months, $interest, $start_date, $loan_customer)
+	{
+		// Calculate maturity date
+		$maturity_date = date('Y-m-d', strtotime("+$months months", strtotime($start_date)));
+
+		// Calculate total interest using monthly interest rate
+		$monthly_interest_rate = $interest / 100;
+		$total_interest = $amount * $monthly_interest_rate * $months;
+		$total_payment = $amount + $total_interest;
+
+		// For bullet loans, we create just one payment entry for the full amount
+		$this->db->insert('payement_schedules', [
+			'customer' => $loan_customer,
+			'loan_id' => $loan_id,
+			'payment_schedule' => $maturity_date,
+			'payment_number' => 1,
+			'amount' => $total_payment, // Principal + Interest
+			'principal' => $amount,
+			'interest' => $total_interest,
+			'paid_amount' => 0.00,
+			'loan_balance' => $amount,
+			'loan_date' => $start_date,
+			'is_bullet_payment' => 1 // Flag for bullet payment
+		]);
 	}
 }
 

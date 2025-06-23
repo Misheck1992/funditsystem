@@ -19,7 +19,7 @@
                 $this->load->model('Menu_model');
                 $this->load->model('Access_model');
                 $acc=$this->Access_model->get_all_acces($id);
-                $result = $this->Menu_model->get_all();
+                $result = $this->Menu_model->get_all_active();
                 $roles=$this->Roles_model->get_all();
                 ?>
                 <div class="box-body">
