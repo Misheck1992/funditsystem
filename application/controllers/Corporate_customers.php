@@ -566,6 +566,7 @@ class Corporate_customers extends CI_Controller
 		'DateOfIncorporation' => set_value('DateOfIncorporation', $row->DateOfIncorporation),
 		'RegistrationNumber' => set_value('RegistrationNumber', $row->RegistrationNumber),
                 'entity_type' =>set_value('entity_type',  $row->entity_type),
+                'category' => set_value('category', $row->category),
 		'ClientId' => set_value('ClientId', $row->ClientId),
 		'TaxIdentificationNumber' => set_value('TaxIdentificationNumber', $row->TaxIdentificationNumber),
 		'Country' => set_value('Country', $row->Country),
@@ -581,7 +582,7 @@ class Corporate_customers extends CI_Controller
                 'website' => set_value('website',$row->website),
 				'company_certificate' => set_value('company_certificate', $row->company_certificate),
                 'tax_id_doc'=>set_value('tax_id_doc', $row->tax_id_doc),
-                'proof_physical _address'=>set_value('proof_physical_address',  $row->financial_statement),
+                'proof_physical_address'=>set_value('proof_physical_address',  $row->proof_physical_address),
                 'financial_statement'=>set_value('financial_statement',  $row->financial_statement),
                 'key_management_info' => set_value('key_management_info', $row->key_management_info),
                 'business_info' => set_value('business_info', $row->business_info),
@@ -996,37 +997,108 @@ class Corporate_customers extends CI_Controller
     }
     public function update_action()
     {
+        $corporate_id = $this->input->post('id', TRUE);
+        $this->load->library('upload');
+
+        // Get existing corporate customer data
+        $existing_customer = $this->Corporate_customers_model->get_by_id($corporate_id);
+        $imagePath = APPPATH . '../uploads/'.$this->input->post('EntityName', TRUE);
+
+        // Create directory if it doesn't exist
+        if (!is_dir($imagePath)) {
+            mkdir($imagePath, 0777, true);
+        }
+
         $this->_rules();
 
         if ($this->form_validation->run() == FALSE) {
-            $this->update($this->input->post('id', TRUE));
+            $this->update($corporate_id);
         } else {
+            // Handle file uploads
+            $company_certificatefile = $existing_customer->company_certificate;
+            $proof_physical_addressfile = $existing_customer->proof_physical_address;
+            $financial_statementfile = $existing_customer->financial_statement;
+            $tax_id_docfile = $existing_customer->tax_id_doc;
+
+            // Company Certificate Upload
+            if (!empty($_FILES['company_certificate']['name'])) {
+                $config['upload_path'] = $imagePath;
+                $config['allowed_types'] = 'pdf|doc|docx|jpg|jpeg|png';
+                $config['max_size'] = 10240; // 10MB
+                $config['file_name'] = 'company_certificate_' . time();
+
+                $this->upload->initialize($config);
+
+                if ($this->upload->do_upload('company_certificate')) {
+                    $upload_data = $this->upload->data();
+                    $company_certificatefile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                }
+            }
+
+            // Proof of Physical Address Upload
+            if (!empty($_FILES['proof_physical_address']['name'])) {
+                $config['file_name'] = 'proof_physical_address_' . time();
+                $this->upload->initialize($config);
+
+                if ($this->upload->do_upload('proof_physical_address')) {
+                    $upload_data = $this->upload->data();
+                    $proof_physical_addressfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                }
+            }
+
+            // Financial Statement Upload
+            if (!empty($_FILES['financial_statement']['name'])) {
+                $config['file_name'] = 'financial_statement_' . time();
+                $this->upload->initialize($config);
+
+                if ($this->upload->do_upload('financial_statement')) {
+                    $upload_data = $this->upload->data();
+                    $financial_statementfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                }
+            }
+
+            // Tax ID Document Upload
+            if (!empty($_FILES['tax_id_doc']['name'])) {
+                $config['file_name'] = 'tax_id_doc_' . time();
+                $this->upload->initialize($config);
+
+                if ($this->upload->do_upload('tax_id_doc')) {
+                    $upload_data = $this->upload->data();
+                    $tax_id_docfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                }
+            }
+
             $data = array(
-		'EntityName' => $this->input->post('EntityName',TRUE),
-		'DateOfIncorporation' => $this->input->post('DateOfIncorporation',TRUE),
-		'RegistrationNumber' => $this->input->post('RegistrationNumber',TRUE),
+                'EntityName' => $this->input->post('EntityName',TRUE),
+                'DateOfIncorporation' => $this->input->post('DateOfIncorporation',TRUE),
+                'RegistrationNumber' => $this->input->post('RegistrationNumber',TRUE),
                 'entity_type' => $this->input->post('entity_type', True),
-		'ClientId' => $this->input->post('ClientId',TRUE),
-		'TaxIdentificationNumber' => $this->input->post('TaxIdentificationNumber',TRUE),
-		'Country' => $this->input->post('Country',TRUE),
-		'Branch' => $this->input->post('Branch',TRUE),
+                'category' => $this->input->post('category', TRUE),
+                'TaxIdentificationNumber' => $this->input->post('TaxIdentificationNumber',TRUE),
+                'Country' => $this->input->post('Country',TRUE),
+                'Branch' => $this->input->post('Branch',TRUE),
                 'nature_of_business' => $this->input->post('nature_of_business',TRUE),
                 'industry_sector' => $this->input->post('industry_sector',TRUE),
                 'street' => $this->input->post('street',TRUE),
                 'province' => $this->input->post('province',TRUE),
                 'postal_code' => $this->input->post('postal_code',TRUE),
-                'phone_number' => $this->input->post('phone_number',TRUE),
+                'phone_number' => $this->input->post('corporate_phone',TRUE),
                 'city_town' => $this->input->post('city_town',TRUE),
                 'contact_email' => $this->input->post('contact_email',TRUE),
                 'website' => $this->input->post('website',TRUE),
                 'key_management_info' => $this->input->post('key_management_info', TRUE),
                 'business_info' => $this->input->post('business_info', TRUE),
+                'company_certificate' => $company_certificatefile,
+                'tax_id_doc' => $tax_id_docfile,
+                'proof_physical_address' => $proof_physical_addressfile,
+                'financial_statement' => $financial_statementfile,
+            );
 
-                'company_certificate' => $this->input->post('company_certificate', TRUE),
-                'tax_id_doc'=>$this->input->post('tax_id_doc', TRUE),
-                'proof_physical_address'=>$this->input->post('proof_physical_address', TRUE),
-                'financial_statement'=>$this->input->post('financial_statement', TRUE),
-	    );
+            // Update corporate customer
+            $this->Corporate_customers_model->update($corporate_id, $data);
+
+            // Handle shareholders update
+            $this->update_shareholders($corporate_id);
 
             // Log the activity
             $logger = array(
@@ -1036,9 +1108,114 @@ class Corporate_customers extends CI_Controller
             );
             log_activity($logger);
 
-         $this->Corporate_customers_model->update($this->input->post('id', TRUE), $data);
-            $this->toaster->success('Success, Corporate customer was updated');
+            $this->toaster->success('Success, Corporate customer and shareholders were updated');
             redirect(site_url('corporate_customers'));
+        }
+    }
+
+    private function update_shareholders($corporate_id)
+    {
+        // Get shareholder data from form
+        $titles = $this->input->post('title');
+        $first_names = $this->input->post('first_name');
+        $last_names = $this->input->post('last_name');
+        $genders = $this->input->post('gender');
+        $nationalities = $this->input->post('nationality');
+        $phone_numbers = $this->input->post('phone_number');
+        $email_addresses = $this->input->post('email_address');
+        $full_addresses = $this->input->post('full_address');
+        $idtypes = $this->input->post('idtype');
+        $idnumbers = $this->input->post('idnumber');
+        $percentage_values = $this->input->post('percentage_value');
+        $shareholder_ids = $this->input->post('shareholder_id');
+        $idfiles = $_FILES['idfile'];
+
+        if (!empty($titles)) {
+            // First, remove all existing corporate_shareholders relationships
+            $this->Corporate_shareholders_model->delete_by_corporate_id($corporate_id);
+
+            $imagePath = APPPATH . '../uploads/'.$this->input->post('EntityName', TRUE).'/shareholders/';
+            if (!is_dir($imagePath)) {
+                mkdir($imagePath, 0777, true);
+            }
+
+            for ($i = 0; $i < count($titles); $i++) {
+                // Handle file upload for each shareholder
+                $idfile = null;
+                if (!empty($idfiles['name'][$i])) {
+                    $config['upload_path'] = $imagePath;
+                    $config['allowed_types'] = 'pdf|doc|docx|jpg|jpeg|png';
+                    $config['max_size'] = 5120; // 5MB
+                    $config['file_name'] = 'shareholder_id_' . $i . '_' . time();
+
+                    $this->upload->initialize($config);
+
+                    // Manually set the file data for this specific file
+                    $_FILES['temp_file']['name'] = $idfiles['name'][$i];
+                    $_FILES['temp_file']['type'] = $idfiles['type'][$i];
+                    $_FILES['temp_file']['tmp_name'] = $idfiles['tmp_name'][$i];
+                    $_FILES['temp_file']['error'] = $idfiles['error'][$i];
+                    $_FILES['temp_file']['size'] = $idfiles['size'][$i];
+
+                    if ($this->upload->do_upload('temp_file')) {
+                        $upload_data = $this->upload->data();
+                        $idfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/shareholders/'.$upload_data['file_name'];
+                    }
+                }
+
+                // Check if this is an existing shareholder or new one
+                if (!empty($shareholder_ids[$i])) {
+                    // Update existing shareholder
+                    $shareholder_data = array(
+                        'title'         => $titles[$i],
+                        'first_name'    => $first_names[$i],
+                        'last_name'     => $last_names[$i],
+                        'gender'        => $genders[$i],
+                        'nationality'   => $nationalities[$i],
+                        'phone_number'  => $phone_numbers[$i],
+                        'email_address' => $email_addresses[$i],
+                        'full_address'  => $full_addresses[$i],
+                        'idtype'        => $idtypes[$i],
+                        'idnumber'      => isset($idnumbers[$i]) ? $idnumbers[$i] : '',
+                    );
+
+                    // Only update idfile if a new file was uploaded
+                    if ($idfile) {
+                        $shareholder_data['idfile'] = $idfile;
+                    }
+
+                    $this->Shareholders_model->update($shareholder_ids[$i], $shareholder_data);
+                    $shareholder_id = $shareholder_ids[$i];
+                } else {
+                    // Create new shareholder
+                    $shareholder_data = array(
+                        'title'         => $titles[$i],
+                        'first_name'    => $first_names[$i],
+                        'last_name'     => $last_names[$i],
+                        'gender'        => $genders[$i],
+                        'nationality'   => $nationalities[$i],
+                        'phone_number'  => $phone_numbers[$i],
+                        'email_address' => $email_addresses[$i],
+                        'full_address'  => $full_addresses[$i],
+                        'added_by'      => $this->session->userdata('user_id'),
+                        'idtype'        => $idtypes[$i],
+                        'idnumber'      => isset($idnumbers[$i]) ? $idnumbers[$i] : '',
+                        'idfile'        => $idfile,
+                        'corporate_id'  => $corporate_id,
+                        'approval_status' => 'Not Approved'
+                    );
+
+                    $shareholder_id = $this->Shareholders_model->insert($shareholder_data);
+                }
+
+                // Create corporate_shareholders relationship
+                $corporate_shareholder = array(
+                    'corporate_id' => $corporate_id,
+                    'shareholder_id' => $shareholder_id,
+                    'percentage_value' => $percentage_values[$i],
+                );
+                $this->Corporate_shareholders_model->insert($corporate_shareholder);
+            }
         }
     }
 

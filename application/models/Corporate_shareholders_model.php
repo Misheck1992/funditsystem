@@ -110,6 +110,13 @@ class Corporate_shareholders_model extends CI_Model
         $this->db->delete($this->table);
     }
 
+    // delete by corporate_id
+    function delete_by_corporate_id($corporate_id)
+    {
+        $this->db->where('corporate_id', $corporate_id);
+        $this->db->delete($this->table);
+    }
+
 }
 
 /* End of file Customer_groups_model.php */

@@ -2929,6 +2929,12 @@ $countries = get_all('geo_countries');
     let countries = <?= json_encode($countries); ?>;
     let shareholderCount = 1;
     $(document).ready(function () {
+        // Initialize shareholder count based on existing shareholders (for edit page)
+        let existingShareholders = $("#shareholdersTable .shareholder-container").length;
+        if (existingShareholders > 0) {
+            shareholderCount = existingShareholders;
+        }
+
         $("#addRow").click(function () {
             shareholderCount++;
 

@@ -141,7 +141,7 @@ $zambian_provinces = [
 
                                     foreach ($countryd as $item){
                                         ?>
-                                        <option value="<?php echo $item->code; ?>" <?php if($item->code==$Country){echo "selected";} ?>><?php echo $item->name?></option>
+                                        <option value="<?php echo $item->code; ?>"><?php echo $item->name?></option>
 
                                         <?php
                                     }
