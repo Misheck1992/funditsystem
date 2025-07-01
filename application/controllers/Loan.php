@@ -2871,7 +2871,7 @@ exit();
         $menu_toggle['toggles'] = 23;
 
         $this->load->view('admin/header', $menu_toggle);
-        $this->load->view('loan/'.$view,$data);
+        $this->load->view('loan/edit_loan',$data);
         $this->load->view('admin/footer');
     }
 

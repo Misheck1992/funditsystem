@@ -115,7 +115,15 @@
 
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
-                        <td><a href="<?php echo base_url('loan/view/'). urlencode($loan->loan_id);?>">View Loan Summary| </a> <a href="<?php echo base_url('loan/client_summary/'). urlencode($loan->loan_id);?>">Client summary  </a> </td>
+                        <td>
+                            <a href="<?php echo base_url('loan/view/'). urlencode($loan->loan_id);?>">View Loan Summary</a> | 
+                            <a href="<?php echo base_url('loan/client_summary/'). urlencode($loan->loan_id);?>">Client summary</a> 
+                            <?php if($loan->loan_status != 'CLOSED' && $loan->loan_status != 'DELETED' && $loan->loan_status != 'WRITTEN_OFF'): ?>
+                            | <a href="<?php echo base_url('loan/edit_single_loan_request/'). urlencode($loan->loan_id);?>" class="btn btn-sm btn-primary">
+                                <i class="fa fa-edit"></i> Edit
+                              </a>
+                            <?php endif; ?>
+                        </td>
                        
 
                     </tr>

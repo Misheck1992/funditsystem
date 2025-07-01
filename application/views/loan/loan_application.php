@@ -156,7 +156,8 @@ $get_settings = get_by_id('settings','settings_id', '1');
 									</tr>
 
 									<tr>
-										<td>Credit details files</td>
+										<td>Credit details files (ie bank statement , loan file etc)</td>
+
 										<td>
 											<div id="loan_forms" >
 												<div class="row">
@@ -393,7 +394,7 @@ $get_settings = get_by_id('settings','settings_id', '1');
 										<td><input type="date" name="loan_date"  value="<?php echo set_value('loan_date'); ?>" /></td>
 									</tr>
 									<tr>
-										<td>Credit details files</td>
+										<td>Credit details files (ie bank statement , loan file etc)</td>
 										<td>
 											<div id="loan_forms1" >
 												<div class="row">
