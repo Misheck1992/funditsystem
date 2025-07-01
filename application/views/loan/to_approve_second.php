@@ -77,7 +77,7 @@
                         <td><?php echo $loan->loan_added_date ?></td>
                     
 
-                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id?>" class="btn btn-sm btn-info">View</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=APPROVED_SECOND"?>"  onclick="return confirm('Are you sure you want to approve?')" class="btn btn-sm btn-warning">Approve</a><a href="<?php echo base_url('loan/approval_action?id=').$loan->loan_id."&action=REJECT"?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to reject?')">Reject</a></td>
+                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id.'?action=approve_second'?>" class="btn btn-sm btn-success">View/Final Approve</a></td>
 
                     </tr>
                     <?php

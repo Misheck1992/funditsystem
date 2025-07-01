@@ -128,11 +128,7 @@
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
 						<td width="250">
-
-								<a class="btn btn-sm btn-danger" href="#" onclick="disburse_loan_charge_pre_paid('<?php echo $loan->loan_id; ?>','<?php echo $loan->loan_date ?>')">Disburse (processing fee charged)</a>
-						
-
-						<a href="<?php echo base_url('loan/view/').$loan->loan_id?>" class="btn btn-sm btn-info">View loan</a>
+						<a href="<?php echo base_url('loan/view/').$loan->loan_id.'?action=disburse'?>" class="btn btn-sm btn-danger">View/Disburse</a>
 						</td>
 
 					</tr>

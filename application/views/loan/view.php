@@ -324,8 +324,51 @@ $currency = get_by_id('currencies','currency_id',$currency);
 				</div>
 				<div class="col-lg-2">
 					<a href="<?php echo base_url('loan/report/').$loan_id ?>" style="color: red;"><i class="fa fa-file-pdf fa-2x"></i>Report</a>
-				
+
 					<hr>
+
+					<!-- Action Buttons Based on Context -->
+					<?php if (isset($action) && !empty($action)): ?>
+						<div class="action-buttons mb-3">
+							<h5>Actions</h5>
+							<?php if ($action == 'approve_first'): ?>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=APPROVED_FIRST"?>"
+								   onclick="return confirm('Are you sure you want to approve this loan?')"
+								   class="btn btn-sm btn-warning mb-2 d-block">Approve</a>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=REJECT"?>"
+								   class="btn btn-sm btn-danger mb-2 d-block"
+								   onclick="return confirm('Are you sure you want to reject?')">Reject</a>
+							<?php elseif ($action == 'recommend'): ?>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=RECOMMENDED"?>"
+								   onclick="return confirm('Are you sure you want to recommend this loan?')"
+								   class="btn btn-sm btn-warning mb-2 d-block">Recommend</a>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=REJECT"?>"
+								   class="btn btn-sm btn-danger mb-2 d-block"
+								   onclick="return confirm('Are you sure you want to reject?')">Reject</a>
+							<?php elseif ($action == 'approve_second'): ?>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=APPROVED"?>"
+								   onclick="return confirm('Are you sure you want to approve this loan?')"
+								   class="btn btn-sm btn-success mb-2 d-block">Final Approve</a>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=REJECT"?>"
+								   class="btn btn-sm btn-danger mb-2 d-block"
+								   onclick="return confirm('Are you sure you want to reject?')">Reject</a>
+							<?php elseif ($action == 'disburse'): ?>
+								<a class="btn btn-sm btn-danger mb-2 d-block" href="#" onclick="disburse_loan_charge_pre_paid('<?php echo $loan_id; ?>','<?php echo $loan_date ?>')">Disburse (processing fee charged)</a>
+							<?php elseif ($action == 'delete_recommend'): ?>
+								<a href="<?php echo base_url('Loan/delete_recommend/').$loan_id  ?>"
+								   class="btn btn-sm btn-warning mb-2 d-block">Recommend Delete</a>
+								<a href="<?php echo base_url('Loan/delete_reject/').$loan_id  ?>"
+								   class="btn btn-sm btn-primary mb-2 d-block">Reject Delete</a>
+							<?php elseif ($action == 'delete_approve'): ?>
+								<a href="<?php echo base_url('Loan/delete_approve/').$loan_id  ?>"
+								   class="btn btn-sm btn-warning mb-2 d-block">Approve Delete</a>
+								<a href="<?php echo base_url('Loan/delete_reject/').$loan_id  ?>"
+								   class="btn btn-sm btn-primary mb-2 d-block">Reject Delete</a>
+							<?php endif; ?>
+						</div>
+						<hr>
+					<?php endif; ?>
+
 					<?php
 					if(empty($next_payment_details)){
 						echo "No more payments to make";

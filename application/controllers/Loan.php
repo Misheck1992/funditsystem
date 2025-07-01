@@ -2647,7 +2647,12 @@ exit();
 
     }
 
-    function view($id){
+    function view($id, $action = null){
+        // Get action from URL parameter if not passed directly
+        if ($action === null) {
+            $action = $this->input->get('action');
+        }
+
         $row = $this->Loan_model->get_by_id($id);
         $payments = $this->Payement_schedules_model->get_all_by_id($row->loan_id);
         $files = $this->Loan_files_model->get_by_loans($row->loan_id);
@@ -2700,7 +2705,8 @@ exit();
             'currency'=>$row->currency,
             'processing_fee'=>$row->processing_fee,
             'calculation_type'=>$row->calculation_type,
-			'acrued' => $acrued
+			'acrued' => $acrued,
+            'action' => $action
 
         );
         $menu_toggle['toggles'] = 23;
