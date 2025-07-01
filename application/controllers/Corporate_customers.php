@@ -448,6 +448,7 @@ class Corporate_customers extends CI_Controller
             $full_addresses = $this->input->post('full_address', TRUE);
             $ownership_percentages = $this->input->post('ownership_percentage', TRUE);
             $IDType = $this->input->post('IDType', TRUE);
+            $idnumbers = $this->input->post('idnumber', TRUE);
             //$Identificationfiles = $this->input->post('Identificationfiles', TRUE);
 
             // Process each shareholder
@@ -501,6 +502,7 @@ class Corporate_customers extends CI_Controller
                         'full_address'  => $full_addresses[$i],
                         'added_by'      => $this->session->userdata('user_id'),
                         'idtype'        => $IDType[$i],
+                        'idnumber'      => isset($idnumbers[$i]) ? $idnumbers[$i] : '',
                         'idfile'        => $idfile
                     );
 
@@ -898,6 +900,7 @@ class Corporate_customers extends CI_Controller
             $email_addresses = $this->input->post('email_address');
             $full_addresses = $this->input->post('full_address');
             $idtypes = $this->input->post('idtype');
+            $idnumbers = $this->input->post('idnumber');
             $percentage_values = $this->input->post('percentage_value');
             $idfiles = $_FILES['idfile'];
 
@@ -963,6 +966,7 @@ class Corporate_customers extends CI_Controller
                         'email_address' => $email_addresses[$i],
                         'full_address' => $full_addresses[$i],
                         'idtype' => $idtypes[$i],
+                        'idnumber' => isset($idnumbers[$i]) ? $idnumbers[$i] : '',
                         'idfile' => $filename,
                         'added_by' => $this->session->userdata('user_id'),
                     ];

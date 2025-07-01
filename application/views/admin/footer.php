@@ -2979,6 +2979,7 @@ $countries = get_all('geo_countries');
                         </select>
                     </td>
                 </tr>
+                <tr><td>Identity Number *</td><td><input class="form-control" type="text" name="idnumber[]" placeholder="Enter ID number" required></td></tr>
                 <tr><td>ID File (optional)</td><td><input class="form-control" type="file" style="display: block;" name="idfile[]" ></td></tr>
                  <tr>
                         <td>Ownership share value (%)</td>

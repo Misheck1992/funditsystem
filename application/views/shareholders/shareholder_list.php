@@ -26,6 +26,8 @@
 				  <th>Phone Number</th>
 				  <th>Email Address</th>
 				  <th>Full Address</th>
+				  <th>ID Type</th>
+				  <th>Identity Number</th>
 				  <th>Corporation </th>
 				  <th>Action</th>
 			  </tr>
@@ -52,6 +54,8 @@
                         <td><?php echo $shareholder->phone_number ?></td>
                         <td><?php echo $shareholder->email_address ?></td>
                         <td><?php echo $shareholder->full_address ?></td>
+                        <td><?php echo isset($shareholder->idtype) ? $shareholder->idtype : 'N/A' ?></td>
+                        <td><?php echo isset($shareholder->idnumber) ? $shareholder->idnumber : 'N/A' ?></td>
                         <td><?php   echo  $customer_name ?></td>
                         <td style="text-align:center" width="200px">
                             <a href="<?php echo base_url('shareholders/read/' . $shareholder->id) ?>" class="btn btn-info"><i class="os-icon os-icon-eye"></i> More</a>

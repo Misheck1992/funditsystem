@@ -319,6 +319,10 @@ $zambian_provinces = [
                                         </td>
                                     </tr>
                                     <tr>
+                                        <td>Identity Number *</td>
+                                        <td><input class="form-control" type="text" name="idnumber[]" placeholder="Enter ID number" required></td>
+                                    </tr>
+                                    <tr>
                                         <td>ID File <span class="text-muted">(Optional)</span></td>
                                         <td><input class="form-control" style="display: block !important;"  type="file" name="idfile[]"></td>
                                     </tr>

@@ -147,9 +147,11 @@
                             <th>Phone Number</th>
                             <th>Email Address</th>
                             <th>Full Address</th>
+                            <th>ID Type</th>
+                            <th>Identity Number</th>
                             <th>% Ownership </th>
                             <th>KYC file </th>
-                           
+
                         </tr>
                         <?php
                         $shareholders_data=get_all_shareholders($id);
@@ -171,6 +173,8 @@
                                 <td><?php echo $shareholder->phone_number ?></td>
                                 <td><?php echo $shareholder->email_address ?></td>
                                 <td><?php echo $shareholder->full_address ?></td>
+                                <td><?php echo isset($shareholder->idtype) ? $shareholder->idtype : 'N/A' ?></td>
+                                <td><?php echo isset($shareholder->idnumber) ? $shareholder->idnumber : 'N/A' ?></td>
                                 <td><?php echo $shareholder->percentage_value ?></td>
                                 <td><a href="<?php echo base_url('uploads/').'147detailed_approach.pdf' ?>">Download KYC</a></td>
 
