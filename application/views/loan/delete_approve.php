@@ -70,9 +70,7 @@
                             <td><?php echo $loan->loan_status ?></td>
                             <td><?php echo $loan->loan_added_date ?></td>
 
-                            <td width="600px"><a href="<?php echo base_url('loan/view/').$loan->loan_id ?>" class="btn btn-sm btn-secondary">View details</a>
-                                <a href="<?php echo base_url('Loan/delete_approve/').$loan->loan_id  ?>" class="btn btn-sm btn-warning" >Approve delete</a>
-                                <a href="<?php echo base_url('Loan/delete_reject/').$loan->loan_id  ?>"  class="btn btn-sm btn-primary">Reject</a>
+                            <td width="600px"><a href="<?php echo base_url('loan/view/').$loan->loan_id.'?action=delete_approve' ?>" class="btn btn-sm btn-success">View/Approve Delete</a>
                             </td>
 
 

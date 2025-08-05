@@ -21,6 +21,12 @@ class Menu_model extends CI_Model
         $this->db->order_by($this->id, $this->order);
         return $this->db->get($this->table)->result();
     }
+	function get_all_active()
+    {
+        $this->db->order_by($this->id, $this->order);
+		$this->db->where('active', 1);
+        return $this->db->get($this->table)->result();
+    }
 
     // get data by id
     function get_by_id($id)

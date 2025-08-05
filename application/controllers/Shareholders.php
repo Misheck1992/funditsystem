@@ -26,7 +26,7 @@ class Shareholders extends CI_Controller
             'shareholders_data' => $this->Shareholders_model->get_all('shareholders'),
 
         );
-        $menu_toggle['toggles'] = 43;
+        $menu_toggle['toggles'] = 56;
         $this->load->view('admin/header', $menu_toggle);
         $this->load->view('shareholders/shareholder_list',$data);
         $this->load->view('admin/footer');
@@ -40,7 +40,7 @@ class Shareholders extends CI_Controller
             'shareholders_data' => $this->Shareholders_model->get_status('initiated')
 
         );
-        $menu_toggle['toggles'] = 43;
+        $menu_toggle['toggles'] = 56;
         $this->load->view('admin/header',$menu_toggle);
         $this->load->view('shareholders/approve',$data);
         $this->load->view('admin/footer');
@@ -54,7 +54,7 @@ class Shareholders extends CI_Controller
             'corporate_customers_data' => $this->Shareholders_model->get_status('Approved')
 
         );
-        $menu_toggle['toggles'] = 43;
+        $menu_toggle['toggles'] = 56;
         $this->load->view('admin/header',$menu_toggle);
         $this->load->view('shareholders/approved',$data);
         $this->load->view('admin/footer');
@@ -76,7 +76,7 @@ class Shareholders extends CI_Controller
                 'full_address' => $row->full_address,
             );
 
-            $menu_toggle['toggles'] = 43;
+            $menu_toggle['toggles'] = 56;
             $this->load->view('admin/header', $menu_toggle);
             $this->load->view('shareholders/shareholder_read', $data); // Update view path
             $this->load->view('admin/footer');
@@ -103,7 +103,7 @@ class Shareholders extends CI_Controller
             'full_address' => set_value('full_address'),
         );
 
-        $menu_toggle['toggles'] = 43;
+        $menu_toggle['toggles'] = 56;
         $this->load->view('admin/header', $menu_toggle);
         $this->load->view('shareholders/shareholder_form', $data); // Update view path
         $this->load->view('admin/footer');
@@ -159,7 +159,7 @@ class Shareholders extends CI_Controller
                 'full_address' => set_value('full_address',$row->full_address),
 
             );
-            $menu_toggle['toggles'] = 43;
+            $menu_toggle['toggles'] = 56;
             $this->load->view('admin/header', $menu_toggle);
             $this->load->view('shareholders/shareholder_edit', $data); // Update view path
             $this->load->view('admin/footer');

@@ -48,6 +48,7 @@
                   <option value="">--select--</option>
                   <option value="Straight Line" <?php if($frequency=='Straight Line'){ echo "selected"; } ?>>Straight Line</option>
                   <option value="Reducing Balance" <?php if($frequency=='Reducing Balance'){ echo "selected"; } ?> >Reducing Balance</option>
+                  <option value="Bullet Payment" <?php if($frequency=='Bullet Payment'){ echo "selected"; } ?> >Bullet Payment Straight Line</option>
 
               </select>
 

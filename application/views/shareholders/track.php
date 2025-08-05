@@ -14,17 +14,33 @@
         <div class="card-body" style="border: thick #24C16B solid;border-radius: 14px;">
             <h2 style="margin-top:0px">Corporate_customers List</h2>
 
-            <table class="table table-bordered" style="margin-bottom: 10px">
-                <tr>
-                    <th>No</th>
-                    <th>EntityName</th>
+            <table class="table table-bordered" id ="data-table1" style="margin-bottom: 10px">
+               <thead>
+			   <tr>
+				   <th>No</th>
+				   <th>EntityName</th>
 
-                    <th>Status</th>
+				   <th>Status</th>
 
 
-                    <th>CreatedOn</th>
-                    <th>Action</th>
-                </tr><?php
+				   <th>CreatedOn</th>
+				   <th>Action</th>
+			   </tr>
+			   </thead>
+				<tbody>
+				<?php
+				if($this->session->flashdata('message'))
+				{
+					echo '<div class="alert alert-success">'.$this->session->flashdata('message').'</div>';
+				}
+				?>
+				<?php
+				if($this->session->flashdata('error'))
+				{
+					echo '<div class="alert alert-danger">'.$this->session->flashdata('error').'</div>';
+				}
+				?>
+				<?php
                 $start=0;
                 foreach ($corporate_customers_data as $corporate_customers)
                 {
@@ -48,6 +64,7 @@
                     <?php
                 }
                 ?>
+				</tbody>
             </table>
         </div>
     </div>

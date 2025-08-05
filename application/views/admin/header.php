@@ -40,6 +40,7 @@ if(!empty($toggles)){
 	<link type="text/css" href="<?php echo base_url()  ?>gisttech/css/tableexport.min.css" rel="stylesheet" />
 	<link rel="stylesheet" type="text/css" href="<?php echo base_url()?>lib/sweetalerts/sweetalert.css">
 	<link href="<?php echo base_url('lib/')?>select2/dist/css/select2.min.css" rel="stylesheet" type="text/css"/>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 	<style>
         .wrapper {
             position: relative;
@@ -420,9 +421,1132 @@ if(!empty($toggles)){
         #addRow:hover {
             background: #27ae60;
         }
+		/*custom style */
+		/**
+ * Finance Real - File Library Module
+ * Main styling for file explorer and components
+ */
+
+		/* Core Layout Styles */
+		.file-library-container {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+			min-height: 500px;
+			background-color: #f8f9fa;
+			border-radius: 8px;
+			box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+			overflow: hidden;
+		}
+
+		.file-library-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 16px 20px;
+			background-color: #fff;
+			border-bottom: 1px solid #e9ecef;
+			z-index: 10;
+		}
+
+		.file-library-title {
+			font-size: 1.25rem;
+			font-weight: 600;
+			color: #343a40;
+			margin: 0;
+		}
+
+		.file-library-main {
+			display: flex;
+			flex: 1;
+			overflow: hidden;
+		}
+
+		.file-library-sidebar {
+			width: 260px;
+			background-color: #fff;
+			border-right: 1px solid #e9ecef;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+		}
+
+		.file-library-content {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+		}
+
+		.file-library-toolbar {
+			padding: 12px 16px;
+			background-color: #fff;
+			border-bottom: 1px solid #e9ecef;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+		}
+
+		.file-library-toolbar-left {
+			display: flex;
+			align-items: center;
+		}
+
+		.file-library-toolbar-right {
+			display: flex;
+			align-items: center;
+		}
+
+		.file-container {
+			flex: 1;
+			overflow-y: auto;
+			padding: 20px;
+			background-color: #f8f9fa;
+			position: relative;
+		}
+
+		/* Sidebar Styles */
+		.sidebar-section {
+			margin-bottom: 15px;
+		}
+
+		.sidebar-section-title {
+			padding: 10px 15px;
+			font-weight: 600;
+			font-size: 0.9rem;
+			color: #495057;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+		}
+
+		.sidebar-section-title .toggle-icon {
+			cursor: pointer;
+			font-size: 0.8rem;
+			color: #6c757d;
+		}
+
+		.sidebar-section-content {
+			padding: 0 15px 10px;
+		}
+
+		.sidebar-menu {
+			list-style: none;
+			padding: 0;
+			margin: 0;
+		}
+
+		.sidebar-menu-item {
+			padding: 8px 12px;
+			margin: 2px 0;
+			border-radius: 4px;
+			cursor: pointer;
+			display: flex;
+			align-items: center;
+			color: #495057;
+			transition: all 0.2s ease;
+		}
+
+		.sidebar-menu-item:hover {
+			background-color: #f1f3f5;
+			color: #212529;
+		}
+
+		.sidebar-menu-item.active {
+			background-color: #e9ecef;
+			color: #212529;
+			font-weight: 500;
+		}
+
+		.sidebar-menu-item i {
+			margin-right: 8px;
+			width: 18px;
+			text-align: center;
+		}
+
+		.folder-tree {
+			padding: 0;
+			margin: 0;
+			list-style: none;
+		}
+
+		.folder-tree-item {
+			padding: 4px 0;
+		}
+
+		.folder-tree-item-link {
+			display: flex;
+			align-items: center;
+			padding: 6px 12px;
+			border-radius: 4px;
+			cursor: pointer;
+			color: #495057;
+			transition: all 0.2s ease;
+		}
+
+		.folder-tree-item-link:hover {
+			background-color: #f1f3f5;
+			color: #212529;
+		}
+
+		.folder-tree-item-link.active {
+			background-color: #e9ecef;
+			color: #212529;
+			font-weight: 500;
+		}
+
+		.folder-tree-item-link i {
+			margin-right: 8px;
+			width: 18px;
+			text-align: center;
+		}
+
+		.folder-tree-children {
+			list-style: none;
+			padding-left: 20px;
+			margin: 0;
+		}
+
+		.folder-tree-item .folder-toggle {
+			width: 16px;
+			cursor: pointer;
+			margin-right: 4px;
+			text-align: center;
+		}
+
+		/* Breadcrumb Styles */
+
+
+
+		/* File Container Styles */
+		.file-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+			gap: 16px;
+		}
+
+		.file-list {
+			display: flex;
+			flex-direction: column;
+		}
+
+		/* File and Folder Items */
+		.file-item,
+		.folder-item {
+			position: relative;
+			border-radius: 8px;
+			background-color: #fff;
+			transition: all 0.2s ease;
+			border: 1px solid #e9ecef;
+			overflow: hidden;
+		}
+
+		/* Grid View */
+		.file-grid .file-item,
+		.file-grid .folder-item {
+			display: flex;
+			flex-direction: column;
+			padding: 0;
+			cursor: pointer;
+		}
+
+		.file-grid .file-preview,
+		.file-grid .folder-icon {
+			height: 120px;
+			width: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			background-color: #f8f9fa;
+			border-bottom: 1px solid #e9ecef;
+		}
+
+		.file-grid .file-icon,
+		.file-grid .folder-icon i {
+			font-size: 48px;
+			color: #6c757d;
+		}
+
+		.file-grid .folder-icon i {
+			color: #ffc107;
+		}
+
+		.file-grid .file-thumbnail {
+			max-width: 100%;
+			max-height: 100%;
+			object-fit: contain;
+		}
+
+		.file-grid .file-details,
+		.file-grid .folder-details {
+			padding: 12px;
+			flex: 1;
+		}
+
+		.file-grid .file-name,
+		.file-grid .folder-name {
+			font-weight: 500;
+			font-size: 0.9rem;
+			margin-bottom: 4px;
+			color: #212529;
+			word-break: break-word;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
+		}
+
+		.file-grid .file-meta,
+		.file-grid .folder-meta {
+			font-size: 0.75rem;
+			color: #6c757d;
+		}
+
+		.file-grid .file-actions,
+		.file-grid .folder-actions {
+			position: absolute;
+			top: 8px;
+			right: 8px;
+			display: none;
+			background-color: rgba(255, 255, 255, 0.9);
+			border-radius: 4px;
+			padding: 4px;
+			z-index: 10;
+		}
+
+		.file-grid .file-item:hover .file-actions,
+		.file-grid .folder-item:hover .folder-actions {
+			display: flex;
+		}
+
+		/* List View */
+		.file-list .file-item,
+		.file-list .folder-item {
+			display: flex;
+			align-items: center;
+			padding: 12px 16px;
+			cursor: pointer;
+			margin-bottom: 8px;
+		}
+
+		.file-list .file-select,
+		.file-list .folder-select {
+			margin-right: 12px;
+		}
+
+		.file-list .file-icon,
+		.file-list .folder-icon {
+			font-size: 24px;
+			margin-right: 16px;
+			color: #6c757d;
+			min-width: 24px;
+			text-align: center;
+		}
+
+		.file-list .folder-icon i {
+			color: #ffc107;
+		}
+
+		.file-list .file-details,
+		.file-list .folder-details {
+			flex: 1;
+			min-width: 0;
+		}
+
+		.file-list .file-name,
+		.file-list .folder-name {
+			font-weight: 500;
+			color: #212529;
+			margin-bottom: 2px;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.file-list .file-category,
+		.file-list .folder-meta {
+			font-size: 0.8rem;
+			color: #6c757d;
+		}
+
+		.file-list .file-meta {
+			display: flex;
+			align-items: center;
+			margin: 0 16px;
+			min-width: 280px;
+		}
+
+		.file-list .file-meta span {
+			margin-right: 16px;
+			font-size: 0.8rem;
+			color: #6c757d;
+		}
+
+		.file-list .file-actions,
+		.file-list .folder-actions {
+			display: none;
+		}
+
+		.file-list .file-item:hover .file-actions,
+		.file-list .folder-item:hover .folder-actions {
+			display: flex;
+		}
+
+		/* Shared styles for file/folder items */
+		.file-item:hover,
+		.folder-item:hover {
+			border-color: #ced4da;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+		}
+
+		.file-item.selected {
+			background-color: #e7f5ff;
+			border-color: #74c0fc;
+		}
+
+		.folder-item.folder-drag-over {
+			background-color: #e7f5ff;
+			border-color: #74c0fc;
+			box-shadow: 0 0 0 2px #74c0fc;
+		}
+
+		.btn-icon {
+			width: 28px;
+			height: 28px;
+			padding: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			border-radius: 4px;
+			background-color: transparent;
+			color: #6c757d;
+			border: none;
+			cursor: pointer;
+			margin-left: 4px;
+			transition: all 0.2s ease;
+		}
+
+		.btn-icon:hover {
+			background-color: #f1f3f5;
+			color: #212529;
+		}
+
+		.btn-icon:focus {
+			outline: none;
+			box-shadow: none;
+		}
+
+		/* Empty folder state */
+		.empty-folder {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			padding: 60px 0;
+			text-align: center;
+		}
+
+		.empty-folder i {
+			font-size: 64px;
+			color: #ced4da;
+			margin-bottom: 16px;
+		}
+
+		.empty-folder p {
+			font-size: 1.1rem;
+			color: #6c757d;
+			margin-bottom: 24px;
+		}
+
+		.empty-folder-actions {
+			display: flex;
+			gap: 12px;
+		}
+
+		/* Drag and Drop */
+		.drag-over {
+			border: 2px dashed #74c0fc !important;
+			background-color: rgba(231, 245, 255, 0.6) !important;
+		}
+
+		#drop-overlay {
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background-color: rgba(248, 249, 250, 0.8);
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			z-index: 1000;
+			display: none;
+		}
+
+		#drop-overlay i {
+			font-size: 64px;
+			color: #74c0fc;
+			margin-bottom: 16px;
+		}
+
+		#drop-overlay p {
+			font-size: 1.1rem;
+			color: #495057;
+		}
+
+		/* File Upload */
+		.upload-progress-modal .modal-body {
+			max-height: 400px;
+			overflow-y: auto;
+		}
+
+		.upload-progress-item {
+			margin-bottom: 16px;
+			border-radius: 8px;
+			padding: 8px 12px;
+			background-color: #f8f9fa;
+		}
+
+		.upload-progress-item[data-status="success"] {
+			background-color: #edfbf3;
+		}
+
+		.upload-progress-item[data-status="error"] {
+			background-color: #fbedee;
+		}
+
+		.progress-info {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 8px;
+		}
+
+		.progress-filename {
+			font-weight: 500;
+			font-size: 0.9rem;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			max-width: 80%;
+		}
+
+		.progress-percentage {
+			font-size: 0.8rem;
+			font-weight: 600;
+		}
+
+		.progress {
+			height: 6px;
+			margin-bottom: 4px;
+		}
+
+		.progress-status {
+			display: flex;
+			justify-content: flex-end;
+			font-size: 0.8rem;
+		}
+
+		/* File Preview */
+		.file-preview-modal .modal-body {
+			padding: 0;
+			position: relative;
+		}
+
+		#preview-container {
+			min-height: 200px;
+			max-height: 70vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			position: relative;
+			overflow: auto;
+		}
+
+		.preview-loading {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-direction: column;
+			padding: 40px;
+			color: #6c757d;
+		}
+
+		.preview-loading i {
+			font-size: 32px;
+			margin-bottom: 16px;
+		}
+
+		.preview-error {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-direction: column;
+			padding: 40px;
+			color: #dc3545;
+		}
+
+		.preview-error i {
+			font-size: 32px;
+			margin-bottom: 16px;
+		}
+
+		.preview-image {
+			max-width: 100%;
+			max-height: 70vh;
+		}
+
+		.pdf-container {
+			width: 100%;
+			height: 70vh;
+		}
+
+		.pdf-container iframe {
+			width: 100%;
+			height: 100%;
+			border: none;
+		}
+
+		.text-preview {
+			padding: 16px;
+			background-color: #f8f9fa;
+			white-space: pre-wrap;
+			word-break: break-word;
+			width: 100%;
+			max-height: 70vh;
+			overflow: auto;
+			font-family: monospace;
+			font-size: 0.9rem;
+			color: #212529;
+		}
+
+		.no-preview {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			padding: 40px;
+			text-align: center;
+		}
+
+		.no-preview .file-icon {
+			font-size: 64px;
+			color: #6c757d;
+			margin-bottom: 16px;
+		}
+
+		.no-preview p {
+			font-size: 1rem;
+			color: #6c757d;
+			margin-bottom: 24px;
+		}
+
+		/* File Sharing */
+		.file-share-modal .user-list {
+			max-height: 300px;
+			overflow-y: auto;
+		}
+
+		.shared-user-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 12px;
+			border-radius: 8px;
+			background-color: #f8f9fa;
+			margin-bottom: 8px;
+		}
+
+		.shared-user-info {
+			display: flex;
+			align-items: center;
+		}
+
+		.shared-user-avatar {
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
+			background-color: #e9ecef;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin-right: 12px;
+			color: #6c757d;
+			font-weight: 600;
+		}
+
+		.shared-user-name {
+			font-weight: 500;
+		}
+
+		.shared-user-email {
+			font-size: 0.8rem;
+			color: #6c757d;
+		}
+
+		.shared-user-actions {
+			display: flex;
+			align-items: center;
+		}
+
+		.permission-select {
+			margin-right: 12px;
+		}
+
+		/* Folder Creation */
+		.create-folder-form .form-group {
+			margin-bottom: 16px;
+		}
+
+		/* Context Menu */
+		.context-menu {
+			position: absolute;
+			z-index: 1000;
+			width: 200px;
+			background-color: #fff;
+			border-radius: 8px;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+			padding: 8px 0;
+			display: none;
+		}
+
+		.context-menu-item {
+			padding: 8px 16px;
+			display: flex;
+			align-items: center;
+			cursor: pointer;
+			color: #212529;
+			transition: all 0.2s ease;
+		}
+
+		.context-menu-item:hover {
+			background-color: #f1f3f5;
+		}
+
+		.context-menu-item i {
+			margin-right: 8px;
+			width: 18px;
+			text-align: center;
+			color: #6c757d;
+		}
+
+		.context-menu-divider {
+			height: 1px;
+			background-color: #e9ecef;
+			margin: 4px 0;
+		}
+
+		/* Search */
+		.search-container {
+			position: relative;
+			width: 100%;
+			max-width: 400px;
+		}
+
+		.search-input {
+			padding-right: 40px;
+		}
+
+		.search-icon {
+			position: absolute;
+			right: 12px;
+			top: 50%;
+			transform: translateY(-50%);
+			color: #6c757d;
+		}
+
+		.search-loading {
+			position: absolute;
+			right: 12px;
+			top: 50%;
+			transform: translateY(-50%);
+			color: #6c757d;
+			display: none;
+		}
+
+		.search-results {
+			position: absolute;
+			top: 100%;
+			left: 0;
+			right: 0;
+			background-color: #fff;
+			border-radius: 8px;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+			z-index: 1000;
+			max-height: 400px;
+			overflow-y: auto;
+			display: none;
+		}
+
+		.search-result-item {
+			padding: 8px 12px;
+			display: flex;
+			align-items: center;
+			cursor: pointer;
+			transition: all 0.2s ease;
+		}
+
+		.search-result-item:hover {
+			background-color: #f1f3f5;
+		}
+
+		.search-result-icon {
+			margin-right: 8px;
+			width: 24px;
+			text-align: center;
+			color: #6c757d;
+		}
+
+		.search-result-text {
+			flex: 1;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.search-result-type {
+			font-size: 0.8rem;
+			color: #6c757d;
+			margin-left: 8px;
+		}
+
+		/* Advanced Search */
+		.advanced-search-form {
+			padding: 16px;
+			background-color: #f8f9fa;
+			border-radius: 8px;
+			margin-bottom: 16px;
+		}
+
+		.search-filters {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 12px;
+		}
+
+		.search-filter {
+			flex: 1;
+			min-width: 200px;
+		}
+
+		/* Notifications */
+		.toast-container {
+			position: fixed;
+			bottom: 20px;
+			right: 20px;
+			z-index: 9999;
+		}
+
+		.toast {
+			margin-bottom: 10px;
+			min-width: 300px;
+		}
+
+		/* Animations */
+		.folder-transition-in {
+			animation: fadeIn 0.3s ease;
+		}
+
+		.folder-transition-out {
+			animation: fadeOut 0.3s ease;
+		}
+
+		@keyframes fadeIn {
+			from {
+				opacity: 0;
+				transform: translateY(10px);
+			}
+			to {
+				opacity: 1;
+				transform: translateY(0);
+			}
+		}
+
+		@keyframes fadeOut {
+			from {
+				opacity: 1;
+				transform: translateY(0);
+			}
+			to {
+				opacity: 0;
+				transform: translateY(10px);
+			}
+		}
+
+		/* File Drag Image */
+		.file-drag-image {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			position: relative;
+			width: 40px;
+			height: 40px;
+		}
+
+		.file-drag-image .file-icon {
+			font-size: 32px;
+			color: #6c757d;
+		}
+
+		.file-drag-image .badge {
+			position: absolute;
+			top: -5px;
+			right: -5px;
+		}
+
+		/* Responsive Adjustments */
+		@media (max-width: 992px) {
+			.file-library-sidebar {
+				width: 220px;
+			}
+
+			.file-grid {
+				grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+			}
+		}
+
+		@media (max-width: 768px) {
+			.file-library-main {
+				flex-direction: column;
+			}
+
+			.file-library-sidebar {
+				width: 100%;
+				border-right: none;
+				border-bottom: 1px solid #e9ecef;
+				max-height: 200px;
+				overflow-y: auto;
+			}
+
+			.file-grid {
+				grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+			}
+
+			.file-list .file-meta {
+				display: none;
+			}
+
+			.file-list .file-item,
+			.file-list .folder-item {
+				padding: 8px 12px;
+			}
+		}
+
+		@media (max-width: 576px) {
+			.file-grid {
+				grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+			}
+
+			.file-grid .file-preview,
+			.file-grid .folder-icon {
+				height: 90px;
+			}
+
+			.file-grid .file-name,
+			.file-grid .folder-name {
+				font-size: 0.8rem;
+			}
+
+			.file-library-toolbar {
+				flex-direction: column;
+				align-items: flex-start;
+			}
+
+			.file-library-toolbar-right {
+				margin-top: 8px;
+				width: 100%;
+				justify-content: space-between;
+			}
+
+			.search-container {
+				max-width: 100%;
+				margin-bottom: 8px;
+			}
+		}
+
+
+		.preview-error {
+			text-align: center;
+			padding: 40px;
+			color: #d9534f;
+		}
+
+		.image-preview {
+			text-align: center;
+			max-height: 60vh;
+			overflow: auto;
+		}
+
+		.pdf-preview {
+			height: 60vh;
+		}
+
+		.pdf-frame {
+			width: 100%;
+			height: 100%;
+			border: 1px solid #ddd;
+		}
+
+		.text-preview {
+			max-height: 60vh;
+			overflow: auto;
+			border: 1px solid #ddd;
+			background: #f9f9f9;
+		}
+
+		.text-content {
+			padding: 15px;
+			white-space: pre-wrap;
+			font-family: 'Courier New', Courier, monospace;
+		}
+
+		.no-preview-available, .generic-preview {
+			text-align: center;
+			padding: 30px;
+		}
+
+		.file-info-section {
+			margin-top: 20px;
+			border-top: 1px solid #ddd;
+			padding-top: 15px;
+		}
+
+		.file-info-header {
+			font-weight: bold;
+			margin-bottom: 10px;
+		}
+
+		.file-info-table {
+			width: 100%;
+		}
+
+		.file-info-table td {
+			padding: 5px;
+		}
+
+		.file-info-table td:first-child {
+			width: 120px;
+			font-weight: bold;
+		}
+
+		/* Notification styles */
+		#notification-container {
+			position: fixed;
+			top: 20px;
+			right: 20px;
+			z-index: 9999;
+			max-width: 350px;
+			width: 100%;
+		}
+
+		.notification {
+			background-color: white;
+			border-radius: 4px;
+			box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+			margin-bottom: 10px;
+			padding: 15px;
+			display: flex;
+			align-items: flex-start;
+			opacity: 0;
+			transform: translateX(50px);
+			transition: opacity 0.3s, transform 0.3s;
+		}
+
+		.notification.show {
+			opacity: 1;
+			transform: translateX(0);
+		}
+
+		.notification.closing {
+			opacity: 0;
+			transform: translateX(50px);
+		}
+
+		.notification-icon {
+			margin-right: 12px;
+			font-size: 20px;
+		}
+
+		.notification-content {
+			flex: 1;
+			padding-right: 10px;
+		}
+
+		.notification-close {
+			background: none;
+			border: none;
+			cursor: pointer;
+			color: #999;
+			padding: 0;
+			margin-left: 10px;
+			font-size: 14px;
+		}
+
+		.notification-close:hover {
+			color: #555;
+		}
+
+		/* Notification types */
+		.notification-success .notification-icon {
+			color: #28a745;
+		}
+
+		.notification-error .notification-icon {
+			color: #dc3545;
+		}
+
+		.notification-info .notification-icon {
+			color: #17a2b8;
+		}
+
+		.notification-warning .notification-icon {
+			color: #ffc107;
+		}
+		/* Loading overlay styles */
+		#loading-overlay {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0, 0, 0, 0.5);
+			z-index: 9999;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			opacity: 0;
+			visibility: hidden;
+			transition: opacity 0.3s, visibility 0.3s;
+		}
+
+		#loading-overlay.show {
+			opacity: 1;
+			visibility: visible;
+		}
+
+		.loading-content {
+			background-color: white;
+			border-radius: 8px;
+			padding: 30px;
+			box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+			text-align: center;
+		}
+
+		.loading-spinner {
+			font-size: 40px;
+			color: #007bff;
+			margin-bottom: 15px;
+		}
+
+		.loading-message {
+			font-size: 16px;
+			color: #333;
+		}
     </style>
 
 <link href="<?php echo base_url('admin_assets')?>/css/style.css" rel="stylesheet">
+	<link href="<?php echo base_url('admin_assets')?>/css/modern-theme.css" rel="stylesheet">
 </head>
 
 <body>
@@ -454,10 +1578,10 @@ if(!empty($toggles)){
 							<i class="anticon"></i>
 						</a>
 					</li>
-                    <h5 class="hidden-mobile" style="font-family:'fantasy';color: #0268bc; font-weight: bolder;background-color: #fff; padding: 0.5em;border-radius: 50px 0px 50px 0px;">Welcome to Finance Realm System  </h5>
+
 				</ul>
 				<ul class="nav-right">
-                    <h5 style="font-family:'fantasy';color: #0268bc; font-weight: bolder;background-color: #fff; padding: 0.5em;border-radius: 12px;" class="hidden-mobile">CURRENT USER: <font color="#0268bc" style="text-underline: green;"><?php echo $this->session->userdata('Firstname')." ".$this->session->userdata('Lastname')."(".$this->session->userdata('RoleName').")"; ?></font> </h5>
+                    <h5 style="font-family:'fantasy';color: #0268bc; font-weight: bolder;background-color: #fff; padding: 0.5em;border-radius: 12px;" class="hidden-mobile">SESSION: <font color="#0268bc" style="text-underline: green;"><?php echo $this->session->userdata('Firstname')." ".$this->session->userdata('Lastname')."(".$this->session->userdata('RoleName').")"; ?></font> </h5>
 
                     <li class="dropdown dropdown-animated scale-left">
 						<div class="pointer" data-toggle="dropdown">
@@ -513,7 +1637,7 @@ if(!empty($toggles)){
 					<li class="nav-item">
 						<a  href="<?php echo base_url('Admin')?>">
                                 <span class="icon-holder">
-                                    <i class="fa fa-home"></i>
+                                    <i class="bi bi-house"></i>
                                 </span>
 							<span class="title">Dashboard</span>
 							<span class="arrow">
@@ -526,20 +1650,19 @@ if(!empty($toggles)){
 
 					<?= display_menu_admin(0, 1, $tg); ?>
 
-
-					<li class="nav-item ">
-						<a class="dropdown-toggle" href="<?php  echo base_url('auth/logout')?>">
+					<li class="nav-item">
+						<a  href="<?php echo base_url('files_controller')?>">
                                 <span class="icon-holder">
-                                    <i class="fa fa-lock"></i>
+                                    <i class="bi bi-folder"></i>
                                 </span>
-							<span class="title">Logout</span>
+							<span class="title">File Library</span>
 							<span class="arrow">
                                     <i class="arrow-icon"></i>
                                 </span>
 						</a>
 
-
 					</li>
+
 				</ul>
 			</div>
 		</div>

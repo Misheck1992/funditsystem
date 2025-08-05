@@ -13,7 +13,112 @@
 	<!-- Core css -->
 	<link href="<?php echo base_url('admin_assets')?>/css/app.min.css" rel="stylesheet">
 	<link href="<?php echo base_url('admin_assets')?>/css/style.css" rel="stylesheet">
+	<style>
+		.login-container {
+			min-height: 100vh;
+			background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
 
+		.login-card {
+			border-radius: 16px;
+			border: none;
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+			overflow: hidden;
+			max-width: 450px;
+			width: 100%;
+		}
+
+		.card-header {
+			background-color: #0268bc;
+			padding: 25px;
+			text-align: center;
+		}
+
+		.card-header img {
+			max-height: 60px;
+		}
+
+		.card-body {
+			padding: 35px;
+			background-color: #fff;
+		}
+
+		.form-group {
+			margin-bottom: 25px;
+		}
+
+		.form-control {
+			height: 50px;
+			border-radius: 8px;
+			border: 1px solid #e0e0e0;
+			padding-left: 15px;
+			transition: all 0.3s;
+		}
+
+		.form-control:focus {
+			border-color: #0268bc;
+			box-shadow: 0 0 0 0.2rem rgba(2, 104, 188, 0.15);
+		}
+
+		.input-icon {
+			position: relative;
+		}
+
+		.input-icon i {
+			position: absolute;
+			left: 15px;
+			top: 50%;
+			transform: translateY(-50%);
+			color: #0268bc;
+		}
+
+		.input-icon input {
+			padding-left: 45px;
+		}
+
+		.btn-primary {
+			background-color: #0268bc;
+			border-color: #0268bc;
+			border-radius: 8px;
+			height: 50px;
+			font-weight: 600;
+			letter-spacing: 0.5px;
+			transition: all 0.3s;
+		}
+
+		.btn-primary:hover {
+			background-color: #0257a1;
+			border-color: #0257a1;
+			transform: translateY(-2px);
+			box-shadow: 0 5px 10px rgba(2, 104, 188, 0.2);
+		}
+
+		.alert {
+			border-radius: 8px;
+			padding: 15px;
+		}
+
+		.forget-link {
+			color: #0268bc;
+			font-weight: 500;
+			transition: all 0.3s;
+		}
+
+		.forget-link:hover {
+			color: #0257a1;
+			text-decoration: none;
+		}
+
+		.footer {
+			text-align: center;
+			padding: 15px;
+			color: #666;
+			font-size: 14px;
+		}
+	</style>
 
 </head>
 

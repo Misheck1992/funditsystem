@@ -44,15 +44,116 @@ class Payement_schedules_model extends CI_Model
         return $this->db->get($this->table)->row();
     }
 
-    public function new_pay($loan_number,$pay_number,$amount, $date){
+    public function new_pay($loan_number,$pay_number,$amount, $date, $acrued=0)
+	{
         $this->db->select("*")->from($this->table);
         $this->db->where('loan_id', $loan_number);
         $this->db->where('payment_number', $pay_number);
         $get_real_amount = $this->db->get()->row();
         $to_pay = $get_real_amount->amount - $get_real_amount->paid_amount ;
+if($get_real_amount->is_bullet_payment == 1 )
+{
+	$this->db->select("*")->from('loan');
+	$this->db->where('loan_id', $loan_number);
+	$get_loan_info = $this->db->get()->row();
+	$loan_date = $get_loan_info->loan_date;
+	$bullet_amount = ($get_loan_info->loan_principal * ($get_loan_info->loan_interest/100)) + $get_loan_info->loan_principal;
+	//calculate difference between loan date to date in parameter if days are greater than less than or equal to 30 days  and  amount is equal to the amount to pay then paid else partial paid
+	$diff = abs(strtotime($date) - strtotime($loan_date));
+	$days = floor($diff / (60*60*24));
 
+	if($days <= 30 && ($amount + $get_real_amount->paid_amount) >= $bullet_amount)
+	{
 
-        if(intval($to_pay) > intval($amount) ){
+		$data = array(
+				'partial_paid'=>'NO',
+				'status'=>'PAID',
+				'paid_amount'=>$amount + $get_real_amount->paid_amount,
+				'paid_date'=> $date,
+			);
+			$this->db->where('loan_id', $loan_number);
+			$this->db->where('payment_number', $pay_number);
+			$this->db->update($this->table,$data);
+			$this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$pay_number+1));
+			//$count_schedules = $this->count_payments($loan_number);
+
+				$this->db->where('loan_id', $loan_number)->
+				update('loan',array('loan_status'=>'CLOSED', 'paid_off'=> 'Yes'));
+
+			$transaction = array(
+				'ref' => "GF.".date('Y').date('m').date('d').'.'.rand(100,999),
+				'loan_id' => $loan_number,
+				'amount' => $amount,
+				'payment_number' => $pay_number,
+				'transaction_type' => 3,
+				'payment_proof' => 'null',
+				'added_by' => $this->session->userdata('user_id'),
+				'date_stamp'=> $date
+
+			);
+			$this->db->insert('transactions',$transaction);
+			return true;
+	}
+	if($days > 30 && ($amount + $get_real_amount->paid_amount) >= ($bullet_amount + $acrued))
+	{
+		$data = array(
+			'partial_paid'=>'NO',
+			'status'=>'PAID',
+			'paid_amount'=>$amount + $get_real_amount->paid_amount,
+			'paid_date'=> $date,
+
+		);
+		$this->db->where('loan_id', $loan_number);
+		$this->db->where('payment_number', $pay_number);
+		$this->db->update($this->table,$data);
+		$this->db->where('loan_id',$loan_number)->update('loan',array('next_payment_id'=>$pay_number+1));
+		$count_schedules = $this->count_payments($loan_number);
+
+			update('loan',array('loan_status'=>'CLOSED'));
+
+		$transaction = array(
+			'ref' => "FI.".date('Y').date('m').date('d').'.'.rand(100,999),
+			'loan_id' => $loan_number,
+			'amount' => $amount,
+			'payment_number' => $pay_number,
+			'transaction_type' => 3,
+			'payment_proof' => 'null',
+			'added_by' => $this->session->userdata('user_id'),
+			'date_stamp'=> $date
+
+		);
+		$this->db->insert('transactions',$transaction);
+		return true;
+	}
+	else
+	{
+
+		$data = array(
+				'partial_paid'=>'YES',
+				'status'=>'PARTIAL PAID',
+				'paid_amount'=>$amount + $get_real_amount->paid_amount,
+				'paid_date'=> $date
+			);
+			$this->db->where('loan_id', $loan_number);
+			$this->db->where('payment_number', $pay_number);
+			$this->db->update($this->table,$data);
+			$transaction = array(
+				'ref' => "FI.".date('Y').date('m').date('d').'.'.rand(100,999),
+				'loan_id' => $loan_number,
+				'amount' => $amount,
+				'payment_number' => $pay_number,
+				'transaction_type' => 3,
+				'payment_proof' => 'null',
+				'added_by' => $this->session->userdata('user_id'),
+				'date_stamp'=> $date
+			);
+		$this->db->insert('transactions',$transaction);
+		return true;
+}
+}
+
+if(intval($to_pay) > intval($amount) )
+{
 
 
             $final_paid = $amount + $get_real_amount->paid_amount ;
@@ -81,7 +182,7 @@ class Payement_schedules_model extends CI_Model
             return true;
 
         }
-        elseif(intval($amount) > intval($to_pay)) {
+elseif(intval($amount) > intval($to_pay)) {
 
             $our_amount = $amount;
 //get all loans
@@ -190,7 +291,7 @@ class Payement_schedules_model extends CI_Model
 
         }
 
-        elseif(intval($to_pay) === intval($amount)){
+elseif(intval($to_pay) === intval($amount)){
 
             $new_to_pay = $amount;
             $final_paid = $new_to_pay + $get_real_amount->paid_amount ;
@@ -225,9 +326,9 @@ class Payement_schedules_model extends CI_Model
             return true;
 
         }
-        else{
+else{
 
-        }
+   }
     }
     public function new_pay_old($loan_number,$pay_number,$amount,$paid_date){
         $this->db->select("*")->from($this->table);
@@ -1484,5 +1585,91 @@ class Payement_schedules_model extends CI_Model
 
         );
     }
+
+	// Add these methods to the Payement_schedules_model.php file
+
+	/**
+	 * Get all unpaid payment schedules for a loan
+	 *
+	 * @param int $loan_id The loan ID
+	 * @return array Array of unpaid schedule objects
+	 */
+	/**
+	 * Get all unpaid payment schedules for a loan
+	 *
+	 * @param int $loan_id The loan ID
+	 * @return array Array of unpaid schedule objects
+	 */
+	function get_unpaid_schedules($loan_id) {
+		$this->db->where('loan_id', $loan_id);
+		$this->db->group_start();
+		$this->db->where('status', 'NOT PAID');
+		$this->db->or_where('partial_paid', 'YES');
+		$this->db->group_end();
+		$this->db->order_by('payment_number', 'ASC');
+		return $this->db->get('payement_schedules')->result();
+	}
+	function get_payment_by_l($loan_id, $payment_no) {
+		$this->db->where('loan_id', $loan_id);
+		$this->db->where('payment_number', $payment_no);
+
+		return $this->db->get('payement_schedules')->row();
+	}
+
+	/**
+	 * Get the last paid payment schedule for a loan
+	 *
+	 * @param int $loan_id The loan ID
+	 * @return object|null The last paid schedule object or null if none found
+	 */
+	/**
+	 * Get the last paid payment schedule for a loan
+	 *
+	 * @param int $loan_id The loan ID
+	 * @return object|null The last paid schedule object or null if none found
+	 */
+	function get_last_paid_schedule($loan_id) {
+		$this->db->where('loan_id', $loan_id);
+		$this->db->where('status', 'PAID');
+		// Order by paid_date instead of payment_schedule to get the most recent payment
+		$this->db->order_by('paid_date', 'DESC');
+		// Also order by payment_number as a secondary sort in case multiple payments were made on the same day
+		$this->db->order_by('payment_number', 'DESC');
+		$this->db->limit(1);
+		$result = $this->db->get('payement_schedules')->row();
+
+		return $result;
+	}
+	/**
+	 * Get the remaining principal for a loan
+	 *
+	 * @param int $loan_id The loan ID
+	 * @return float The remaining principal amount
+	 */
+	function get_remaining_principal($loan_id) {
+		$this->db->select_sum('principal');
+		$this->db->where('loan_id', $loan_id);
+		$this->db->where('status', 'NOT PAID');
+		$result = $this->db->get('payement_schedules')->row();
+
+		$principal = isset($result->principal) ? $result->principal : 0;
+
+		// Also check partial paid schedules
+		$this->db->select('principal, paid_amount');
+		$this->db->where('loan_id', $loan_id);
+		$this->db->where('partial_paid', 'YES');
+		$partial_paid = $this->db->get('payement_schedules')->result();
+
+		foreach ($partial_paid as $schedule) {
+			// Calculate the proportion of principal that's been paid
+			$payment_ratio = $schedule->paid_amount / $schedule->amount;
+			$principal_paid = $schedule->principal * $payment_ratio;
+
+			// Add the remaining principal
+			$principal += ($schedule->principal - $principal_paid);
+		}
+
+		return $principal;
+	}
 }
 

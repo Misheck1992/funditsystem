@@ -34,6 +34,15 @@ class Employees extends CI_Controller
 
 
     }
+	public function get_users_for_sharing()
+    {
+$res = array();
+
+        $res['data']= $this->Employees_model->get_all();
+		$res['status'] ='success';
+echo json_encode($res);
+
+    }
 
     public function read($id) 
     {

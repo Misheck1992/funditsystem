@@ -15,7 +15,7 @@
         <div class="card-body" style="border: thick #24C16B solid; border-radius: 14px;">
             <h2 style="margin-top:0px">Shareholders List</h2>
 
-            <table class="table table-bordered" style="margin-bottom: 10px">
+            <table class="table table-bordered"  id ="data-table1" style="margin-bottom: 10px">
                 <thead>
                 <tr>
                     <th>No</th>

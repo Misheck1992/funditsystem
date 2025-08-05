@@ -81,24 +81,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
 							</td>
 						</tr>
 
-                        <tr>
-                            <td style="text-align: right;padding-right: 10px;">Remaining Deposited Balance
-                            </td>
-                            <td><?php echo $currency->currency_code ?> &nbsp;
 
-                                <?php
-
-                                $check = $this->Account_model->get_account($loan_number);
-                                if( $check){
-                                    echo number_format($check->balance,2);
-
-                                }else {
-                                    echo '0.00';
-                                }
-
-                                ?>
-                            </td>
-                        </tr>
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Remaining Balance to Pay
 							</td>
@@ -170,8 +153,69 @@ $currency = get_by_id('currencies','currency_id',$currency);
 
 				</div>
 				<div class="col-lg-7 border-right">
-					<h2>Overview</h2>
+					<?php if($calculation_type == 'Bullet Payment'): ?>
+						<?php if (!empty($acrued) && $acrued['status'] == 'success' && isset($acrued['debug'])): ?>
+							<div class="card mb-3 collapse" id="payoffDetails">
+								<div class="card-header bg-light">
+									<h6>Payoff Calculation Details</h6>
+								</div>
+								<div class="card-body">
+									<ul class="list-group">
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Loan Start Date Date
+											<span><?= $acrued['debug']['loan_date'] ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Current Date
+											<span><?= $acrued['debug']['payoff_date'] ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Daily interest Accrual Days Elapsed  After First Month.
+											<span><?= $acrued['debug']['elapsed_days'] ?>Days</span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Monthly Interest Rate
+											<span><?= number_format($acrued['debug']['monthly_interest_rate'] * 100, 2) ?>%</span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Daily Interest amount
+											<span><?= $currency->currency_code ?> <?= number_format($acrued['debug']['daily_interest'], 2) ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Current Accrued Interest amount
+											<span><?= $currency->currency_code ?> <?= number_format($acrued['accrued_interest'], 2) ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Loan Principal  amount
+											<span><?= $currency->currency_code ?> <?= number_format($acrued['debug']['loan_principal'], 2) ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Loan Payments  Made
+											<span><?= $currency->currency_code ?> <?=  number_format($total_p,2); ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Current Accrued Interest Balance amount
+											<span><?= $currency->currency_code ?> <?= number_format($acrued['accrued_interest_balance'], 2) ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Current Principal Balance amount
+											<span><?= $currency->currency_code ?> <?= number_format($acrued['current_balance'], 2) ?></span>
+										</li>
+										<li class="list-group-item d-flex justify-content-between align-items-center">
+											Total Payoff amount
+											<span><?= $currency->currency_code ?> <?= number_format($acrued['total_payoff'], 2) ?></span>
+										</li>
+									</ul>
+									<div class="mt-3">
+										<pre class="bg-light p-2 rounded"><?= $acrued['debug']['calculation_explanation'] ?></pre>
+									</div>
+								</div>
+							</div>
+							<p><a class="btn btn-sm btn-outline-info" data-toggle="collapse" href="#payoffDetails">Show/Hide Calculation Details</a></p>
+						<?php endif; ?>
+					<?php endif; ?>
 					<hr>
+					<h2>Contract Summary</h2>
                     <div class="double-scroll">
 					<table style="width: 100%;border-collapse: collapse;">
 						<thead>
@@ -246,10 +290,11 @@ $currency = get_by_id('currencies','currency_id',$currency);
                             <tr style="border: 1px solid black;">
                                 <th>Deposit amount</th>
                                 <th>Transaction Ref</th>
-                                <th>Proof File</th>
+                                <th>Transaction Reason</th>
+
                                 <th>Payment Date</th>
                                 <th>Cashier account</th>
-
+								<th>Proof File</th>
                                 <th>Action</th>
                             </tr>
                             </thead>
@@ -263,10 +308,11 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                 <tr>
                                     <td><?php echo $currency->currency_code ?> &nbsp;<?php echo number_format($history->credit,2); ?></td>
                                     <td><?php echo $history->transaction_id; ?></td>
-                                    <td><a href="<?php echo base_url('uploads/').$history->proof; ?>" target="_blank">Download proo</a></td>
-                                    <td><?php echo $history->system_time; ?></td>
+                                    <td><?php echo $history->reason; ?></td>
+                                      <td><?php echo $history->system_time; ?></td>
                                     <td><?php echo $history->coresponding_account; ?></td>
-                                    <td><a href="">Reverse transaction</a></td>
+									<td><a href="<?php echo base_url('uploads/').$history->proof; ?>" target="_blank"><i class="bi bi-download"></i></a></td>
+									<td><a href="">Deposit Usage</a></td>
                                 </tr>
 
                                 <?php
@@ -278,8 +324,51 @@ $currency = get_by_id('currencies','currency_id',$currency);
 				</div>
 				<div class="col-lg-2">
 					<a href="<?php echo base_url('loan/report/').$loan_id ?>" style="color: red;"><i class="fa fa-file-pdf fa-2x"></i>Report</a>
-				
+
 					<hr>
+
+					<!-- Action Buttons Based on Context -->
+					<?php if (isset($action) && !empty($action)): ?>
+						<div class="action-buttons mb-3">
+							<h5>Actions</h5>
+							<?php if ($action == 'approve_first'): ?>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=APPROVED_FIRST"?>"
+								   onclick="return confirm('Are you sure you want to approve this loan?')"
+								   class="btn btn-sm btn-warning mb-2 d-block">Approve</a>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=REJECT"?>"
+								   class="btn btn-sm btn-danger mb-2 d-block"
+								   onclick="return confirm('Are you sure you want to reject?')">Reject</a>
+							<?php elseif ($action == 'recommend'): ?>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=RECOMMENDED"?>"
+								   onclick="return confirm('Are you sure you want to recommend this loan?')"
+								   class="btn btn-sm btn-warning mb-2 d-block">Recommend</a>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=REJECT"?>"
+								   class="btn btn-sm btn-danger mb-2 d-block"
+								   onclick="return confirm('Are you sure you want to reject?')">Reject</a>
+							<?php elseif ($action == 'approve_second'): ?>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=APPROVED"?>"
+								   onclick="return confirm('Are you sure you want to approve this loan?')"
+								   class="btn btn-sm btn-success mb-2 d-block">Final Approve</a>
+								<a href="<?php echo base_url('loan/approval_action?id=').$loan_id."&action=REJECT"?>"
+								   class="btn btn-sm btn-danger mb-2 d-block"
+								   onclick="return confirm('Are you sure you want to reject?')">Reject</a>
+							<?php elseif ($action == 'disburse'): ?>
+								<a class="btn btn-sm btn-danger mb-2 d-block" href="#" onclick="disburse_loan_charge_pre_paid('<?php echo $loan_id; ?>','<?php echo $loan_date ?>')">Disburse (processing fee charged)</a>
+							<?php elseif ($action == 'delete_recommend'): ?>
+								<a href="<?php echo base_url('Loan/delete_recommend/').$loan_id  ?>"
+								   class="btn btn-sm btn-warning mb-2 d-block">Recommend Delete</a>
+								<a href="<?php echo base_url('Loan/delete_reject/').$loan_id  ?>"
+								   class="btn btn-sm btn-primary mb-2 d-block">Reject Delete</a>
+							<?php elseif ($action == 'delete_approve'): ?>
+								<a href="<?php echo base_url('Loan/delete_approve/').$loan_id  ?>"
+								   class="btn btn-sm btn-warning mb-2 d-block">Approve Delete</a>
+								<a href="<?php echo base_url('Loan/delete_reject/').$loan_id  ?>"
+								   class="btn btn-sm btn-primary mb-2 d-block">Reject Delete</a>
+							<?php endif; ?>
+						</div>
+						<hr>
+					<?php endif; ?>
+
 					<?php
 					if(empty($next_payment_details)){
 						echo "No more payments to make";

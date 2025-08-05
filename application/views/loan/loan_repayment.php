@@ -14,7 +14,7 @@
 
             <div style="overflow-y: auto"">
             <div class="double-scroll">
-            <table  id="data-table" class="tableCss">
+            <table  id="data-table1" class="tableCss">
                 <thead>
                 <tr>
 

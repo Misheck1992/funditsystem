@@ -14,7 +14,7 @@
 		<div class="card-body" style="border: thick orange solid;border-radius: 14px;">
 
 
-			<a href="<?php echo base_url('roles/create')?>" class="btn btn-sm btn-primary"><i class="anticon anticon-plus-square" style="color: white; font-size: 20px;"></i>Add Employee</a>
+			<a href="<?php echo base_url('roles/create')?>" class="btn btn-sm btn-primary"><i class="anticon anticon-plus-square" style="color: white; font-size: 20px;"></i>Add User Role</a>
 
 			<div class="m-t-25">
 				<table id="data-table" class="table">
