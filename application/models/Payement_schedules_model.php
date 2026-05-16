@@ -1841,7 +1841,7 @@ else{
 		$this->db->select('SUM(principal) AS future_principal, SUM(interest) AS interest_waived')
 				 ->from($this->table)
 				 ->where('loan_id', $loan_id)
-				 ->where('status !=', 'PAID')
+				 ->where('status', 'NOT PAID')
 				 ->where('payment_schedule >', $date);
 		$future          = $this->db->get()->row();
 		$future_principal = $future->future_principal ? (float)$future->future_principal : 0;
