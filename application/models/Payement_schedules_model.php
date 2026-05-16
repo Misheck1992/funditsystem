@@ -1854,5 +1854,54 @@ else{
 			'total_payoff'     => round($overdue_amount + $future_principal, 2),
 		];
 	}
+
+	public function payoff_loan($loan_id, $amount, $date)
+	{
+		// Snapshot interest_waived before making changes (for the activity log)
+		$breakdown       = $this->calculate_payoff_amount($loan_id, $date);
+		$interest_waived = $breakdown['interest_waived'];
+
+		// Mark overdue schedules (due <= date) as PAID; set paid_amount = the full schedule amount
+		$this->db->set('status',       'PAID');
+		$this->db->set('paid_amount',  'amount', FALSE); // FALSE = treat 'amount' as a column reference
+		$this->db->set('paid_date',    $date);
+		$this->db->set('partial_paid', 'NO');
+		$this->db->where('loan_id',    $loan_id);
+		$this->db->where('status !=',  'PAID');
+		$this->db->where('payment_schedule <=', $date);
+		$this->db->update($this->table);
+
+		// Mark future schedules (due > date) as PAID; zero interest, set paid_amount = principal only
+		$this->db->set('status',       'PAID');
+		$this->db->set('interest',     0);
+		$this->db->set('paid_amount',  'principal', FALSE); // FALSE = column reference
+		$this->db->set('paid_date',    $date);
+		$this->db->set('partial_paid', 'NO');
+		$this->db->where('loan_id',    $loan_id);
+		$this->db->where('status !=',  'PAID');
+		$this->db->where('payment_schedule >', $date);
+		$this->db->update($this->table);
+
+		// Close the loan
+		$this->db->where('loan_id', $loan_id)->update('loan', [
+			'loan_status' => 'CLOSED',
+			'paid_off'    => 'Yes',
+		]);
+
+		// Log the settlement
+		$loan          = $this->db->where('loan_id', $loan_id)->get('loan')->row();
+		$currency      = $this->db->where('currency_id', $loan->currency)->get('currencies')->row();
+		$currency_code = $currency ? $currency->currency_code : '';
+
+		$this->db->insert('activity_logger', [
+			'user_id'       => $this->session->userdata('user_id'),
+			'activity'      => 'Early payoff settlement — Loan ID: ' . $loan_id .
+							   ' | Settled: ' . number_format((float)$amount, 2) .
+							   ' | ' . $currency_code . ' ' . number_format($interest_waived, 2) . ' interest waived',
+			'activity_cate' => 'loan_closure',
+		]);
+
+		return true;
+	}
 }
 
