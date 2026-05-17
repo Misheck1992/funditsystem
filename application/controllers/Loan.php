@@ -7056,6 +7056,14 @@ public function get_loan_product_details() {
 		$amount     = (float)$this->input->post('amount');
 		$pay_method = $this->input->post('payment_method');
 
+		// Validate $paid_date format
+		$dt = DateTime::createFromFormat('Y-m-d', $paid_date);
+		if (!$dt || $dt->format('Y-m-d') !== $paid_date) {
+			$this->toaster->error('Invalid settlement date.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
 		// Guard: loan must be active
 		$loan = $this->Loan_model->get_by_id($loan_id);
 		if (!$loan || $loan->loan_status !== 'ACTIVE') {
@@ -7087,12 +7095,20 @@ public function get_loan_product_details() {
 			$unique_name = 'file_' . time() . '_' . uniqid() . '.' . $file_ext;
 			$config['file_name'] = $unique_name;
 			$this->upload->initialize($config);
-			$this->upload->do_upload('pay_proof');
+			if (!$this->upload->do_upload('pay_proof')) {
+				$unique_name = ''; // upload failed, proceed without proof
+			}
 		}
 
 		$tid          = 'ES-' . rand(1000, 9999) . date('Ymd');
 		$loan_account = get_by_id('loan', 'loan_id', $loan_id);
 		$recepientt   = get_by_id('account', 'collection_account', 'Yes');
+
+		if (!$loan_account || !$recepientt) {
+			$this->toaster->error('Account configuration error. Please contact support.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
 
 		if ($pay_method == '0') {
 			// Institution's Bank Savings path
@@ -7137,7 +7153,13 @@ public function get_loan_product_details() {
 		}
 
 		// Execute the payoff
-		$this->Payement_schedules_model->payoff_loan($loan_id, $amount, $paid_date);
+		$settled = $this->Payement_schedules_model->payoff_loan($loan_id, $amount, $paid_date);
+		if (!$settled) {
+			log_message('error', 'Early settlement DB failure: loan_id=' . $loan_id . ', tid=' . $tid);
+			$this->toaster->error('Payment recorded but loan closure failed. Contact support with reference: ' . $tid);
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
 
 		$this->toaster->success('Loan settled successfully. All remaining schedules have been closed and interest waived.');
 		redirect($_SERVER['HTTP_REFERER']);
