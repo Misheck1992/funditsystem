@@ -1309,6 +1309,8 @@ function get_transaction_usage(transaction_id) {
 }
 
 function open_early_settlement() {
+    document.getElementById('es_breakdown').style.display = 'none';
+    document.getElementById('es_amount').value = '';
     $('#early_settlement_modal').modal('show');
     fetchEarlySettlementAmount();
 }
@@ -1319,7 +1321,7 @@ function fetchEarlySettlementAmount() {
     document.getElementById('es_hidden_date').value = date;
 
     $.ajax({
-        url: '<?php echo base_url("loan/get_early_settlement_amount/"); ?><?php echo $loan_id; ?>',
+        url: '<?php echo base_url("loan/get_early_settlement_amount/"); ?><?php echo (int)$loan_id; ?>',
         type: 'GET',
         data: { date: date },
         dataType: 'json',
@@ -1335,6 +1337,9 @@ function fetchEarlySettlementAmount() {
             document.getElementById('es_total').innerText   = cc + fmt(r.total_payoff);
             document.getElementById('es_amount').value      = parseFloat(r.total_payoff).toFixed(2);
             document.getElementById('es_breakdown').style.display = 'block';
+        },
+        error: function() {
+            alert('Could not calculate settlement amount. Please try again.');
         }
     });
 }
