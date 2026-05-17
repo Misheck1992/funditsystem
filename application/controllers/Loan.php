@@ -7003,24 +7003,39 @@ public function get_loan_product_details() {
 
 	public function get_early_settlement_amount($loan_id)
 	{
+		header('Content-Type: application/json');
+
 		if (!$this->input->is_ajax_request()) {
 			show_error('No direct script access allowed', 403);
 			return;
 		}
 
-		$date = $this->input->get('date');
+		$loan_id = (int) $loan_id;
+		$date    = $this->input->get('date');
+
 		if (!$loan_id || !$date) {
 			echo json_encode(['status' => 'error', 'message' => 'Missing parameters']);
 			return;
 		}
 
-		$loan = $this->Loan_model->get_by_id($loan_id);
-		if (!$loan || $loan->loan_status === 'CLOSED') {
-			echo json_encode(['status' => 'error', 'message' => 'Loan is already closed']);
+		$d = DateTime::createFromFormat('Y-m-d', $date);
+		if (!$d || $d->format('Y-m-d') !== $date) {
+			echo json_encode(['status' => 'error', 'message' => 'Invalid date format. Use Y-m-d.']);
 			return;
 		}
 
-		$breakdown     = $this->Payement_schedules_model->calculate_payoff_amount($loan_id, $date);
+		$loan = $this->Loan_model->get_by_id($loan_id);
+		if (!$loan || $loan->loan_status !== 'ACTIVE') {
+			echo json_encode(['status' => 'error', 'message' => 'Loan is not available for early settlement']);
+			return;
+		}
+
+		$breakdown = $this->Payement_schedules_model->calculate_payoff_amount($loan_id, $date);
+		if (!is_array($breakdown)) {
+			echo json_encode(['status' => 'error', 'message' => 'Failed to calculate payoff amount']);
+			return;
+		}
+
 		$currency      = get_by_id('currencies', 'currency_id', $loan->currency);
 		$currency_code = $currency ? $currency->currency_code : '';
 
