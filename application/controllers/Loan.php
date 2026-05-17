@@ -12,11 +12,13 @@ class Loan extends CI_Controller
     function __construct()
     {
         parent::__construct();
+        $this->load->model('Corporate_customers_model');
         $this->load->model('Loan_model');
         $this->load->model('Groups_model');
         $this->load->model('charges_model');
         $this->load->model('Account_model');
         $this->load->model('Loan_files_model');
+        $this->load->model('Loan_approval_trail_model');
         $this->load->model('Loan_recommendation_model');
         $this->load->model('Rescheduled_payments_model');
         $this->load->model('Individual_customers_model');
@@ -34,8 +36,9 @@ class Loan extends CI_Controller
 		$this->load->model('File_library_model');
 		$this->load->model('File_shares_model');
 		$this->load->model('File_folders_model');
-
 		$this->load->model('File_folder_mapping_model');
+		$this->load->model('Loan_notes_model');
+		$this->load->model('Collateral_model');
 
     }
     public function file_add(){
@@ -500,19 +503,89 @@ $request_id = $this->db->insert_id();
     function create_act(){
 
         $this->load->library('upload');//loading the library
-          $number_of_files_uploaded = count($_FILES['loan_files']['name']);
+          $number_of_files_uploaded = isset($_FILES['loan_files']['name']) ? count($_FILES['loan_files']['name']) : 0;
         $name = $this->input->post('file_name');
         $coname = $this->input->post('coname');
         $type = $this->input->post('type');
         $currency = $this->input->post('currency');
         $serial = $this->input->post('serial');
         $cvalue = $this->input->post('cvalue');
-       
+
         $desc = $this->input->post('desc');
 
+        // Determine which tab to redirect to based on customer_type
+        $customer_type = $this->input->post('customer_type');
+        $tab = ($customer_type == 'corporate' || $customer_type == 'institution') ? 'corporate' : 'individual';
+        $redirect_url = site_url('loan/loan_application?tab=' . $tab);
+
+        // Validate required fields
+        if(empty($this->input->post('customer'))){
+            $this->toaster->error('Error: Please select a customer');
+            redirect($redirect_url);
+            return;
+        }
+        if(empty($this->input->post('amount'))){
+            $this->toaster->error('Error: Please enter loan amount');
+            redirect($redirect_url);
+            return;
+        }
+        if(empty($currency)){
+            $this->toaster->error('Error: Please select currency');
+            redirect($redirect_url);
+            return;
+        }
+        if(empty($this->input->post('months'))){
+            $this->toaster->error('Error: Please enter loan term');
+            redirect($redirect_url);
+            return;
+        }
+        if(empty($this->input->post('interest'))){
+            $this->toaster->error('Error: Please enter loan interest');
+            redirect($redirect_url);
+            return;
+        }
+        if(empty($this->input->post('loan_type'))){
+            $this->toaster->error('Error: Please select loan type');
+            redirect($redirect_url);
+            return;
+        }
+        if(empty($this->input->post('loan_date'))){
+            $this->toaster->error('Error: Please select loan date');
+            redirect($redirect_url);
+            return;
+        }
 
         $loan_number = str_replace(' ', '', $this->input->post('loan_number'));
-        $result = $this->Loan_model->add_loan( $loan_number,$this->input->post('amount'), $this->input->post('months'),$this->input->post('interest'), $this->input->post('loan_type'), $this->input->post('loan_date'),$this->input->post('customer'),$this->input->post('customer_type'),$this->input->post('worthness_file'),$this->input->post('narration'),$this->session->userdata('user_id'), $this->input->post('payment_method'),$this->input->post('fee_amount'),$currency,$this->input->post('off_taker'),$this->input->post('processing_fee'));
+
+        // Gather appraisal data
+        // Note: Bank statement fields (personal_credit, personal_debit, etc.) are now stored
+        // in the separate bank_statements table with multiple row support
+        $appraisal_data = array(
+            'crb_search' => $this->input->post('crb_search'),
+            'pacra_search' => $this->input->post('pacra_search'),
+            'previous_facilities' => $this->input->post('previous_facilities'),
+            'past_loans_comment' => $this->input->post('past_loans_comment'),
+            'security_notes' => $this->input->post('security_notes'),
+            'bank_statement_notes' => $this->input->post('bank_statement_notes'),
+            'about_transaction' => $this->input->post('about_transaction'),
+            'risk_analysis' => $this->input->post('risk_analysis')
+        );
+
+        try {
+            $result = $this->Loan_model->add_loan( $loan_number,$this->input->post('amount'), $this->input->post('months'),$this->input->post('interest'), $this->input->post('loan_type'), $this->input->post('loan_date'),$this->input->post('customer'),$this->input->post('customer_type'),$this->input->post('worthness_file'),$this->input->post('narration'),$this->session->userdata('user_id'), $this->input->post('payment_method'),$this->input->post('fee_amount'),$currency,$this->input->post('off_taker'),$this->input->post('processing_fee'), $appraisal_data);
+        } catch (Exception $e) {
+            $this->toaster->error('Error: ' . $e->getMessage());
+            redirect($redirect_url);
+            return;
+        }
+
+        // Check if add_loan returned an error message (string) instead of result array
+        if(!is_array($result)){
+            $this->toaster->error('Error: ' . $result);
+            redirect($redirect_url);
+            return;
+        }
+
         $data['result'] = $result;
 		$folder_data = [
 			'folder_name' => $result['loan_number'],
@@ -588,7 +661,7 @@ $request_id = $this->db->insert_id();
                 $data = array(
                     'loan_id' => $result['loan_id'],
                     'file_name' => $uploaded_data['file_name'],
-                    'real_file' => $config['file_name'],
+                    'real_file' => $result['loan_number'] . '/' . $uploaded_data['file_name'],
 
                 );
 
@@ -627,8 +700,73 @@ $request_id = $this->db->insert_id();
 
         }//for loop ends here
 
+        // Handle corporate loan files upload
+        if (isset($_FILES['corporate_loan_files']) && !empty($_FILES['corporate_loan_files']['name'][0])) {
+            $number_of_corporate_files = count($_FILES['corporate_loan_files']['name']);
+            
+            for ($i = 0; $i < $number_of_corporate_files; $i++) {
+                if (!empty($_FILES['corporate_loan_files']['name'][$i])) {
+                    $_FILES['userfile']['name']     = $_FILES['corporate_loan_files']['name'][$i];
+                    $_FILES['userfile']['type']     = $_FILES['corporate_loan_files']['type'][$i];
+                    $_FILES['userfile']['tmp_name'] = $_FILES['corporate_loan_files']['tmp_name'][$i];
+                    $_FILES['userfile']['error']    = $_FILES['corporate_loan_files']['error'][$i];
+                    $_FILES['userfile']['size']     = $_FILES['corporate_loan_files']['size'][$i];
+                    
+                    $config = array(
+                        'file_name'     => $_FILES['userfile']['name'],
+                        'allowed_types' => '*',
+                        'max_size'      => 200000,
+                        'overwrite'     => FALSE,
+                        'upload_path'   => $imagePath
+                    );
+                    
+                    $this->upload->initialize($config);
+                    
+                    if (!$this->upload->do_upload()) {
+                        $error = array('error' => $this->upload->display_errors());
+                        error_log('Corporate loan file upload error: ' . $this->upload->display_errors());
+                    } else {
+                        $uploaded_data = $this->upload->data();
+                        
+                        $data = array(
+                            'loan_id' => $result['loan_id'],
+                            'file_name' => $uploaded_data['file_name'],
+                            'real_file' => $result['loan_number'] . '/' . $uploaded_data['file_name'],
+                        );
 
-        $number_of_collateral = count($_FILES['collateralfiles']['name']);
+                        $this->Loan_files_model->insert($data);
+
+                        $insert_data = [
+                            'owner_type' => 'loan',
+                            'owner_id' => $result['loan_id'],
+                            'file_category' => 'corporate_loan_files',
+                            'file_type' => $_FILES['userfile']['type'],
+                            'file_name' => $uploaded_data['file_name'],
+                            'file_path' => "uploads/".$result['loan_number']."/".$uploaded_data['file_name'],
+                            'file_size' => $_FILES['userfile']['size'],
+                            'is_public' => 1,
+                            'date_added' => date('Y-m-d H:i:s'),
+                            'date_modified' => date('Y-m-d H:i:s'),
+                            'added_by' => $this->session->userdata('user_id'),
+                            'description' => "Corporate loan file",
+                            'tags' => ""
+                        ];
+                        
+                        $file_id = $this->File_library_model->insert($insert_data);
+                        
+                        if ($folder_id) {
+                            $this->File_folder_mapping_model->insert([
+                                'file_id' => $file_id,
+                                'folder_id' => $folder_id_loan_files,
+                                'date_added' => date('Y-m-d H:i:s')
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+
+        $number_of_collateral = isset($_FILES['collateralfiles']['name']) ? count($_FILES['collateralfiles']['name']) : 0;
 
         for ($i = 0; $i <  $number_of_collateral; $i++) {
             $_FILES['userfile']['name']     = $_FILES['collateralfiles']['name'][$i];
@@ -708,10 +846,300 @@ $request_id = $this->db->insert_id();
 
         }
 
+        // Ensure bank_statements table exists with correct structure
+        if (!$this->db->table_exists('bank_statements')) {
+            $sql = "CREATE TABLE IF NOT EXISTS `bank_statements` (
+                `statement_id` int NOT NULL AUTO_INCREMENT,
+                `loan_id` int NOT NULL,
+                `statement_type` varchar(20) DEFAULT 'corporate',
+                `credit` decimal(18,2) NOT NULL,
+                `debit` decimal(18,2) NOT NULL,
+                `month` varchar(20) NOT NULL,
+                `year` int NOT NULL,
+                `file` varchar(200) DEFAULT NULL,
+                `added_by` int NOT NULL,
+                `date_added` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`statement_id`),
+                KEY `loan_id` (`loan_id`)
+            )";
+            $this->db->query($sql);
+        } else {
+            // Check if statement_type column exists, add if missing
+            $fields = $this->db->field_data('bank_statements');
+            $statement_type_exists = false;
+            foreach ($fields as $field) {
+                if ($field->name == 'statement_type') {
+                    $statement_type_exists = true;
+                    break;
+                }
+            }
+            if (!$statement_type_exists) {
+                $this->db->query("ALTER TABLE bank_statements ADD COLUMN `statement_type` varchar(20) DEFAULT 'corporate' AFTER `loan_id`");
+            }
+
+            // Also check if month column type needs updating (from int to varchar)
+            foreach ($fields as $field) {
+                if ($field->name == 'month' && $field->type == 'int') {
+                    $this->db->query("ALTER TABLE bank_statements MODIFY COLUMN `month` varchar(20) NOT NULL");
+                    break;
+                }
+            }
+        }
+
+        // Handle bank statements for corporate loans (multiple)
+        if ($this->input->post('customer_type') == 'institution') {
+            $corporate_credits = $this->input->post('corporate_credit');
+            $corporate_debits = $this->input->post('corporate_debit');
+            $corporate_months = $this->input->post('corporate_statement_month');
+
+            if (is_array($corporate_credits) && is_array($corporate_debits) && is_array($corporate_months)) {
+                $num_statements = count($corporate_credits);
+
+                for ($i = 0; $i < $num_statements; $i++) {
+                    $credit = isset($corporate_credits[$i]) ? $corporate_credits[$i] : null;
+                    $debit = isset($corporate_debits[$i]) ? $corporate_debits[$i] : null;
+                    $month = isset($corporate_months[$i]) ? $corporate_months[$i] : null;
+
+                    // Skip empty entries
+                    if (empty($credit) && empty($debit) && empty($month)) {
+                        continue;
+                    }
+
+                    $statement_filename = null;
+
+                    // Handle file upload for this statement
+                    if (isset($_FILES['corporate_statement_file']) &&
+                        isset($_FILES['corporate_statement_file']['name'][$i]) &&
+                        $_FILES['corporate_statement_file']['name'][$i] != '') {
+
+                        $_FILES['userfile']['name']     = $_FILES['corporate_statement_file']['name'][$i];
+                        $_FILES['userfile']['type']     = $_FILES['corporate_statement_file']['type'][$i];
+                        $_FILES['userfile']['tmp_name'] = $_FILES['corporate_statement_file']['tmp_name'][$i];
+                        $_FILES['userfile']['error']    = $_FILES['corporate_statement_file']['error'][$i];
+                        $_FILES['userfile']['size']     = $_FILES['corporate_statement_file']['size'][$i];
+
+                        $config = array(
+                            'file_name'     => 'statement_' . time() . '_' . $i . '_' . $_FILES['userfile']['name'],
+                            'allowed_types' => '*',
+                            'max_size'      => 200000,
+                            'overwrite'     => FALSE,
+                            'upload_path'   => $imagePath
+                        );
+
+                        $this->upload->initialize($config);
+
+                        if ($this->upload->do_upload()) {
+                            $uploaded_data = $this->upload->data();
+                            $statement_filename = $uploaded_data['file_name'];
+
+                            // Add to file library
+                            $insert_data_statement = [
+                                'owner_type' => 'loan',
+                                'owner_id' => $result['loan_id'],
+                                'file_category' => 'bank_statement',
+                                'file_type' => $_FILES['userfile']['type'],
+                                'file_name' => $uploaded_data['file_name'],
+                                'file_path' => "uploads/".$result['loan_number']."/".$uploaded_data['file_name'],
+                                'file_size' => $_FILES['userfile']['size'],
+                                'is_public' => 1,
+                                'date_added' => date('Y-m-d H:i:s'),
+                                'date_modified' => date('Y-m-d H:i:s'),
+                                'added_by' => $this->session->userdata('user_id'),
+                                'description' => "Bank statement for loan - " . $month,
+                                'tags' => ""
+                            ];
+
+                            $file_id_statement = $this->File_library_model->insert($insert_data_statement);
+
+                            if ($folder_id) {
+                                $this->File_folder_mapping_model->insert([
+                                    'file_id' => $file_id_statement,
+                                    'folder_id' => $folder_id_loan_files,
+                                    'date_added' => date('Y-m-d H:i:s')
+                                ]);
+                            }
+                        }
+                    }
+
+                    // Insert bank statement data
+                    $bank_statement_data = [
+                        'loan_id' => $result['loan_id'],
+                        'statement_type' => 'corporate',
+                        'credit' => $credit ? str_replace(',', '', $credit) : 0,
+                        'debit' => $debit ? str_replace(',', '', $debit) : 0,
+                        'month' => $month,
+                        'year' => date('Y'),
+                        'file' => $statement_filename,
+                        'added_by' => $this->session->userdata('user_id'),
+                        'date_added' => date('Y-m-d H:i:s')
+                    ];
+
+                    $this->db->insert('bank_statements', $bank_statement_data);
+                }
+            }
+        }
+
+        // Handle bank statements for personal/individual loans (multiple)
+        if ($this->input->post('customer_type') == 'individual') {
+            $personal_credits = $this->input->post('personal_credit');
+            $personal_debits = $this->input->post('personal_debit');
+            $personal_months = $this->input->post('personal_statement_month');
+
+            if (is_array($personal_credits) && is_array($personal_debits) && is_array($personal_months)) {
+                $num_statements = count($personal_credits);
+
+                for ($i = 0; $i < $num_statements; $i++) {
+                    $credit = isset($personal_credits[$i]) ? $personal_credits[$i] : null;
+                    $debit = isset($personal_debits[$i]) ? $personal_debits[$i] : null;
+                    $month = isset($personal_months[$i]) ? $personal_months[$i] : null;
+
+                    // Skip empty entries
+                    if (empty($credit) && empty($debit) && empty($month)) {
+                        continue;
+                    }
+
+                    $statement_filename = null;
+
+                    // Handle file upload for this statement
+                    if (isset($_FILES['personal_statement_file']) &&
+                        isset($_FILES['personal_statement_file']['name'][$i]) &&
+                        $_FILES['personal_statement_file']['name'][$i] != '') {
+
+                        $_FILES['userfile']['name']     = $_FILES['personal_statement_file']['name'][$i];
+                        $_FILES['userfile']['type']     = $_FILES['personal_statement_file']['type'][$i];
+                        $_FILES['userfile']['tmp_name'] = $_FILES['personal_statement_file']['tmp_name'][$i];
+                        $_FILES['userfile']['error']    = $_FILES['personal_statement_file']['error'][$i];
+                        $_FILES['userfile']['size']     = $_FILES['personal_statement_file']['size'][$i];
+
+                        $config = array(
+                            'file_name'     => 'statement_' . time() . '_' . $i . '_' . $_FILES['userfile']['name'],
+                            'allowed_types' => '*',
+                            'max_size'      => 200000,
+                            'overwrite'     => FALSE,
+                            'upload_path'   => $imagePath
+                        );
+
+                        $this->upload->initialize($config);
+
+                        if ($this->upload->do_upload()) {
+                            $uploaded_data = $this->upload->data();
+                            $statement_filename = $uploaded_data['file_name'];
+
+                            // Add to file library
+                            $insert_data_statement = [
+                                'owner_type' => 'loan',
+                                'owner_id' => $result['loan_id'],
+                                'file_category' => 'bank_statement',
+                                'file_type' => $_FILES['userfile']['type'],
+                                'file_name' => $uploaded_data['file_name'],
+                                'file_path' => "uploads/".$result['loan_number']."/".$uploaded_data['file_name'],
+                                'file_size' => $_FILES['userfile']['size'],
+                                'is_public' => 1,
+                                'date_added' => date('Y-m-d H:i:s'),
+                                'date_modified' => date('Y-m-d H:i:s'),
+                                'added_by' => $this->session->userdata('user_id'),
+                                'description' => "Bank statement for loan - " . $month,
+                                'tags' => ""
+                            ];
+
+                            $file_id_statement = $this->File_library_model->insert($insert_data_statement);
+
+                            if ($folder_id) {
+                                $this->File_folder_mapping_model->insert([
+                                    'file_id' => $file_id_statement,
+                                    'folder_id' => $folder_id_loan_files,
+                                    'date_added' => date('Y-m-d H:i:s')
+                                ]);
+                            }
+                        }
+                    }
+
+                    // Insert bank statement data
+                    $bank_statement_data = [
+                        'loan_id' => $result['loan_id'],
+                        'statement_type' => 'personal',
+                        'credit' => $credit ? str_replace(',', '', $credit) : 0,
+                        'debit' => $debit ? str_replace(',', '', $debit) : 0,
+                        'month' => $month,
+                        'year' => date('Y'),
+                        'file' => $statement_filename,
+                        'added_by' => $this->session->userdata('user_id'),
+                        'date_added' => date('Y-m-d H:i:s')
+                    ];
+
+                    $this->db->insert('bank_statements', $bank_statement_data);
+                }
+            }
+        }
+
+        // Link selected collaterals to the loan
+        $collateral_ids = $this->input->post('collateral_ids');
+        $collateral_amounts = $this->input->post('collateral_amounts');
+
+        if (!empty($collateral_ids) && is_array($collateral_ids)) {
+            $user_id = $this->session->userdata('user_id');
+
+            for ($i = 0; $i < count($collateral_ids); $i++) {
+                $collateral_id = $collateral_ids[$i];
+                $amount_utilized = isset($collateral_amounts[$i]) ? floatval($collateral_amounts[$i]) : 0;
+
+                if ($collateral_id && $amount_utilized > 0) {
+                    // Check available balance
+                    $available = $this->Collateral_model->get_available_balance($collateral_id);
+
+                    if ($amount_utilized <= $available) {
+                        $link_data = array(
+                            'loan_id' => $result['loan_id'],
+                            'collateral_id' => $collateral_id,
+                            'amount_utilized' => $amount_utilized,
+                            'linked_by' => $user_id,
+                            'linked_at' => date('Y-m-d H:i:s'),
+                            'status' => 'ACTIVE'
+                        );
+
+                        $this->Collateral_model->link_to_loan($link_data);
+                    }
+                }
+            }
+        }
+
+        // Send email notification to users who can recommend loans
+        $customer_type = $this->input->post('customer_type');
+        $customer_id = $this->input->post('customer');
+        $customer_name = 'N/A';
+
+        // Get customer name based on type
+        if ($customer_type == 'individual') {
+            $customer = $this->db->get_where('individual_customers', array('id' => $customer_id))->row();
+            if ($customer) {
+                $customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+            }
+        } else {
+            $customer = $this->db->get_where('corporate_customers', array('id' => $customer_id))->row();
+            if ($customer) {
+                $customer_name = $customer->EntityName;
+            }
+        }
+
+        // Get currency code
+        $currency_data = $this->db->get_where('currency', array('id' => $currency))->row();
+        $currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+        // Prepare loan data for notification
+        $loan_notification_data = array(
+            'loan_id' => $result['loan_id'],
+            'loan_number' => $result['loan_number'],
+            'customer_name' => $customer_name,
+            'amount' => $this->input->post('amount'),
+            'currency' => $currency_code
+        );
+
+        // Notify users with access to Loan/recommend
+        notify_loan_recommenders($loan_notification_data, $this->session->userdata('user_id'));
 
         $this->toaster->success('Success, loan  was created  pending authorisation');
 
-        redirect('loan/individual_track');
+        redirect('loan/track');
 
 
     }
@@ -836,7 +1264,7 @@ $request_id = $this->db->insert_id();
 
         }
         $this->toaster->success('Success, Loans uploaded successfully');
-        redirect('loan/individual_track');
+        redirect('loan/track');
 
 
 
@@ -953,7 +1381,7 @@ exit();
 
         }
         $this->toaster->success('Success, Loans uploaded successfully');
-        redirect('loan/individual_track');
+        redirect('loan/track');
 
 
 
@@ -989,7 +1417,7 @@ exit();
                     );
 
                     $this->Group_loan_tracker_model->insert($data);
-                    redirect('loan/individual_track');
+                    redirect('loan/track');
                 }
             }
         }else{
@@ -1178,6 +1606,190 @@ exit();
 		$this->load->view('loan/to_approve_third', $data);
 		$this->load->view('admin/footer');
 	}
+
+	/**
+	 * Unified approval page - shows all loans with RECOMMENDED status
+	 * Multi-level approval system: 3 different users must approve
+	 */
+	function unified_approval(){
+		$data['loan_data'] = $this->Loan_model->get_all('RECOMMENDED');
+		$menu_toggle['toggles'] = 23;
+		$this->load->view('admin/header', $menu_toggle);
+		$this->load->view('loan/unified_approval', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/**
+	 * Handle multi-level approval action
+	 * Tracks individual approvals and updates loan status when 3 approvals are reached
+	 */
+	function multi_approval_action(){
+		$action = $this->input->post('action');
+		$loan_id = $this->input->post('loan_id');
+		$comment = $this->input->post('comment');
+		$approval_level = $this->input->post('approval_level');
+
+		$current_user_id = $this->session->userdata('user_id');
+
+		// Get the loan
+		$loan = $this->Loan_model->get_by_id($loan_id);
+		if(!$loan || $loan->loan_status != 'RECOMMENDED') {
+			$this->toaster->error('Error: Loan not found or not in RECOMMENDED status.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Handle rejection
+		if($action == 'REJECT') {
+			// Insert rejection into approval trail
+			$trail_data = array(
+				'user_id' => $current_user_id,
+				'action' => 'REJECTED',
+				'comment' => $comment,
+				'loan_id' => $loan_id
+			);
+			$this->Loan_approval_trail_model->insert($trail_data);
+
+			// Update loan status to REJECTED
+			$this->Loan_model->update($loan_id, array(
+				'loan_status' => 'REJECTED',
+				'rejected_by' => $current_user_id,
+				'rejected_date' => date('Y-m-d H:i:s'),
+				'rejection_reasons' => $comment
+			));
+
+			// Log activity
+			$logger = array(
+				'user_id' => $current_user_id,
+				'activity' => 'REJECTED a loan during multi-level approval',
+				'activity_cate' => 'updating'
+			);
+			log_activity($logger);
+
+			$this->toaster->success('Loan has been rejected.');
+			redirect('loan/unified_approval');
+			return;
+		}
+
+		// Handle approval
+		if($action == 'MULTI_APPROVE') {
+			// Get existing approvers for this loan
+			$approvers = get_loan_approvers($loan_id);
+			$approval_count = count($approvers);
+			$last_approver_id = !empty($approvers) ? end($approvers)['user_id'] : null;
+
+			// Only check for consecutive approvals - same user CAN approve 1st and 3rd
+			// But same user CANNOT approve consecutively (1st and 2nd, or 2nd and 3rd)
+			if($last_approver_id == $current_user_id) {
+				$this->toaster->error('Error: You cannot approve consecutively. Another user must approve first.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+
+			// Insert approval into trail
+			$trail_data = array(
+				'user_id' => $current_user_id,
+				'action' => 'MULTI_APPROVE',
+				'comment' => $comment . ' (Approval #' . ($approval_count + 1) . ' of 3)',
+				'loan_id' => $loan_id
+			);
+			$this->Loan_approval_trail_model->insert($trail_data);
+
+			// Log activity
+			$logger = array(
+				'user_id' => $current_user_id,
+				'activity' => 'Performed approval #' . ($approval_count + 1) . ' of 3 on loan ' . $loan->loan_number,
+				'activity_cate' => 'updating'
+			);
+			log_activity($logger);
+
+			// Check if this is the 3rd approval (final approval)
+			if($approval_count + 1 >= 3) {
+				// Update loan status to APPROVED and clear sent_back flag
+				$this->Loan_model->update($loan_id, array(
+					'loan_status' => 'APPROVED',
+					'loan_approved_by' => $current_user_id,
+					'approved_date' => date('Y-m-d H:i:s'),
+					'sent_back' => 0,
+					'sent_back_comment' => null
+				));
+
+				// Add final approval to trail
+				$trail_data = array(
+					'user_id' => $current_user_id,
+					'action' => 'APPROVED',
+					'comment' => 'Final approval - Loan has received 3 approvals and is ready for disbursement.',
+					'loan_id' => $loan_id
+				);
+				$this->Loan_approval_trail_model->insert($trail_data);
+
+				// Notify users with access to loan/approved about the fully approved loan
+				$customer_name = 'Customer';
+				if ($loan->customer_type == 'individual') {
+					$customer = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+					if ($customer) {
+						$customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+					}
+				} else {
+					$customer = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+					if ($customer) {
+						$customer_name = $customer->EntityName;
+					}
+				}
+
+				// Get currency code
+				$currency_data = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+				$currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+				// Prepare loan data for notification
+				$loan_notification_data = array(
+					'loan_id' => $loan_id,
+					'loan_number' => $loan->loan_number,
+					'customer_name' => $customer_name,
+					'amount' => $loan->loan_principal,
+					'currency' => $currency_code
+				);
+
+				// Notify users with access to loan/approved (disbursement team)
+				notify_loan_approved($loan_notification_data, 'loan/approved', $current_user_id);
+
+				// Notify the loan creator that the loan has been fully approved
+				notify_loan_creator($loan_notification_data, 'APPROVED', $current_user_id, $loan->loan_added_by);
+
+				$this->toaster->success('Final approval granted! Loan is now ready for disbursement.');
+			} else {
+				// Notify creator of intermediate approval
+				$customer_name = 'Customer';
+				if ($loan->customer_type == 'individual') {
+					$cust = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+					if ($cust) $customer_name = $cust->Firstname . ' ' . $cust->Lastname;
+				} else {
+					$cust = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+					if ($cust) $customer_name = $cust->EntityName;
+				}
+				$currency_data2 = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+				$currency_code2 = $currency_data2 ? $currency_data2->code : 'ZMW';
+				$intermediate_data = array(
+					'loan_id' => $loan_id,
+					'loan_number' => $loan->loan_number,
+					'customer_name' => $customer_name,
+					'amount' => $loan->loan_principal,
+					'currency' => $currency_code2
+				);
+				$approval_status = ($approval_count + 1 == 1) ? 'APPROVED_FIRST' : 'APPROVED_SECOND';
+				notify_loan_creator($intermediate_data, $approval_status, $current_user_id, $loan->loan_added_by);
+
+				$this->toaster->success('Approval #' . ($approval_count + 1) . ' recorded. ' . (3 - $approval_count - 1) . ' more approval(s) needed.');
+			}
+
+			redirect('loan/unified_approval');
+			return;
+		}
+
+		$this->toaster->error('Error: Invalid action.');
+		redirect($_SERVER['HTTP_REFERER']);
+	}
+
     function recommend(){
         $data['loan_data'] = $this->Loan_model->get_all('INITIATED');
         $menu_toggle['toggles'] = 23;
@@ -1452,9 +2064,7 @@ exit();
         }
     }
     function track(){
-        $data['loan_data'] = $this->Loan_model->get_all('');
         $menu_toggle['toggles'] = 23;
-
 
         $user = $this->input->get('user');
         $product = $this->input->get('product');
@@ -1462,25 +2072,29 @@ exit();
         $from = $this->input->get('from');
         $to = $this->input->get('to');
         $search = $this->input->get('search');
-        if($search=="filter"){
-            $data['loan_data'] = $this->Loan_model->get_filter($user,$product,$status,$from,$to);
-            $this->load->view('admin/header', $menu_toggle);
-            $this->load->view('loan/track', $data);
-            $this->load->view('admin/footer');
-        }elseif($search=='pdf'){
-            $data['loan_data'] = $this->Loan_model->get_filter($user,$product,$status,$from,$to);
-            $data['officer'] = ($user=="All") ? "All Officers" : get_by_id('employees','id',$user)->Firstname;
-            $data['product'] =($product=="All") ? "All Products" : get_by_id('loan_products','loan_product_id',$product)->product_name;
+
+        // If status is passed directly via URL (e.g., from dashboard), apply filter
+        if ($status && $status != 'All' && !$search) {
+            $data['loan_data'] = $this->Loan_model->get_filter($user ?? 'All', $product ?? 'All', $status, $from, $to);
+        } elseif ($search == "filter") {
+            $data['loan_data'] = $this->Loan_model->get_filter($user, $product, $status, $from, $to);
+        } elseif ($search == 'pdf') {
+            $data['loan_data'] = $this->Loan_model->get_filter($user, $product, $status, $from, $to);
+            $data['officer'] = ($user == "All") ? "All Officers" : get_by_id('employees', 'id', $user)->Firstname;
+            $data['product'] = ($product == "All") ? "All Products" : get_by_id('loan_products', 'loan_product_id', $product)->product_name;
             $data['from'] = $from;
             $data['to'] = $to;
             $this->load->library('Pdf');
-            $html = $this->load->view('loan/loan_report_pdf', $data,true);
-            $this->pdf->createPDF($html, "loan report as on".date('Y-m-d'), true,'A4','landscape');
-        }else{
-            $this->load->view('admin/header', $menu_toggle);
-            $this->load->view('loan/track', $data);
-            $this->load->view('admin/footer');
+            $html = $this->load->view('loan/loan_report_pdf', $data, true);
+            $this->pdf->createPDF($html, "loan report as on" . date('Y-m-d'), true, 'A4', 'landscape');
+            return;
+        } else {
+            $data['loan_data'] = $this->Loan_model->get_all('');
         }
+
+        $this->load->view('admin/header', $menu_toggle);
+        $this->load->view('loan/track', $data);
+        $this->load->view('admin/footer');
     }
 
 
@@ -1563,7 +2177,8 @@ exit();
     }
 
     function approved(){
-        $data['loan_data'] = $this->Loan_model->get_all('APPROVED');
+        // Default to CLIENT_SIGNED (ready for disbursement)
+        $data['loan_data'] = $this->Loan_model->get_all('CLIENT_SIGNED');
         $menu_toggle['toggles'] = 23;
         $user = $this->input->get('user');
         $product = $this->input->get('product');
@@ -1933,7 +2548,14 @@ exit();
 
 							);
 							log_activity($logger);
-							$this->toaster->success('Success, payment was successful');
+
+							// Check if loan was closed after payment
+							$loan_after = get_by_id('loan', 'loan_id', $loan_number);
+							if ($loan_after && $loan_after->loan_status == 'CLOSED') {
+								$this->toaster->success('Success! Loan has been fully paid and closed.');
+							} else {
+								$this->toaster->success('Success, payment was successful');
+							}
 							redirect($_SERVER['HTTP_REFERER']);
 						} else {
 							$this->toaster->error('Ops!, Sorry payment failed P2');
@@ -2011,8 +2633,13 @@ exit();
 						);
 						log_activity($logger);
 
-
-						$this->toaster->success('Success, payment was successful');
+						// Check if loan was closed after payment
+						$loan_after = get_by_id('loan', 'loan_id', $loan_number);
+						if ($loan_after && $loan_after->loan_status == 'CLOSED') {
+							$this->toaster->success('Success! Loan has been fully paid and closed.');
+						} else {
+							$this->toaster->success('Success, payment was successful');
+						}
 						redirect($_SERVER['HTTP_REFERER']);
 					}
 				}
@@ -2647,6 +3274,55 @@ exit();
 
     }
 
+    /**
+     * Unified approval page - automatically determines the appropriate approval level
+     * based on the loan's current status
+     */
+    function approve($id){
+        $row = $this->Loan_model->get_by_id($id);
+
+        if(!$row){
+            $this->toaster->error('Error: Loan not found');
+            redirect('loan/track');
+            return;
+        }
+
+        // Determine the appropriate action based on loan status
+        $action = null;
+        switch($row->loan_status){
+            case 'INITIATED':
+                $action = 'recommend';
+                break;
+            case 'RECOMMENDED':
+                // Use multi-level approval system
+                $action = 'multi_approve';
+                break;
+            case 'APPROVED_FIRST':
+                $action = 'approve_second';
+                break;
+            case 'APPROVED_SECOND':
+                $action = 'approve_third';
+                break;
+            case 'APPROVED':
+                $action = 'disburse';
+                break;
+            case 'ACTIVE':
+            case 'DISBURSED':
+            case 'CLOSED':
+                // Already fully processed, just view
+                $action = null;
+                break;
+            case 'REJECTED':
+                $action = null;
+                break;
+            default:
+                $action = null;
+        }
+
+        // Redirect to view with the determined action
+        $this->view($id, $action);
+    }
+
     function view($id, $action = null){
         // Get action from URL parameter if not passed directly
         if ($action === null) {
@@ -2656,6 +3332,7 @@ exit();
         $row = $this->Loan_model->get_by_id($id);
         $payments = $this->Payement_schedules_model->get_all_by_id($row->loan_id);
         $files = $this->Loan_files_model->get_by_loans($row->loan_id);
+        $bank_statements = $this->db->where('loan_id', $row->loan_id)->get('bank_statements')->result();
 //        $scores = $this->Loan_recommendation_model->get_by_loan($row->loan_id);
 
         if($row->customer_type=='group'){
@@ -2675,8 +3352,67 @@ exit();
         }
 		$acrued = array();
 		if($row->calculation_type=='Bullet Payment'){
-		$acrued = $this->calculate_payoff_inline($row->loan_id);
+			$acrued = $this->calculate_payoff_inline($row->loan_id);
 		}
+
+        // Compute schedule totals for amortisation footer and closed-loan summary cards
+        $total_schedule_interest  = 0;
+        $total_schedule_principal = 0;
+        $total_schedule_amount    = 0;
+        $total_paid_interest      = 0;
+        foreach ($payments as $p) {
+            $total_schedule_interest  += floatval($p->interest  ?? 0);
+            $total_schedule_principal += floatval($p->principal ?? 0);
+            $total_schedule_amount    += floatval($p->amount    ?? 0);
+        }
+        // For closed loans, actual interest = what was recorded in PAID rows
+        if ($row->loan_status == 'CLOSED') {
+            foreach ($payments as $p) {
+                if ($p->status == 'PAID') {
+                    if ($row->calculation_type == 'Bullet Payment') {
+                        $total_paid_interest += max(0, floatval($p->paid_amount ?? 0) - floatval($p->principal ?? 0));
+                    } else {
+                        $total_paid_interest += floatval($p->interest ?? 0);
+                    }
+                }
+            }
+            if ($total_paid_interest == 0) {
+                $total_paid_interest = $total_schedule_interest;
+            }
+        }
+
+        // Get linked collaterals for this loan
+        $linked_collaterals = $this->Collateral_model->get_loan_collaterals($row->loan_id);
+        $total_force_sale = 0;
+        $total_utilized = 0;
+        foreach ($linked_collaterals as &$lc) {
+            $total_force_sale += floatval($lc->force_sale_value ?? 0);
+            $total_utilized += floatval($lc->amount_utilized ?? 0);
+        }
+
+        // Get customer collaterals for linking (available ones)
+        $cust_type = ($row->customer_type == 'institution') ? 'institution' : 'individual';
+        $customer_collaterals = $this->Collateral_model->get_by_customer($row->loan_customer, $cust_type);
+
+        // Get multi-level approval data for RECOMMENDED loans
+        $approvers = array();
+        $can_approve = false;
+        $approval_reason = '';
+        if($row->loan_status == 'RECOMMENDED') {
+            $approvers = get_loan_approvers($row->loan_id);
+            $approval_count = count($approvers);
+            $last_approver_id = !empty($approvers) ? end($approvers)['user_id'] : null;
+            $current_user_id = $this->session->userdata('user_id');
+
+            // Only check for consecutive approvals - same user CAN approve 1st and 3rd
+            // But same user CANNOT approve consecutively (1st and 2nd, or 2nd and 3rd)
+            if($last_approver_id == $current_user_id) {
+                $can_approve = false;
+                $approval_reason = 'You cannot approve consecutively. Another user must approve next.';
+            } else {
+                $can_approve = true;
+            }
+        }
 
         $data = array(
             'loan_id' => $row->loan_id,
@@ -2706,9 +3442,36 @@ exit();
             'processing_fee'=>$row->processing_fee,
             'calculation_type'=>$row->calculation_type,
 			'acrued' => $acrued,
-            'action' => $action
+            'action' => $action,
+            'linked_collaterals' => $linked_collaterals,
+            'total_force_sale' => $total_force_sale,
+            'total_utilized' => $total_utilized,
+            'customer_collaterals' => $customer_collaterals,
+            'cust_id' => $row->loan_customer,
+            // Multi-level approval data
+            'approvers' => $approvers,
+            'can_approve' => $can_approve,
+            'approval_reason' => $approval_reason,
+            'total_schedule_interest'  => $total_schedule_interest,
+            'total_schedule_principal' => $total_schedule_principal,
+            'total_schedule_amount'    => $total_schedule_amount,
+            'total_paid_interest'      => $total_paid_interest,
+            // Sent back data
+            'sent_back' => isset($row->sent_back) ? $row->sent_back : 0,
+            'sent_back_comment' => isset($row->sent_back_comment) ? $row->sent_back_comment : '',
+            'sent_back_by_name' => '',
+            'sent_back_date' => isset($row->sent_back_date) ? $row->sent_back_date : '',
+            'bank_statements' => $bank_statements,
 
         );
+
+        // Get sent back by user name if loan was sent back
+        if (isset($row->sent_back) && $row->sent_back == 1 && isset($row->sent_back_by)) {
+            $sent_back_user = $this->db->get_where('employees', array('id' => $row->sent_back_by))->row();
+            if ($sent_back_user) {
+                $data['sent_back_by_name'] = $sent_back_user->Firstname . ' ' . $sent_back_user->Lastname;
+            }
+        }
         $menu_toggle['toggles'] = 23;
         $this->load->view('admin/header', $menu_toggle);
         $this->load->view('loan/view',$data);
@@ -2828,7 +3591,23 @@ exit();
 
     function edit_single_loan_request($id){
         $row = $this->Loan_model->get_by_id($id);
+
+        // Check if loan exists
+        if(!$row) {
+            $this->toaster->error('Loan not found');
+            redirect('loan/track');
+            return;
+        }
+
+        // Prevent editing of CLOSED or WRITTEN_OFF loans
+        if($row->loan_status == 'CLOSED' || $row->loan_status == 'WRITTEN_OFF') {
+            $this->toaster->error('Cannot edit a ' . strtolower(str_replace('_', ' ', $row->loan_status)) . ' loan');
+            redirect('loan/track');
+            return;
+        }
+
         $payments = $this->Payement_schedules_model->get_all_by_id($row->loan_id);
+        $bank_statements = $this->db->where('loan_id', $row->loan_id)->get('bank_statements')->result();
 //        $files = $this->Loan_files_model->get_by_loans($row->loan_id);
 //  $scores = $this->Loan_recommendation_model->get_by_loan($row->loan_id);
 
@@ -2842,7 +3621,13 @@ exit();
             $indi = $this->Individual_customers_model->get_by_id($row->loan_customer);
             $customer_name = $indi->Firstname.' '.$indi->Lastname;
             $preview_url = "Individual_customers/view/";
-            $view = "Edit_loan";
+            $view = "edit_loan";
+        }else{
+            $institution = $this->Corporate_customers_model->get_by_id($row->loan_customer);
+
+            $customer_name = $institution->EntityName.'('.$institution->RegistrationNumber.')';
+            $preview_url = "Corporate_customers/view/";
+            $view = "edit_loan_corporate";
         }
         $customers =$this->Individual_customers_model->get_all_active();
         $data = array(
@@ -2872,12 +3657,26 @@ exit();
             'customer'=>$row->loan_customer,
             'currency'=>$row->currency,
             'processing_fee'=>$row->processing_fee,
+            'off_taker'=>$row->off_taker,
+            'narration'=>$row->narration,
+            'calculation_type'=>isset($row->calculation_type) ? $row->calculation_type : '',
+            'wht'=>isset($row->wht) ? $row->wht : '',
+            'chieftaincy'=>isset($row->chieftaincy) ? $row->chieftaincy : '',
+            'crb_search'=>isset($row->crb_search) ? $row->crb_search : '',
+            'pacra_search'=>isset($row->pacra_search) ? $row->pacra_search : '',
+            'previous_facilities'=>isset($row->previous_facilities) ? $row->previous_facilities : '',
+            'past_loans_comment'=>isset($row->past_loans_comment) ? $row->past_loans_comment : '',
+            'security_notes'=>isset($row->security_notes) ? $row->security_notes : '',
+            'bank_statement_notes'=>isset($row->bank_statement_notes) ? $row->bank_statement_notes : '',
+            'about_transaction'=>isset($row->about_transaction) ? $row->about_transaction : '',
+            'risk_analysis'=>isset($row->risk_analysis) ? $row->risk_analysis : '',
+            'bank_statements' => $bank_statements,
 
         );
         $menu_toggle['toggles'] = 23;
 
         $this->load->view('admin/header', $menu_toggle);
-        $this->load->view('loan/edit_loan',$data);
+        $this->load->view('loan/'.$view,$data);
         $this->load->view('admin/footer');
     }
 
@@ -2906,96 +3705,447 @@ exit();
     function create_act_edit(){
         $row = get_by_id('approval_edits','approval_edits_id',$this->session->userdata('loan_data'));
         $data_new = json_decode($row->new_info);
-        $this->Loan_model->add_loan_edit($row->id,$data_new->loan_number,$data_new->loan_principal, $data_new->loan_period, $data_new->sy_loan_product, $data_new->loan_date,$data_new->sy_loan_customer,$data_new->customer_type,$data_new->loan_worthness_file,$data_new->narration,$data_new->sy_added_by);
+        $this->Loan_model->add_loan_edit($row->id,$data_new->loan_number,$data_new->loan_principal, $data_new->loan_period, $data_new->loan_interest, $data_new->sy_loan_product, $data_new->loan_date,$data_new->sy_loan_customer,$data_new->customer_type,$data_new->loan_worthness_file,$data_new->narration,$data_new->sy_added_by);
         $this->toaster->success('Success, loan edit was authorised  pending authorisation');
         redirect('loan/track');
 
 
     }
     public function edit_action(){
+        $this->load->database();
+        $this->db->trans_start();
 
-        $row = $this->Loan_model->get_by_id($this->input->post('loan_id'));
+        try {
+            $loan_id = $this->input->post('loan_id');
+            $row = $this->Loan_model->get_by_id($loan_id);
 
+            if (!$row) {
+                throw new Exception('Loan not found');
+            }
 
-        if($row->customer_type=='group'){
-            $group = $this->Groups_model->get_by_id($row->loan_customer);
+            // Always use the DB loan number so the user always sees the same number
+            $original_loan_number = $row->loan_number;
 
-            $customer_name = $group->group_name.'('.$group->group_code.')';
-            $preview_url = "Customer_groups/members/";
-        }elseif($row->customer_type=='individual'){
-            $indi = $this->Individual_customers_model->get_by_id($row->loan_customer);
-            $customer_name = $indi->Firstname.' '.$indi->Lastname;
-            $preview_url = "Individual_customers/view/";
+            // For fields only present in the individual form, fall back to the
+            // original loan values so the group form (which omits them) is safe.
+            $amount          = $this->input->post('amount')          !== FALSE ? $this->input->post('amount')          : $row->loan_principal;
+            $months          = $this->input->post('months')          !== FALSE ? $this->input->post('months')          : $row->loan_period;
+            $interest        = $this->input->post('interest')        !== FALSE ? $this->input->post('interest')        : $row->loan_interest;
+            $loan_type       = $this->input->post('loan_type')       !== FALSE ? $this->input->post('loan_type')       : $row->loan_product;
+            $loan_date       = $this->input->post('loan_date')       !== FALSE ? $this->input->post('loan_date')       : $row->loan_date;
+            $customer        = $this->input->post('customer')        !== FALSE ? $this->input->post('customer')        : $row->loan_customer;
+            $customer_type   = $this->input->post('customer_type')   !== FALSE ? $this->input->post('customer_type')   : $row->customer_type;
+            $narration       = $this->input->post('narration')       !== FALSE ? $this->input->post('narration')       : $row->narration;
+            $currency        = $this->input->post('currency')        !== FALSE ? $this->input->post('currency')        : $row->currency;
+            $off_taker       = $this->input->post('off_taker')       !== FALSE ? $this->input->post('off_taker')       : $row->off_taker;
+            $processing_fee  = $this->input->post('processing_fee')  !== FALSE ? $this->input->post('processing_fee')  : $row->processing_fee;
+            $appraisal_data  = array(
+                'crb_search'           => $this->input->post('crb_search')           !== FALSE ? $this->input->post('crb_search')           : $row->crb_search,
+                'pacra_search'         => $this->input->post('pacra_search')         !== FALSE ? $this->input->post('pacra_search')         : $row->pacra_search,
+                'previous_facilities'  => $this->input->post('previous_facilities')  !== FALSE ? $this->input->post('previous_facilities')  : $row->previous_facilities,
+                'past_loans_comment'   => $this->input->post('past_loans_comment')   !== FALSE ? $this->input->post('past_loans_comment')   : $row->past_loans_comment,
+                'security_notes'       => $this->input->post('security_notes')       !== FALSE ? $this->input->post('security_notes')       : $row->security_notes,
+                'bank_statement_notes' => $this->input->post('bank_statement_notes') !== FALSE ? $this->input->post('bank_statement_notes') : $row->bank_statement_notes,
+                'about_transaction'    => $this->input->post('about_transaction')    !== FALSE ? $this->input->post('about_transaction')    : $row->about_transaction,
+                'risk_analysis'        => $this->input->post('risk_analysis')        !== FALSE ? $this->input->post('risk_analysis')        : $row->risk_analysis,
+            );
+
+            // Remove old account and schedules before recreating
+            $this->db->where('account_number', $original_loan_number)->delete('account');
+            $this->db->where('loan_id', $loan_id)->delete('payement_schedules');
+
+            // Create the new loan — this recalculates all schedules
+            $result = $this->Loan_model->add_loan(
+                $original_loan_number,
+                $amount,
+                $months,
+                $interest,
+                $loan_type,
+                $loan_date,
+                $customer,
+                $customer_type,
+                $row->worthness_file,
+                $narration,
+                $this->session->userdata('user_id'),
+                '',
+                '',
+                $currency,
+                $off_taker,
+                $processing_fee,
+                $appraisal_data
+            );
+
+            if (!$result || !isset($result['loan_id'])) {
+                throw new Exception('Failed to create updated loan');
+            }
+
+            // add_loan always auto-generates a new loan number — restore the original
+            $this->db->where('loan_id', $result['loan_id'])->update('loan', array('loan_number' => $original_loan_number));
+            $this->db->where('account_number', $result['loan_number'])->update('account', array('account_number' => $original_loan_number));
+
+            // Preserve the original loan status (e.g. INITIATED, SENT_BACK)
+            $this->db->where('loan_id', $result['loan_id'])->update('loan', array('loan_status' => $row->loan_status));
+
+            // Migrate existing files and folders to the new loan record
+            $this->db->where('loan_id', $loan_id)->update('loan_files', array('loan_id' => $result['loan_id']));
+            $this->db->where('owner_id', $loan_id)->update('file_folders', array('owner_id' => $result['loan_id']));
+
+            // Replace bank statements: delete old ones, then insert from form
+            $this->db->where('loan_id', $loan_id)->delete('bank_statements');
+            $credits = $this->input->post('personal_credit');
+            $debits  = $this->input->post('personal_debit');
+            $months  = $this->input->post('personal_statement_month');
+            if (is_array($credits) && is_array($debits) && is_array($months)) {
+                for ($i = 0; $i < count($credits); $i++) {
+                    $credit = isset($credits[$i]) ? $credits[$i] : null;
+                    $debit  = isset($debits[$i])  ? $debits[$i]  : null;
+                    $month  = isset($months[$i])  ? $months[$i]  : null;
+                    if (empty($credit) && empty($debit) && empty($month)) continue;
+                    $this->db->insert('bank_statements', array(
+                        'loan_id'        => $result['loan_id'],
+                        'statement_type' => 'personal',
+                        'credit'         => $credit ? str_replace(',', '', $credit) : 0,
+                        'debit'          => $debit  ? str_replace(',', '', $debit)  : 0,
+                        'month'          => $month,
+                        'year'           => date('Y'),
+                        'added_by'       => $this->session->userdata('user_id'),
+                        'date_added'     => date('Y-m-d H:i:s'),
+                    ));
+                }
+            }
+
+            // Delete the old loan record
+            $this->Loan_model->delete($loan_id);
+
+            $logger = array(
+                'type'         => 'Loan Edit',
+                'old_info'     => json_encode($row),
+                'new_info'     => json_encode($result),
+                'id'           => $result['loan_id'],
+                'summary'      => 'Edited loan ' . $original_loan_number,
+                'Initiated_by' => $this->session->userdata('user_id'),
+            );
+            auth_logger($logger);
+
+            $this->db->trans_complete();
+
+            if ($this->db->trans_status() === FALSE) {
+                throw new Exception('Transaction failed');
+            }
+
+            $this->toaster->success('Loan updated successfully. Payment schedule recalculated.');
+            redirect('loan/track');
+
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            $this->toaster->error('Failed to update loan: ' . $e->getMessage());
+            redirect('loan/edit_single_loan_request/' . $this->input->post('loan_id'));
         }
-
-        if($this->input->post('customer_type')=='group'){
-            $group1 = $this->Groups_model->get_by_id($this->input->post('customer'));
-
-            $customer_name1 = $group1->group_name.'('.$group1->group_code.')';
-            $preview_url1 = "Customer_groups/members/";
-        }elseif($this->input->post('customer_type')=='individual'){
-            $indi1 = $this->Individual_customers_model->get_by_id($this->input->post('customer'));
-            $customer_name1 = $indi1->Firstname.' '.$indi1->Lastname;
-            $preview_url1 = "Individual_customers/view/";
-        }
-        $loan_number = str_replace(' ', '', $this->input->post('loan_number'));
-        $product_n = get_by_id('loan_products','loan_product_id',$this->input->post('loan_type'));
-        $added_by1 = get_by_id('employees','id',$this->session->userdata('user_id'));
-        $result = array(
-            'loan_id' => $row->loan_id,
-            'loan_number'=> $loan_number,
-            'sy_loan_product'=>$this->input->post('loan_type'),
-            'loan_product'=>$product_n->product_name,
-            'sy_loan_customer'=>$this->input->post('customer'),
-            'loan_customer'=>$customer_name1,
-            'customer_type'=> $this->input->post('customer_type'),
-            'preview_url' => $preview_url1,
-            'customer_id' => $row->loan_customer,
-            'loan_date'=>$this->input->post('loan_date'),
-            'loan_principal'=>$this->input->post('amount'),
-            'loan_period'=>$this->input->post('months'),
-            'loan_worthness_file'=>$this->input->post('worthness_file'),
-            'narration'=>$this->input->post('narration'),
-            'sy_added_by'=>$this->session->userdata('user_id'),
-            'added_by'=>$added_by1->Firstname." ".$added_by1->Lastname,
-
-        );
-        $added_by = get_by_id('employees','id',$row->loan_added_by);
-        $data = array(
-            'loan_id' => $row->loan_id,
-            'loan_number' => $row->loan_number,
-            'loan_product' => $row->product_name,
-            'loan_customer' => $customer_name,
-            'customer_type' => $row->customer_type,
-            'preview_url' => $preview_url,
-            'customer_id' => $row->loan_customer,
-            'loan_date' => $row->loan_date,
-            'loan_principal' => $row->loan_principal,
-            'loan_period' => $row->loan_period,
-            'loan_worthness_file'=>$row->worthness_file,
-            'narration'=>$row->narration,
-            'loan_added_by' => $added_by->Firstname." ".$added_by->Lastname,
-
-
-        );
-
-
-
-
-        $logger = array(
-            'type' => 'Loan edit',
-            'old_info' => json_encode($data),
-            'new_info' => json_encode($result),
-            'id'=> $this->input->post('loan_id'),
-            'summary'=> $this->input->post('loan_number'),
-
-            'Initiated_by' => $this->session->userdata('user_id')
-
-        );
-        auth_logger($logger);
-        $this->toaster->success('You successfully, initiated loan edit, wait for approval');
-        redirect('Loan/initiate_edit_loan');
     }
+
+    public function  edit_corporate_action(){
+        // Load database library for transaction support
+        $this->load->database();
+        
+        // Start database transaction
+        $this->db->trans_start();
+        
+        try {
+            // Get the original loan data
+            $loan_id = $this->input->post('loan_id');
+            $original_loan_number = $this->input->post('original_loan_number');
+            $row = $this->Loan_model->get_by_id($loan_id);
+            
+            if (!$row) {
+                throw new Exception('Loan not found');
+            }
+            
+            // Prepare data for new loan (based on create_act implementation)
+            $loan_number = str_replace(' ', '', $original_loan_number); // Keep same loan number
+            $amount = $this->input->post('amount');
+            $months = $this->input->post('months');
+            $interest = $this->input->post('interest');
+            $loan_type = $this->input->post('loan_type');
+            $loan_date = $this->input->post('loan_date');
+            $customer = $this->input->post('customer');
+            $customer_type = $this->input->post('customer_type');
+            $narration = $this->input->post('narration');
+            $currency = $this->input->post('currency');
+            $off_taker = $this->input->post('off_taker');
+            $processing_fee = $this->input->post('processing_fee');
+            $appraisal_data = array(
+                'crb_search'          => $this->input->post('crb_search'),
+                'pacra_search'        => $this->input->post('pacra_search'),
+                'previous_facilities' => $this->input->post('previous_facilities'),
+                'past_loans_comment'  => $this->input->post('past_loans_comment'),
+                'security_notes'      => $this->input->post('security_notes'),
+                'bank_statement_notes'=> $this->input->post('bank_statement_notes'),
+                'about_transaction'   => $this->input->post('about_transaction'),
+                'risk_analysis'       => $this->input->post('risk_analysis'),
+            );
+            
+            // Delete associated records before deleting the loan to avoid duplicate key errors
+            // Delete account record if it exists
+            $this->db->where('account_number', $loan_number);
+            $this->db->delete('account');
+            
+            // Delete payment schedules
+            $this->db->where('loan_id', $loan_id);
+            $this->db->delete('payement_schedules');
+            
+            // Create new loan with same loan number BEFORE deleting old loan
+            $result = $this->Loan_model->add_loan(
+                $loan_number,
+                $amount,
+                $months,
+                $interest,
+                $loan_type,
+                $loan_date,
+                $customer,
+                $customer_type,
+                '', // worthness_file
+                $narration,
+                $this->session->userdata('user_id'),
+                '', // payment_method
+                '', // fee_amount
+                $currency,
+                $off_taker,
+                $processing_fee,
+                $appraisal_data
+            );
+            
+            if (!$result) {
+                throw new Exception('Failed to create new loan');
+            }
+
+            // Restore the original loan number (add_loan always generates a new one)
+            $this->db->where('loan_id', $result['loan_id'])->update('loan', array('loan_number' => $loan_number));
+            $this->db->where('account_number', $result['loan_number'])->update('account', array('account_number' => $loan_number));
+            $result['loan_number'] = $loan_number;
+
+            // Update existing loan files to reference the new loan_id
+            $this->db->where('loan_id', $loan_id);
+            $this->db->update('loan_files', array('loan_id' => $result['loan_id']));
+
+            // Update existing loan folders to reference the new loan_id
+            $this->db->where('owner_id', $loan_id);
+            $this->db->update('file_folders', array('owner_id' => $result['loan_id']));
+
+            // Finally delete the old loan
+            $this->Loan_model->delete($loan_id);
+            
+            // Handle file uploads if any
+//            $number_of_files_uploaded = count($_FILES['corporate_loan_files']['name']);
+//            if ($number_of_files_uploaded > 0 && $_FILES['corporate_loan_files']['name'][0] != '') {
+//                $this->load->library('upload');
+//
+//                // Create directory if it doesn't exist
+//                $imagePath = APPPATH . '../uploads/' . $result['loan_number'];
+//                if (!is_dir($imagePath)) {
+//                    mkdir($imagePath, 0777, true);
+//                }
+//
+//                for ($i = 0; $i < $number_of_files_uploaded; $i++) {
+//                    if ($_FILES['corporate_loan_files']['name'][$i] != '') {
+//                        $_FILES['userfile']['name'] = $_FILES['corporate_loan_files']['name'][$i];
+//                        $_FILES['userfile']['type'] = $_FILES['corporate_loan_files']['type'][$i];
+//                        $_FILES['userfile']['tmp_name'] = $_FILES['corporate_loan_files']['tmp_name'][$i];
+//                        $_FILES['userfile']['error'] = $_FILES['corporate_loan_files']['error'][$i];
+//                        $_FILES['userfile']['size'] = $_FILES['corporate_loan_files']['size'][$i];
+//
+//                        $config = array(
+//                            'file_name' => $_FILES['userfile']['name'],
+//                            'allowed_types' => '*',
+//                            'max_size' => 200000,
+//                            'overwrite' => FALSE,
+//                            'upload_path' => $imagePath
+//                        );
+//
+//                        $this->upload->initialize($config);
+//
+//                        if ($this->upload->do_upload()) {
+//                            $uploaded_data = $this->upload->data();
+//                            $file_data = array(
+//                                'loan_id' => $result['loan_id'],
+//                                'file_name' => $uploaded_data['file_name'],
+//                                'real_file' => $config['file_name'],
+//                            );
+//                            $this->Loan_files_model->insert($file_data);
+//                        }
+//                    }
+//                }
+//            }
+//
+//            // Handle collateral files if any
+//            $conames = $this->input->post('coname');
+//            $types = $this->input->post('type');
+//            $serials = $this->input->post('serial');
+//            $cvalues = $this->input->post('cvalue');
+//            $descs = $this->input->post('desc');
+//
+//            if (!empty($conames)) {
+//                for ($i = 0; $i < count($conames); $i++) {
+//                    if (!empty($conames[$i])) {
+//                        // Handle collateral data insertion here if you have a collateral model
+//                        // This would need to be implemented based on your collateral table structure
+//                    }
+//                }
+//            }
+//
+            // Add reference to original loan
+            $edit_reference = array(
+                'original_loan_id' => $loan_id,
+                'new_loan_id' => $result['loan_id'],
+                'edit_date' => date('Y-m-d H:i:s'),
+                'edited_by' => $this->session->userdata('user_id'),
+                'edit_reason' => 'Corporate loan update'
+            );
+            
+            // Log the edit operation
+            $logger = array(
+                'type' => 'Corporate Loan Edit',
+                'old_info' => json_encode($row),
+                'new_info' => json_encode($result),
+                'id' => $result['loan_id'],
+                'summary' => 'Edited loan ' . $loan_number,
+                'Initiated_by' => $this->session->userdata('user_id')
+            );
+            auth_logger($logger);
+            
+            // Complete transaction
+            $this->db->trans_complete();
+            
+            if ($this->db->trans_status() === FALSE) {
+                throw new Exception('Transaction failed');
+            }
+            
+            $this->toaster->success('Loan updated successfully. Previous loan archived and new loan created.');
+            redirect('loan/track');
+            
+        } catch (Exception $e) {
+            // Rollback transaction on error
+            $this->db->trans_rollback();
+            $this->toaster->error('Failed to update loan: ' . $e->getMessage());
+            redirect('loan/edit_single_loan_request/' . $loan_id);
+        }
+    }
+    
+    public function delete_loan_action($loan_id){
+        // Load database library for transaction support
+        $this->load->database();
+        
+        // Start database transaction
+        $this->db->trans_start();
+        
+        try {
+            // Get the loan data for logging before deletion
+            $row = $this->Loan_model->get_by_id($loan_id);
+            
+            if (!$row) {
+                throw new Exception('Loan not found');
+            }
+            
+            // Check if loan can be deleted (only INITIATED or REJECTED)
+            if ($row->loan_status != 'INITIATED' && $row->loan_status != 'REJECTED') {
+                throw new Exception('Only loans with status INITIATED or REJECTED can be deleted');
+            }
+            
+            // Get customer information for logging
+            if($row->customer_type=='group'){
+                $group = $this->Groups_model->get_by_id($row->loan_customer);
+                $customer_name = $group->group_name.'('.$group->group_code.')';
+            }elseif($row->customer_type=='individual'){
+                $indi = $this->Individual_customers_model->get_by_id($row->loan_customer);
+                $customer_name = $indi->Firstname.' '.$indi->Lastname;
+            }else{
+                $institution = $this->Corporate_customers_model->get_by_id($row->loan_customer);
+                $customer_name = $institution->EntityName.'('.$institution->RegistrationNumber.')';
+            }
+            
+            // Prepare data for logging
+            $loan_data_for_log = array(
+                'loan_id' => $row->loan_id,
+                'loan_number' => $row->loan_number,
+                'loan_product' => $row->product_name,
+                'loan_customer' => $customer_name,
+                'customer_type' => $row->customer_type,
+                'customer_id' => $row->loan_customer,
+                'loan_date' => $row->loan_date,
+                'loan_principal' => $row->loan_principal,
+                'loan_period' => $row->loan_period,
+                'period_type' => $row->period_type,
+                'loan_interest' => $row->loan_interest,
+                'loan_interest_amount' => $row->loan_interest_amount,
+                'loan_amount_total' => $row->loan_amount_total,
+                'loan_status' => $row->loan_status,
+                'loan_added_date' => $row->loan_added_date,
+                'currency' => $row->currency,
+                'processing_fee' => $row->processing_fee
+            );
+            
+            // Log the deletion operation BEFORE deleting
+            $logger = array(
+                'type' => 'Loan Deletion',
+                'old_info' => json_encode($loan_data_for_log),
+                'new_info' => 'DELETED',
+                'id' => $loan_id,
+                'summary' => 'Deleted loan ' . $row->loan_number . ' for customer ' . $customer_name,
+                'Initiated_by' => $this->session->userdata('user_id')
+            );
+            auth_logger($logger);
+            
+            // Delete associated records in order
+            // 1. Delete account record if it exists
+            $this->db->where('account_number', $row->loan_number);
+            $this->db->delete('account');
+            
+            // 2. Delete payment schedules
+            $this->db->where('loan_id', $loan_id);
+            $this->db->delete('payement_schedules');
+            
+            // 3. Delete loan files
+            $this->db->where('loan_id', $loan_id);
+            $this->db->delete('loan_files');
+            
+            // 4. Delete loan folders
+            $this->db->where('owner_id', $loan_id);
+            $this->db->delete('file_folders');
+            
+            // Delete physical files from server if folder exists
+            $upload_path = APPPATH . '../uploads/' . $row->loan_number;
+            if (is_dir($upload_path)) {
+                // Delete all files in the directory
+                $files = glob($upload_path . '/*');
+                foreach($files as $file) {
+                    if(is_file($file)) {
+                        unlink($file);
+                    }
+                }
+                // Remove the directory
+                rmdir($upload_path);
+            }
+            
+            // 5. Finally delete the loan
+            $this->Loan_model->delete($loan_id);
+            
+            // Complete transaction
+            $this->db->trans_complete();
+            
+            if ($this->db->trans_status() === FALSE) {
+                throw new Exception('Transaction failed');
+            }
+            
+            $this->toaster->success('Loan deleted successfully. All associated records and files have been removed.');
+            redirect('loan/track');
+            
+        } catch (Exception $e) {
+            // Rollback transaction on error
+            $this->db->trans_rollback();
+            $this->toaster->error('Failed to delete loan: ' . $e->getMessage());
+            redirect('loan/track');
+        }
+    }
+    
     function edit_single_loan_recommend($id){
         $row = $this->Loan_model->get_by_id_recommend($id);
         $payments = $this->Payement_schedules_model->get_all_by_id($row->loan_id);
@@ -3293,6 +4443,37 @@ exit();
         $maturity_date = $this->Payement_schedules_model->get_last_payment($row->loan_id);
         $first_payment = $this->Payement_schedules_model->get_first_payment($row->loan_id);
 
+        // Calculate accrued amount if it's a Bullet Payment
+        $acrued = array();
+        if($row->calculation_type == 'Bullet Payment'){
+            $acrued = $this->calculate_payoff_inline($row->loan_id);
+        }
+
+        // Schedule totals for amortisation tfoot and closed-loan header summary
+        $total_schedule_interest  = 0;
+        $total_schedule_principal = 0;
+        $total_schedule_amount    = 0;
+        $total_paid_interest      = 0;
+        foreach ($payments as $p) {
+            $total_schedule_interest  += floatval($p->interest  ?? 0);
+            $total_schedule_principal += floatval($p->principal ?? 0);
+            $total_schedule_amount    += floatval($p->amount    ?? 0);
+        }
+        if ($row->loan_status == 'CLOSED') {
+            foreach ($payments as $p) {
+                if ($p->status == 'PAID') {
+                    if ($row->calculation_type == 'Bullet Payment') {
+                        $total_paid_interest += max(0, floatval($p->paid_amount ?? 0) - floatval($p->principal ?? 0));
+                    } else {
+                        $total_paid_interest += floatval($p->interest ?? 0);
+                    }
+                }
+            }
+            if ($total_paid_interest == 0) {
+                $total_paid_interest = $total_schedule_interest;
+            }
+        }
+
       if( $row->customer_type=='individual'){
       $row = $this->Loan_model->get_by_id_report($id);
 
@@ -3321,6 +4502,12 @@ exit();
             'payments'=>$payments,
             'currency'=>$row->currency,
             'processing_fee'=>$row->processing_fee,
+            'calculation_type'=>$row->calculation_type,
+            'acrued' => $acrued,
+            'total_schedule_interest'  => $total_schedule_interest,
+            'total_schedule_principal' => $total_schedule_principal,
+            'total_schedule_amount'    => $total_schedule_amount,
+            'total_paid_interest'      => $total_paid_interest,
         );
         $this->load->library('Pdf');
         $html = $this->load->view('loan/report', $data,true);
@@ -3355,6 +4542,12 @@ $row = $this->Loan_model->get_by_id_group($id);
             'loan_added_date' => $row->loan_added_date,
             'payments'=>$payments,
             'currency'=>$row->currency,
+            'calculation_type'=>$row->calculation_type,
+            'acrued' => $acrued,
+            'total_schedule_interest'  => $total_schedule_interest,
+            'total_schedule_principal' => $total_schedule_principal,
+            'total_schedule_amount'    => $total_schedule_amount,
+            'total_paid_interest'      => $total_paid_interest,
         );
         $this->load->library('Pdf');
         $html = $this->load->view('loan/report', $data,true);
@@ -3362,6 +4555,128 @@ $row = $this->Loan_model->get_by_id_group($id);
      }
 
     }
+
+    /**
+     * Loan Appraisal Report
+     * Displays a comprehensive appraisal report for a loan
+     */
+    function appraisal_report($id) {
+        $loan = $this->Loan_model->get_by_id($id);
+        if (!$loan) {
+            $this->toaster->error('Loan not found');
+            redirect('loan');
+        }
+
+        // Get loan product
+        $loan_product = get_by_id('loan_products', 'loan_product_id', $loan->loan_product);
+
+        // Get currency
+        $currency = get_by_id('currencies', 'currency_id', $loan->currency);
+
+        // Get customer based on type
+        $is_corporate = false;
+        if ($loan->customer_type == 'individual') {
+            $customer = $this->Individual_customers_model->get_by_id($loan->loan_customer);
+        } elseif ($loan->customer_type == 'institution') {
+            $customer = get_by_id('corporate_customers', 'id', $loan->loan_customer);
+            $is_corporate = true;
+        } elseif ($loan->customer_type == 'group') {
+            $customer = $this->Groups_model->get_by_id($loan->loan_customer);
+        }
+
+        // Get previous loans for this customer
+        $this->db->where('loan_customer', $loan->loan_customer);
+        $this->db->where('customer_type', $loan->customer_type);
+        $this->db->where('loan_id !=', $loan->loan_id);
+        $this->db->order_by('loan_date', 'DESC');
+        $previous_loans = $this->db->get('loan')->result();
+
+        // Get approvers
+        $approvers = array();
+        $this->db->select('lat.*, e.Firstname as first_name, e.Lastname as last_name');
+        $this->db->from('loan_approval_trail lat');
+        $this->db->join('employees e', 'e.id = lat.user_id', 'left');
+        $this->db->where('lat.loan_id', $loan->loan_id);
+        $this->db->where_in('lat.action', array('APPROVED', 'MULTI_APPROVE'));
+        $this->db->order_by('lat.date_stamp', 'ASC');
+        $approvers = $this->db->get()->result();
+
+        // Get loan creator
+        $created_by = get_by_id('employees', 'id', $loan->loan_added_by);
+
+        // Calculate total interest and repayment
+        $payments = $this->Payement_schedules_model->get_all_by_id($loan->loan_id);
+        $total_interest = 0;
+        $total_repayment = 0;
+        if (!empty($payments)) {
+            foreach ($payments as $payment) {
+                $total_interest += floatval($payment->interest ?? 0);
+                $total_repayment += floatval($payment->amount ?? 0);
+            }
+        }
+
+        // Get company details from settings
+        $settings = get_by_id('settings', 'settings_id', '1');
+        $company_name = $settings ? $settings->company_name : 'Fundit Capital Solutions';
+        $company_logo = $settings && !empty($settings->logo) ? 'uploads/' . $settings->logo : '';
+        $company_address = $settings ? $settings->address : '';
+        $company_phone = $settings ? $settings->phone_number : '';
+        $company_email = $settings ? $settings->company_email : '';
+
+        // Get off-taker for bullet loans
+        $off_taker = null;
+        if (!empty($loan->off_taker)) {
+            $off_taker = get_by_id('corporate_customers', 'id', $loan->off_taker);
+        }
+
+        // Get shareholders for client (if corporate)
+        $client_shareholders = array();
+        if ($is_corporate && !empty($customer->id)) {
+            $this->db->where('corporate_id', $customer->id);
+            $client_shareholders = $this->db->get('shareholders')->result();
+        }
+
+        // Get shareholders for off-taker (if exists)
+        $offtaker_shareholders = array();
+        if (!empty($off_taker) && !empty($off_taker->id)) {
+            $this->db->where('corporate_id', $off_taker->id);
+            $offtaker_shareholders = $this->db->get('shareholders')->result();
+        }
+
+        $bank_statements = $this->db->where('loan_id', $loan->loan_id)->get('bank_statements')->result();
+
+        // For individual customers, fetch KYC (ID number lives in proofofidentity, not individual_customers)
+        $customer_kyc = null;
+        if (!$is_corporate && $loan->customer_type == 'individual') {
+            $customer_kyc = $this->db->where('ClientId', $loan->loan_customer)->get('proofofidentity')->row();
+        }
+
+        $data = array(
+            'loan' => $loan,
+            'loan_product' => $loan_product,
+            'currency' => $currency,
+            'customer' => $customer,
+            'customer_kyc' => $customer_kyc,
+            'is_corporate' => $is_corporate,
+            'previous_loans' => $previous_loans,
+            'approvers' => $approvers,
+            'created_by' => $created_by,
+            'total_interest' => $total_interest,
+            'total_repayment' => $total_repayment,
+            'company_name' => $company_name,
+            'company_logo' => $company_logo,
+            'company_address' => $company_address,
+            'company_phone' => $company_phone,
+            'company_email' => $company_email,
+            'off_taker' => $off_taker,
+            'client_shareholders' => $client_shareholders,
+            'offtaker_shareholders' => $offtaker_shareholders,
+            'bank_statements' => $bank_statements,
+        );
+
+        $this->load->view('loan/appraisal_report', $data);
+    }
+
     function pv(){
         $this->load->view('testv');
     }
@@ -3395,21 +4710,342 @@ $row = $this->Loan_model->get_by_id_group($id);
             $by = 'disbursed_by';
 
             $by_date = 'disbursed_date';
-            $this->Loan_model->update($id,array('loan_status'=>$action,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>$action,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
         }else{
-            $this->Loan_model->update($id,array('loan_status'=>$action,$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>$action,$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
         }
         if($notify->loan_disbursement=='Yes' && $action =="ACTIVE"){
             send_sms($customer->PhoneNumber,'Dear customer, loan has been approved, you can call numbers below for more');
         }
+
+        // Notify the loan creator of the status change
+        $loan_row = $this->db->get_where('loan', array('loan_id' => $id))->row();
+        if ($loan_row) {
+            $cust_name = 'N/A';
+            if ($loan_row->customer_type == 'individual') {
+                $c = $this->db->get_where('individual_customers', array('id' => $loan_row->loan_customer))->row();
+                if ($c) $cust_name = $c->Firstname . ' ' . $c->Lastname;
+            } else {
+                $c = $this->db->get_where('corporate_customers', array('id' => $loan_row->loan_customer))->row();
+                if ($c) $cust_name = $c->EntityName;
+            }
+            $cur = $this->db->get_where('currency', array('id' => $loan_row->currency))->row();
+            $cur_code = $cur ? $cur->code : 'ZMW';
+
+            $creator_data = array(
+                'loan_id' => $id,
+                'loan_number' => $loan_row->loan_number,
+                'customer_name' => $cust_name,
+                'amount' => $loan_row->loan_principal,
+                'currency' => $cur_code
+            );
+            notify_loan_creator($creator_data, $action, $this->session->userdata('user_id'), $loan_row->loan_added_by);
+        }
+
         $this->toaster->success('Success, your action successful');
         redirect($_SERVER['HTTP_REFERER']);
+    }
+
+    function approval_action_with_comment(){
+        $action = $this->input->post('action');
+        $id = $this->input->post('loan_id');
+        $comment = $this->input->post('comment');
+
+        // Check for adjacent approval actions by same user
+        $current_user_id = $this->session->userdata('user_id');
+
+        // Get the last approval action for this loan
+        $this->db->select('action, user_id');
+        $this->db->from('loan_approval_trail');
+        $this->db->where('loan_id', $id);
+        $this->db->order_by('date_stamp', 'DESC');
+        $this->db->limit(1);
+        $last_action = $this->db->get()->row();
+
+        // Define adjacent actions that cannot be done by same user
+        // Note: INITIATED → RECOMMENDED is allowed by same user
+        $adjacent_actions = array(
+            'RECOMMENDED' => 'APPROVED_FIRST',
+            'APPROVED_FIRST' => 'APPROVED_SECOND',
+            'APPROVED_SECOND' => 'APPROVED',
+            'APPROVED' => 'DISBURSED'
+        );
+
+        // Check if current user did the previous action
+        if($last_action && $last_action->user_id == $current_user_id){
+            // Check if current action is adjacent to previous action
+            if(isset($adjacent_actions[$last_action->action]) && $adjacent_actions[$last_action->action] == $action){
+                $this->toaster->error('Error: You cannot perform consecutive approval actions. The previous action was done by you.');
+                redirect($_SERVER['HTTP_REFERER']);
+                return;
+            }
+        }
+
+        $customer = $this->Loan_model->loan_user($id);
+        $by = 'loan_approved_by';
+        $by_date = 'approved_date';
+
+        // Store original action for trail
+        $original_action = $action;
+
+        if($action == "REJECT"){
+            $by = 'rejected_by';
+            $by_date = 'rejected_date';
+            $action = "REJECTED"; // Set status to REJECTED
+        }
+        if($action == "RECOMMENDED"){
+            $by = 'loan_recommended_by';
+            $by_date = 'loan_recommended_date';
+            // Status remains RECOMMENDED
+        }
+        if($action == "APPROVED_FIRST"){
+            $by = 'loan_approved_by';
+            $by_date = 'approved_date';
+            // Status remains APPROVED_FIRST
+        }
+        if($action == "APPROVED_SECOND"){
+            $by = 'loan_approved_by';
+            $by_date = 'approved_date';
+            // Status remains APPROVED_SECOND
+        }
+        if($action == "APPROVED_THIRD" || $action == "APPROVED"){
+            $by = 'loan_approved_by';
+            $by_date = 'approved_date';
+            $action = "APPROVED"; // Final approval status
+        }
+        if($action == "WRITTEN_OFF"){
+            $by = 'written_off_by';
+            $by_date = 'written_off_date';
+        }
+        if($action == "WRITE_OFF"){
+            $by = 'written_off_by';
+            $by_date = 'written_off_date';
+        }
+
+        // Insert into loan_approval_trail (keep original action)
+        $trail_data = array(
+            'user_id' => $this->session->userdata('user_id'),
+            'action' => $original_action,
+            'comment' => $comment,
+            'loan_id' => $id
+        );
+        $this->Loan_approval_trail_model->insert($trail_data);
+
+        // Log activity
+        $logger = array(
+            'user_id' => $this->session->userdata('user_id'),
+            'activity' => $original_action.' a loan with comment',
+            'activity_cate' => 'updating'
+        );
+        log_activity($logger);
+
+        $notify = get_by_id('sms_settings','id','1');
+
+        // Update loan status and clear sent_back flag
+        if($action == "ACTIVE"){
+            $by = 'disbursed_by';
+            $by_date = 'disbursed_date';
+            $this->Loan_model->update($id, array(
+                'loan_status' => $action,
+                'disbursed' => 'Yes',
+                $by => $this->session->userdata('user_id'),
+                $by_date => date('Y-m-d H:i:s'),
+                'sent_back' => 0,
+                'sent_back_comment' => null
+            ));
+        } else {
+            $this->Loan_model->update($id, array(
+                'loan_status' => $action,
+                $by => $this->session->userdata('user_id'),
+                $by_date => date('Y-m-d H:i:s'),
+                'sent_back' => 0,
+                'sent_back_comment' => null
+            ));
+        }
+
+        // Send SMS notification if applicable
+        if($notify->loan_disbursement == 'Yes' && $action == "ACTIVE"){
+            send_sms($customer->PhoneNumber, 'Dear customer, loan has been approved, you can call numbers below for more');
+        }
+
+        // Send email notifications based on action
+        $loan = $this->db->get_where('loan', array('loan_id' => $id))->row();
+        if ($loan) {
+            // Get customer name
+            $customer_name = 'N/A';
+            if ($loan->customer_type == 'individual') {
+                $cust = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+                if ($cust) {
+                    $customer_name = $cust->Firstname . ' ' . $cust->Lastname;
+                }
+            } else {
+                $cust = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+                if ($cust) {
+                    $customer_name = $cust->EntityName;
+                }
+            }
+
+            // Get currency code
+            $currency_data = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+            $currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+            // Prepare loan data for notification
+            $loan_notification_data = array(
+                'loan_id' => $id,
+                'loan_number' => $loan->loan_number,
+                'customer_name' => $customer_name,
+                'amount' => $loan->loan_principal,
+                'currency' => $currency_code
+            );
+
+            // Notify based on action
+            if ($original_action == 'RECOMMENDED') {
+                // Notify users with access to loan/unified_approval (approvers)
+                notify_loan_approvers($loan_notification_data, 'loan/unified_approval', $current_user_id);
+            } elseif ($original_action == 'APPROVED' || $original_action == 'APPROVED_THIRD') {
+                // Notify users with loan creation rights to upload signed client copy
+                notify_loan_upload_signed($loan_notification_data, $current_user_id);
+            }
+
+            // Always notify the loan creator of the status change
+            notify_loan_creator($loan_notification_data, $action, $current_user_id, $loan->loan_added_by);
+        }
+
+        $this->toaster->success('Success, your action was successful');
+        redirect($_SERVER['HTTP_REFERER']);
+    }
+
+    /**
+     * Send loan for disbursement after client has signed documents
+     */
+    function send_for_disburse($id) {
+        $loan = $this->db->get_where('loan', array('loan_id' => $id))->row();
+
+        if (!$loan) {
+            $this->toaster->error('Loan not found');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
+        // Check loan is in APPROVED status
+        if ($loan->loan_status != 'APPROVED') {
+            $this->toaster->error('Loan must be in APPROVED status to send for disbursement');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
+        $current_user_id = $this->session->userdata('user_id');
+
+        // Update loan status to CLIENT_SIGNED and clear sent_back flag
+        $this->Loan_model->update($id, array(
+            'loan_status' => 'CLIENT_SIGNED',
+            'client_signed_by' => $current_user_id,
+            'client_signed_date' => date('Y-m-d H:i:s'),
+            'sent_back' => 0,
+            'sent_back_comment' => null
+        ));
+
+        // Insert into loan_approval_trail
+        $trail_data = array(
+            'user_id' => $current_user_id,
+            'action' => 'CLIENT_SIGNED',
+            'comment' => 'Client signed documents uploaded. Sent for disbursement.',
+            'loan_id' => $id
+        );
+        $this->Loan_approval_trail_model->insert($trail_data);
+
+        // Log activity
+        $logger = array(
+            'user_id' => $current_user_id,
+            'activity' => 'Sent loan for disbursement - client signed',
+            'activity_cate' => 'loan_disburse'
+        );
+        log_activity($logger);
+
+        // Get customer name for notification
+        $customer_name = 'N/A';
+        if ($loan->customer_type == 'individual') {
+            $cust = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+            if ($cust) {
+                $customer_name = $cust->Firstname . ' ' . $cust->Lastname;
+            }
+        } else {
+            $cust = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+            if ($cust) {
+                $customer_name = $cust->EntityName;
+            }
+        }
+
+        // Get currency code
+        $currency_data = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+        $currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+        // Prepare loan data for notification
+        $loan_notification_data = array(
+            'loan_id' => $id,
+            'loan_number' => $loan->loan_number,
+            'customer_name' => $customer_name,
+            'amount' => $loan->loan_principal,
+            'currency' => $currency_code
+        );
+
+        // Notify users with disburse rights (loan/approved page)
+        notify_loan_ready_disburse($loan_notification_data, 'loan/approved', $current_user_id);
+
+        // Notify the loan creator that the loan has been sent for disbursement
+        notify_loan_creator($loan_notification_data, 'CLIENT_SIGNED', $current_user_id, $loan->loan_added_by);
+
+        $this->toaster->success('Loan sent for disbursement successfully');
+        redirect('loan/view/' . $id);
+    }
+
+    function get_approval_trail($loan_id){
+        // Fetch approval trail records for the loan
+        $this->db->select('loan_approval_trail.*, employees.Firstname, employees.Lastname');
+        $this->db->from('loan_approval_trail');
+        $this->db->join('employees', 'employees.id = loan_approval_trail.user_id', 'left');
+        $this->db->where('loan_approval_trail.loan_id', $loan_id);
+        $this->db->order_by('loan_approval_trail.date_stamp', 'ASC');
+        $trail = $this->db->get()->result();
+
+        if(!empty($trail)){
+            $data = array();
+            foreach($trail as $record){
+                $data[] = array(
+                    'action' => $record->action,
+                    'comment' => $record->comment,
+                    'user_name' => $record->Firstname . ' ' . $record->Lastname,
+                    'date_stamp' => date('d M Y, h:i A', strtotime($record->date_stamp))
+                );
+            }
+
+            echo json_encode(array('status' => 'success', 'data' => $data));
+        } else {
+            echo json_encode(array('status' => 'error', 'message' => 'No approval trail found'));
+        }
     }
     function disburse_loan(){
         $id = $this->input->post('loan_id');
         $previous_date= $this->input->post('pdate');
         $current_date = $this->input->post('cdate');
         $comment= $this->input->post('comment');
+
+        // Check if current user did the final approval
+        $current_user_id = $this->session->userdata('user_id');
+        $this->db->select('action, user_id');
+        $this->db->from('loan_approval_trail');
+        $this->db->where('loan_id', $id);
+        $this->db->where_in('action', array('APPROVED', 'CLIENT_SIGNED'));
+        $this->db->order_by('date_stamp', 'DESC');
+        $this->db->limit(1);
+        $final_approval = $this->db->get()->row();
+
+        if($final_approval && $final_approval->user_id == $current_user_id){
+            $this->toaster->error('Error: You cannot disburse a loan that you approved or sent for disbursement. Another user must perform the disbursement.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
         $customer = $this->Loan_model->loan_user($id);
         $notify = get_by_id('sms_settings','id','1');
 
@@ -3419,11 +5055,11 @@ $row = $this->Loan_model->get_by_id_group($id);
 
         if($current_date !=""){
             $r  = $this->Loan_model->restructure($id,$current_date);
-            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE','disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE','disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
 
         }else{
 
-            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE','disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE','disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
 
         }
         $logger = array(
@@ -3433,6 +5069,15 @@ $row = $this->Loan_model->get_by_id_group($id);
 
         );
         log_activity($logger);
+
+        // Insert into loan_approval_trail to track disbursement
+        $trail_data = array(
+            'user_id' => $this->session->userdata('user_id'),
+            'action' => 'DISBURSED',
+            'comment' => !empty($comment) ? $comment : 'Loan disbursed to customer',
+            'loan_id' => $id
+        );
+        $this->Loan_approval_trail_model->insert($trail_data);
 
         if($notify->loan_disbursement=='Yes'){
             send_sms($customer->PhoneNumber,'Dear customer, loan has been Disbursed, you can call numbers below for more');
@@ -3447,6 +5092,23 @@ $row = $this->Loan_model->get_by_id_group($id);
         $previous_date= $this->input->post('pdate');
         $current_date = $this->input->post('cdate');
         $comment= $this->input->post('comment');
+
+        // Check if current user did the final approval
+        $current_user_id = $this->session->userdata('user_id');
+        $this->db->select('action, user_id');
+        $this->db->from('loan_approval_trail');
+        $this->db->where('loan_id', $id);
+        $this->db->where_in('action', array('APPROVED', 'CLIENT_SIGNED'));
+        $this->db->order_by('date_stamp', 'DESC');
+        $this->db->limit(1);
+        $final_approval = $this->db->get()->row();
+
+        if($final_approval && $final_approval->user_id == $current_user_id){
+            $this->toaster->error('Error: You cannot disburse a loan that you approved or sent for disbursement. Another user must perform the disbursement.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
         $customer = $this->Loan_model->loan_user($id);
         $notify = get_by_id('sms_settings','id','1');
 
@@ -3455,8 +5117,13 @@ $row = $this->Loan_model->get_by_id_group($id);
         $by_date = 'disbursed_date';
 
         if($current_date !=""){
-
+            // Restructure payment schedules with new date
             $r  = $this->Loan_model->restructure($id,$current_date);
+            
+            // Update loan date if it's different from the previous date
+            if($current_date != $previous_date) {
+                $this->Loan_model->update($id, array('loan_date' => $current_date));
+            }
 
             $charge_value = 0;
             $loan =	$this->Loan_model->get_by_id($id);
@@ -3509,7 +5176,7 @@ $row = $this->Loan_model->get_by_id_group($id);
             }
 
 
-            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE','disbursed_amount'=> $disbursedamount,'disbursed'=> 'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE','disbursed_amount'=> $disbursedamount,'disbursed'=> 'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
             $data = array(
                 'ref' => "CF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
                 'loan_id' => $id,
@@ -3524,6 +5191,9 @@ $row = $this->Loan_model->get_by_id_group($id);
 
             $this->Transactions_model->insert($data);
         }else{
+            // If no current date provided, use the previous date
+            $current_date = $previous_date;
+            
             $charge_value = 0;
             $loan =	$this->Loan_model->get_by_id($id);
 
@@ -3571,7 +5241,7 @@ $row = $this->Loan_model->get_by_id_group($id);
                 }
             }
 
-            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE', 'disbursed_amount'=> $disbursedamount,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>'ACTIVE', 'disbursed_amount'=> $disbursedamount,'disbursed'=>'Yes',$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
             $data = array(
                 'ref' => "CF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
                 'loan_id' => $id,
@@ -3593,6 +5263,15 @@ $row = $this->Loan_model->get_by_id_group($id);
 
         );
         log_activity($logger);
+
+        // Insert into loan_approval_trail to track disbursement
+        $trail_data = array(
+            'user_id' => $this->session->userdata('user_id'),
+            'action' => 'DISBURSED',
+            'comment' => !empty($comment) ? $comment : 'Loan disbursed to customer with processing fee deducted',
+            'loan_id' => $id
+        );
+        $this->Loan_approval_trail_model->insert($trail_data);
 
         if($notify->loan_disbursement=='Yes'){
             send_sms($customer->PhoneNumber,'Dear customer, loan has been Disbursed, you can call numbers below for more');
@@ -3609,7 +5288,7 @@ $row = $this->Loan_model->get_by_id_group($id);
         for ($i = 0; $i < $rowCount; $i ++) {
 
 
-            $this->Loan_model->update($users[$i],array('loan_status'=>'APPROVED','loan_approved_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'minutes'=>$this->input->post('minutes')));
+            $this->Loan_model->update($users[$i],array('loan_status'=>'APPROVED','loan_approved_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'minutes'=>$this->input->post('minutes'), 'sent_back'=>0, 'sent_back_comment'=>null));
 
 
         }
@@ -3649,6 +5328,29 @@ $row = $this->Loan_model->get_by_id_group($id);
 
             $this->Loan_model->update($users[$i],array('loan_status'=>'REJECTED','rejection_reasons'=>$reasons,'rejected_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'minutes'=>$this->input->post('minutes')));
 
+            // Notify the loan creator of rejection
+            $rej_loan = $this->db->get_where('loan', array('loan_id' => $users[$i]))->row();
+            if ($rej_loan) {
+                $cust_name = 'N/A';
+                if ($rej_loan->customer_type == 'individual') {
+                    $c = $this->db->get_where('individual_customers', array('id' => $rej_loan->loan_customer))->row();
+                    if ($c) $cust_name = $c->Firstname . ' ' . $c->Lastname;
+                } else {
+                    $c = $this->db->get_where('corporate_customers', array('id' => $rej_loan->loan_customer))->row();
+                    if ($c) $cust_name = $c->EntityName;
+                }
+                $cur = $this->db->get_where('currency', array('id' => $rej_loan->currency))->row();
+                $cur_code = $cur ? $cur->code : 'ZMW';
+
+                $creator_data = array(
+                    'loan_id' => $rej_loan->loan_id,
+                    'loan_number' => $rej_loan->loan_number,
+                    'customer_name' => $cust_name,
+                    'amount' => $rej_loan->loan_principal,
+                    'currency' => $cur_code
+                );
+                notify_loan_creator($creator_data, 'REJECTED', $this->session->userdata('user_id'), $rej_loan->loan_added_by);
+            }
 
         }
         $this->toaster->success('loan were rejected successfully');
@@ -3664,6 +5366,30 @@ $row = $this->Loan_model->get_by_id_group($id);
 
         $this->Loan_model->update($loan_id,array('loan_status'=>'REJECTED','rejection_reasons'=>$reasons,'rejected_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
 
+        // Notify the loan creator of rejection
+        $rej_loan = $this->db->get_where('loan', array('loan_id' => $loan_id))->row();
+        if ($rej_loan) {
+            $cust_name = 'N/A';
+            if ($rej_loan->customer_type == 'individual') {
+                $c = $this->db->get_where('individual_customers', array('id' => $rej_loan->loan_customer))->row();
+                if ($c) $cust_name = $c->Firstname . ' ' . $c->Lastname;
+            } else {
+                $c = $this->db->get_where('corporate_customers', array('id' => $rej_loan->loan_customer))->row();
+                if ($c) $cust_name = $c->EntityName;
+            }
+            $cur = $this->db->get_where('currency', array('id' => $rej_loan->currency))->row();
+            $cur_code = $cur ? $cur->code : 'ZMW';
+
+            $creator_data = array(
+                'loan_id' => $loan_id,
+                'loan_number' => $rej_loan->loan_number,
+                'customer_name' => $cust_name,
+                'amount' => $rej_loan->loan_principal,
+                'currency' => $cur_code
+            );
+            notify_loan_creator($creator_data, 'REJECTED', $this->session->userdata('user_id'), $rej_loan->loan_added_by);
+        }
+
         $this->toaster->success('Loan were rejection was successful');
         redirect(site_url('loan/recommend'));
 
@@ -3672,13 +5398,60 @@ $row = $this->Loan_model->get_by_id_group($id);
         $by_date = 'loan_recommended_date';
         $users = $this->input->post('loans');
         $rowCount = count($users);
+        $notified_approvers = false;
+
         for ($i = 0; $i < $rowCount; $i ++) {
-
-
-            $this->Loan_model->update($users[$i],array('loan_status'=>'RECOMMENDED','loan_recommended_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
-
-
+            $this->Loan_model->update($users[$i],array('loan_status'=>'RECOMMENDED','loan_recommended_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
         }
+
+        // Send a single notification for bulk recommendations (to avoid spamming)
+        if ($rowCount > 0) {
+            // Get the first loan for basic notification info
+            $first_loan = $this->db->get_where('loan', array('loan_id' => $users[0]))->row();
+            if ($first_loan) {
+                $currency_data = $this->db->get_where('currency', array('id' => $first_loan->currency))->row();
+                $currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+                // Send bulk notification
+                $loan_notification_data = array(
+                    'loan_id' => $users[0],
+                    'loan_number' => $rowCount . ' loans',
+                    'customer_name' => 'Multiple customers',
+                    'amount' => 0,
+                    'currency' => $currency_code
+                );
+                notify_loan_approvers($loan_notification_data, 'loan/unified_approval', $this->session->userdata('user_id'));
+            }
+
+            // Notify each loan's creator individually
+            $notified_creators = array();
+            for ($j = 0; $j < $rowCount; $j++) {
+                $bulk_loan = $this->db->get_where('loan', array('loan_id' => $users[$j]))->row();
+                if ($bulk_loan && !in_array($bulk_loan->loan_added_by, $notified_creators)) {
+                    $cust_name = 'N/A';
+                    if ($bulk_loan->customer_type == 'individual') {
+                        $cust = $this->db->get_where('individual_customers', array('id' => $bulk_loan->loan_customer))->row();
+                        if ($cust) $cust_name = $cust->Firstname . ' ' . $cust->Lastname;
+                    } else {
+                        $cust = $this->db->get_where('corporate_customers', array('id' => $bulk_loan->loan_customer))->row();
+                        if ($cust) $cust_name = $cust->EntityName;
+                    }
+                    $cur = $this->db->get_where('currency', array('id' => $bulk_loan->currency))->row();
+                    $cur_code = $cur ? $cur->code : 'ZMW';
+
+                    $creator_notif_data = array(
+                        'loan_id' => $bulk_loan->loan_id,
+                        'loan_number' => $bulk_loan->loan_number,
+                        'customer_name' => $cust_name,
+                        'amount' => $bulk_loan->loan_principal,
+                        'currency' => $cur_code
+                    );
+                    notify_loan_creator($creator_notif_data, 'RECOMMENDED', $this->session->userdata('user_id'), $bulk_loan->loan_added_by);
+                    $notified_creators[] = $bulk_loan->loan_added_by;
+                }
+            }
+        }
+
         $this->toaster->success('loans were approved successfully');
         redirect(site_url('Loan/recommend'));
     }
@@ -3687,7 +5460,45 @@ $row = $this->Loan_model->get_by_id_group($id);
         $by_date = 'loan_recommended_date';
         $loan_id = $this->input->post('loan_id');
         $reasons = $this->input->post('recommend_reasons');
-        $this->Loan_model->update($loan_id,array('loan_status'=>'RECOMMENDED','recommend_reasons'=>$reasons,'loan_recommended_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'minutes'=>$this->input->post('minutes')));
+        $this->Loan_model->update($loan_id,array('loan_status'=>'RECOMMENDED','recommend_reasons'=>$reasons,'loan_recommended_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'minutes'=>$this->input->post('minutes'), 'sent_back'=>0, 'sent_back_comment'=>null));
+
+        // Send email notification to users who can approve loans
+        $loan = $this->db->get_where('loan', array('loan_id' => $loan_id))->row();
+        if ($loan) {
+            // Get customer name
+            $customer_name = 'N/A';
+            if ($loan->customer_type == 'individual') {
+                $customer = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+                if ($customer) {
+                    $customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+                }
+            } else {
+                $customer = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+                if ($customer) {
+                    $customer_name = $customer->EntityName;
+                }
+            }
+
+            // Get currency code
+            $currency_data = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+            $currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+            // Prepare loan data for notification
+            $loan_notification_data = array(
+                'loan_id' => $loan_id,
+                'loan_number' => $loan->loan_number,
+                'customer_name' => $customer_name,
+                'amount' => $loan->loan_principal,
+                'currency' => $currency_code
+            );
+
+            // Notify users with access to loan/unified_approval (approvers)
+            notify_loan_approvers($loan_notification_data, 'loan/unified_approval', $this->session->userdata('user_id'));
+
+            // Notify the loan creator that the loan has been recommended
+            notify_loan_creator($loan_notification_data, 'RECOMMENDED', $this->session->userdata('user_id'), $loan->loan_added_by);
+        }
+
         $this->toaster->success('Loan were recommended successfully');
         redirect(site_url('loan/recommend'));
 
@@ -3703,6 +5514,29 @@ $row = $this->Loan_model->get_by_id_group($id);
 
             $this->Loan_model->update($users[$i],array('loan_status'=>'REJECTED','rejection_reasons'=>$reasons,'rejected_by'=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
 
+            // Notify the loan creator of rejection
+            $rej_loan = $this->db->get_where('loan', array('loan_id' => $users[$i]))->row();
+            if ($rej_loan) {
+                $cust_name = 'N/A';
+                if ($rej_loan->customer_type == 'individual') {
+                    $c = $this->db->get_where('individual_customers', array('id' => $rej_loan->loan_customer))->row();
+                    if ($c) $cust_name = $c->Firstname . ' ' . $c->Lastname;
+                } else {
+                    $c = $this->db->get_where('corporate_customers', array('id' => $rej_loan->loan_customer))->row();
+                    if ($c) $cust_name = $c->EntityName;
+                }
+                $cur = $this->db->get_where('currency', array('id' => $rej_loan->currency))->row();
+                $cur_code = $cur ? $cur->code : 'ZMW';
+
+                $creator_data = array(
+                    'loan_id' => $rej_loan->loan_id,
+                    'loan_number' => $rej_loan->loan_number,
+                    'customer_name' => $cust_name,
+                    'amount' => $rej_loan->loan_principal,
+                    'currency' => $cur_code
+                );
+                notify_loan_creator($creator_data, 'REJECTED', $this->session->userdata('user_id'), $rej_loan->loan_added_by);
+            }
 
         }
         $this->toaster->success('loan were rejected successfully');
@@ -3736,9 +5570,33 @@ $row = $this->Loan_model->get_by_id_group($id);
             $by = 'written_off_by';
 
             $by_date = 'written_off_date';
-            $this->Loan_model->update($id,array('loan_status'=>$action, $by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>$action, $by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
         }else{
-            $this->Loan_model->update($id,array('loan_status'=>$action,$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s')));
+            $this->Loan_model->update($id,array('loan_status'=>$action,$by=>$this->session->userdata('user_id'),$by_date =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
+        }
+
+        // Notify the loan creator of the status change
+        $write_loan = $this->db->get_where('loan', array('loan_id' => $id))->row();
+        if ($write_loan) {
+            $cust_name = 'N/A';
+            if ($write_loan->customer_type == 'individual') {
+                $c = $this->db->get_where('individual_customers', array('id' => $write_loan->loan_customer))->row();
+                if ($c) $cust_name = $c->Firstname . ' ' . $c->Lastname;
+            } else {
+                $c = $this->db->get_where('corporate_customers', array('id' => $write_loan->loan_customer))->row();
+                if ($c) $cust_name = $c->EntityName;
+            }
+            $cur = $this->db->get_where('currency', array('id' => $write_loan->currency))->row();
+            $cur_code = $cur ? $cur->code : 'ZMW';
+
+            $creator_data = array(
+                'loan_id' => $id,
+                'loan_number' => $write_loan->loan_number,
+                'customer_name' => $cust_name,
+                'amount' => $write_loan->loan_principal,
+                'currency' => $cur_code
+            );
+            notify_loan_creator($creator_data, $action, $this->session->userdata('user_id'), $write_loan->loan_added_by);
         }
 
         $this->toaster->success('Success, your action successful');
@@ -3754,13 +5612,254 @@ $row = $this->Loan_model->get_by_id_group($id);
 
         );
         log_activity($logger);
-        $this->Loan_model->update($id,array('loan_status'=>'RECOMMENDED', 'loan_recommended_by'=>$this->session->userdata('user_id'),'loan_recommended_date' =>date('Y-m-d H:i:s')));
+        $this->Loan_model->update($id,array('loan_status'=>'RECOMMENDED', 'loan_recommended_by'=>$this->session->userdata('user_id'),'loan_recommended_date' =>date('Y-m-d H:i:s'), 'sent_back'=>0, 'sent_back_comment'=>null));
 
+        // Send email notification to users who can approve loans
+        $loan = $this->db->get_where('loan', array('loan_id' => $id))->row();
+        if ($loan) {
+            // Get customer name
+            $customer_name = 'N/A';
+            if ($loan->customer_type == 'individual') {
+                $customer = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+                if ($customer) {
+                    $customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+                }
+            } else {
+                $customer = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+                if ($customer) {
+                    $customer_name = $customer->EntityName;
+                }
+            }
 
+            // Get currency code
+            $currency_data = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+            $currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+            // Prepare loan data for notification
+            $loan_notification_data = array(
+                'loan_id' => $id,
+                'loan_number' => $loan->loan_number,
+                'customer_name' => $customer_name,
+                'amount' => $loan->loan_principal,
+                'currency' => $currency_code
+            );
+
+            // Notify users with access to loan/unified_approval (approvers)
+            notify_loan_approvers($loan_notification_data, 'loan/unified_approval', $this->session->userdata('user_id'));
+
+            // Notify the loan creator that the loan has been recommended
+            notify_loan_creator($loan_notification_data, 'RECOMMENDED', $this->session->userdata('user_id'), $loan->loan_added_by);
+        }
 
         $this->toaster->success('Success, your recommending action was successful');
         redirect($_SERVER['HTTP_REFERER']);
     }
+
+    /**
+     * Send back loan to previous stage
+     * This allows approvers to send loans back for corrections
+     */
+    function send_back() {
+        $loan_id = $this->input->post('loan_id');
+        $comment = $this->input->post('comment');
+        $current_user_id = $this->session->userdata('user_id');
+
+        if (!$loan_id || !$comment) {
+            $this->toaster->error('Loan ID and comment are required');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
+        $loan = $this->Loan_model->get_by_id($loan_id);
+        if (!$loan) {
+            $this->toaster->error('Loan not found');
+            redirect('loan/track');
+            return;
+        }
+
+        // Determine previous status based on current status
+        $current_status = $loan->loan_status;
+        $previous_status = '';
+        $send_back_to = '';
+
+        switch ($current_status) {
+            case 'INITIATED':
+                // Send back from recommend stage to initiator
+                $previous_status = 'INITIATED';
+                $send_back_to = 'Initiator';
+                break;
+            case 'RECOMMENDED':
+                $previous_status = 'INITIATED';
+                $send_back_to = 'Initiator';
+                break;
+            case 'APPROVED_FIRST':
+                $previous_status = 'RECOMMENDED';
+                $send_back_to = 'Recommender';
+                break;
+            case 'APPROVED_SECOND':
+                $previous_status = 'APPROVED_FIRST';
+                $send_back_to = 'First Approver';
+                break;
+            case 'APPROVED':
+                // Check if we have multi-level approvals
+                $approvers = get_loan_approvers($loan_id);
+                $approval_count = count($approvers);
+                if ($approval_count >= 3) {
+                    $previous_status = 'RECOMMENDED';
+                    $send_back_to = 'Recommender';
+                } elseif ($approval_count == 2) {
+                    $previous_status = 'RECOMMENDED';
+                    $send_back_to = 'Recommender';
+                } else {
+                    $previous_status = 'RECOMMENDED';
+                    $send_back_to = 'Recommender';
+                }
+                break;
+            default:
+                $this->toaster->error('Cannot send back loan in current status: ' . $current_status);
+                redirect($_SERVER['HTTP_REFERER']);
+                return;
+        }
+
+        // Update loan status and set sent_back flag
+        $update_data = array(
+            'loan_status' => $previous_status,
+            'sent_back' => 1,
+            'sent_back_comment' => $comment,
+            'sent_back_by' => $current_user_id,
+            'sent_back_date' => date('Y-m-d H:i:s')
+        );
+        $this->Loan_model->update($loan_id, $update_data);
+
+        // If sending back from RECOMMENDED, clear the multi-level approvals
+        if ($current_status == 'RECOMMENDED' || $current_status == 'APPROVED') {
+            // Remove approval trail entries for this loan (only MULTI_APPROVE type)
+            $this->db->where('loan_id', $loan_id);
+            $this->db->where('action', 'MULTI_APPROVE');
+            $this->db->delete('loan_approval_trail');
+        }
+
+        // Log the send back action in approval trail
+        $trail_data = array(
+            'loan_id' => $loan_id,
+            'user_id' => $current_user_id,
+            'action' => 'SENT_BACK',
+            'comment' => $comment,
+            'from_status' => $current_status,
+            'to_status' => $previous_status,
+            'date_stamp' => date('Y-m-d H:i:s')
+        );
+        $this->Loan_approval_trail_model->insert($trail_data);
+
+        // Log activity
+        $logger = array(
+            'user_id' => $current_user_id,
+            'activity' => 'Sent back loan ' . $loan->loan_number . ' from ' . $current_status . ' to ' . $previous_status . '. Reason: ' . $comment,
+            'activity_cate' => 'loan_send_back'
+        );
+        log_activity($logger);
+
+        // Send email notification to the person who needs to correct the loan
+        $this->_notify_send_back($loan, $comment, $previous_status);
+
+        // Also notify the loan creator if they are not the one being sent back to
+        if ($previous_status != 'INITIATED') {
+            $cust_name = 'N/A';
+            if ($loan->customer_type == 'individual') {
+                $c = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+                if ($c) $cust_name = $c->Firstname . ' ' . $c->Lastname;
+            } else {
+                $c = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+                if ($c) $cust_name = $c->EntityName;
+            }
+            $cur = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+            $cur_code = $cur ? $cur->code : 'ZMW';
+
+            $creator_notif = array(
+                'loan_id' => $loan_id,
+                'loan_number' => $loan->loan_number,
+                'customer_name' => $cust_name,
+                'amount' => $loan->loan_principal,
+                'currency' => $cur_code
+            );
+            notify_loan_creator($creator_notif, $previous_status, $current_user_id, $loan->loan_added_by);
+        }
+
+        $this->toaster->success('Loan has been sent back to ' . $send_back_to . ' for corrections');
+        redirect('loan/view/' . $loan_id);
+    }
+
+    /**
+     * Notify relevant users when a loan is sent back
+     */
+    private function _notify_send_back($loan, $comment, $previous_status) {
+        // Get customer name
+        $customer_name = 'N/A';
+        if ($loan->customer_type == 'individual') {
+            $customer = $this->db->get_where('individual_customers', array('id' => $loan->loan_customer))->row();
+            if ($customer) {
+                $customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+            }
+        } else {
+            $customer = $this->db->get_where('corporate_customers', array('id' => $loan->loan_customer))->row();
+            if ($customer) {
+                $customer_name = $customer->EntityName;
+            }
+        }
+
+        // Determine who to notify based on previous status
+        $notify_user_id = null;
+        switch ($previous_status) {
+            case 'INITIATED':
+                $notify_user_id = $loan->loan_added_by;
+                break;
+            case 'RECOMMENDED':
+                $notify_user_id = $loan->loan_recommended_by;
+                break;
+            case 'APPROVED_FIRST':
+                // Get the first approver from trail
+                $first_approver = $this->db->select('user_id')
+                    ->from('loan_approval_trail')
+                    ->where('loan_id', $loan->loan_id)
+                    ->where('action', 'APPROVED_FIRST')
+                    ->order_by('date_stamp', 'ASC')
+                    ->limit(1)
+                    ->get()->row();
+                if ($first_approver) {
+                    $notify_user_id = $first_approver->user_id;
+                }
+                break;
+        }
+
+        if ($notify_user_id) {
+            $user = $this->db->get_where('employees', array('id' => $notify_user_id))->row();
+            if ($user && !empty($user->EmailAddress)) {
+                $currency_data = $this->db->get_where('currency', array('id' => $loan->currency))->row();
+                $currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+                $sender_user = $this->db->get_where('employees', array('id' => $this->session->userdata('user_id')))->row();
+                $sender_name = $sender_user ? $sender_user->Firstname . ' ' . $sender_user->Lastname : 'System';
+
+                $subject = 'Loan Sent Back for Corrections - ' . $loan->loan_number;
+                $message = '
+                    <p>Dear ' . $user->Firstname . ',</p>
+                    <p>A loan has been sent back to you for corrections.</p>
+                    <table style="border-collapse: collapse; width: 100%; margin: 15px 0;">
+                        <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5; width: 30%;"><strong>Loan Number</strong></td><td style="padding: 8px; border: 1px solid #ddd;">' . $loan->loan_number . '</td></tr>
+                        <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Customer</strong></td><td style="padding: 8px; border: 1px solid #ddd;">' . $customer_name . '</td></tr>
+                        <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Amount</strong></td><td style="padding: 8px; border: 1px solid #ddd;">' . $currency_code . ' ' . number_format($loan->loan_principal, 2) . '</td></tr>
+                        <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Sent Back By</strong></td><td style="padding: 8px; border: 1px solid #ddd;">' . $sender_name . '</td></tr>
+                        <tr><td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Reason</strong></td><td style="padding: 8px; border: 1px solid #ddd; color: #dc3545;">' . htmlspecialchars($comment) . '</td></tr>
+                    </table>
+                    <p>Please review and make the necessary corrections, then resubmit the loan for approval.</p>
+                    <p><a href="' . base_url('loan/view/' . $loan->loan_id) . '" style="display: inline-block; padding: 10px 20px; background: #007bff; color: #fff; text-decoration: none; border-radius: 5px;">View Loan</a></p>
+                ';
+
+                send_templated_email($user->EmailAddress, $subject, $message);
+            }
+        }
+    }
+
     public function index()
     {
         $q = urldecode($this->input->get('q', TRUE));
@@ -4570,9 +6669,18 @@ $row = $this->Loan_model->get_by_id_group($id);
         }
     }
     function loan_report(){
-        $data['loan_data'] = array();
+        // Load all loans by default (Active and Closed)
+        $data['loan_data'] = $this->Loan_model->get_loans_for_report();
+
+        // Get stats for the report
+        $data['stats'] = array(
+            'active' => get_loan_stats_by_status('ACTIVE'),
+            'closed' => get_loan_stats_by_status('CLOSED'),
+            'written_off' => get_loan_stats_by_status('WRITTEN_OFF')
+        );
+
         $this->load->view('admin/header');
-        $this->load->view('loan/loan_report',$data);
+        $this->load->view('loan/loan_report', $data);
         $this->load->view('admin/footer');
     }
     function loan_report_search(){
@@ -4582,6 +6690,14 @@ $row = $this->Loan_model->get_by_id_group($id);
         $from = $this->input->get('from');
         $to = $this->input->get('to');
         $search = $this->input->get('search');
+
+        // Get stats for the report
+        $data['stats'] = array(
+            'active' => get_loan_stats_by_status('ACTIVE'),
+            'closed' => get_loan_stats_by_status('CLOSED'),
+            'written_off' => get_loan_stats_by_status('WRITTEN_OFF')
+        );
+
         if($search=="filter"){
             $data['loan_data'] = $this->Loan_model->get_filter($user,$product,$status,$from,$to);
             $this->load->view('admin/header');
@@ -4596,8 +6712,10 @@ $row = $this->Loan_model->get_by_id_group($id);
             $this->load->library('Pdf');
             $html = $this->load->view('loan/loan_report_pdf', $data,true);
             $this->pdf->createPDF($html, "loan report as on".date('Y-m-d'), true,'A4','landscape');
+        } else {
+            // No search parameter - redirect to main report
+            redirect('loan/loan_report');
         }
-
     }
     function exportExcel()
     {
@@ -4876,246 +6994,225 @@ public function get_loan_product_details() {
 			return;
 		}
 
-
-		$loan = $this->Loan_model->get_by_id($loan_id);
-
-
-		// Get all unpaid schedules
-		$unpaid_schedules = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
-
-		// Calculate remaining principal
-		$remaining_principal = 0;
-		$amount_paid = 0;
-		foreach ($unpaid_schedules as $schedule) {
-
-			//remaining principal is total after deducting current accrued interest and that current accrued interest is fully paid and the remainder or remaining is what is deducted to $loan->loan_principal to get the principal balance
-			$amount_paid += $schedule->paid_amount;
-			// Check if partial paid
-//			if ($schedule->partial_paid == 'YES') {
-//				// Calculate remaining amount
-//
-//				$remaining_principal += $schedule->principal * (1 - ($schedule->paid_amount / $schedule->amount));
-//			} else {
-//				$remaining_principal += $schedule->principal;
-//			}
-		}
-
-		// Convert loan date and payoff date to DateTime objects
-		$loan_date = new DateTime($loan->loan_date);
-		$payoff_date_obj = new DateTime($payoff_date);
-
-		// Calculate monthly interest amount
-		$monthly_interest_rate = $loan->loan_interest / 100; // Convert percentage to decimal
-		$full_monthly_interest = $loan->loan_principal * $monthly_interest_rate;
-		$daily_interest = $full_monthly_interest / 30; // Daily interest based on 30-day month
-
-		// Initialize interest amount
-		$accrued_interest = 0;
-
-		// Get the next month date (one month after loan date)
-		$next_month_date = clone $loan_date;
-		$next_month_date->modify('+1 month');
-
-		// Simple algorithm:
-		// 1. If payoff date is before or equal to loan date + 1 month: full interest
-		// 2. Otherwise: full interest + daily accruals for elapsed days beyond first month
-		$calculation_explanation = "";
-		$days_elapsed1 = 0;
-		$real_interest_balance = 0;
-
-		if ($payoff_date_obj <= $next_month_date) {
-			// Case 1: Payoff within first month - charge full interest
-			$accrued_interest = $full_monthly_interest;
-			$interest_balance = abs($amount_paid - $accrued_interest);
-			if($accrued_interest < $amount_paid){
-				$real_interest_balance = 0;
-				$remaining_principal = $loan->loan_principal - $interest_balance;
-			}else{
-				$real_interest_balance = $interest_balance;
-				$remaining_principal = $loan->loan_principal;
-			}
-
-
-			$calculation_explanation = "Payoff within first month - full interest applied: " .
-				"$remaining_principal × $monthly_interest_rate = $accrued_interest";
-			$days_elapsed1 = 0;
-		} else {
-			// Case 2: Payoff after first month
-			// Start with full interest for the first month
-			$accrued_interest = $full_monthly_interest;
-
-			// Calculate days elapsed after first month
-			$days_elapsed = $payoff_date_obj->diff($next_month_date)->days;
-			$days_elapsed1 = $days_elapsed;
-			// Add daily accruals for elapsed days
-			$daily_accrual = $daily_interest * $days_elapsed;
-			$accrued_interest += $daily_accrual;
-			$interest_balance = abs($amount_paid - $accrued_interest);
-			if($accrued_interest < $amount_paid){
-				$real_interest_balance = 0;
-				$remaining_principal = $loan->loan_principal - $interest_balance;
-			}else{
-				$real_interest_balance = $interest_balance;
-				$remaining_principal = $loan->loan_principal;
-			}
-			$calculation_explanation = "Payoff after first month:\n" .
-				"Full interest for first month: $loan->loan_principal × $monthly_interest_rate = $full_monthly_interest\n" .
-				"Days elapsed after first month: $days_elapsed\n" .
-				"Daily interest: $full_monthly_interest ÷ 30 = $daily_interest\n" .
-				"Daily accrual: $daily_interest × $days_elapsed = $daily_accrual\n" .
-				"Total interest: $full_monthly_interest + $daily_accrual = $accrued_interest\n".
-				"Total interest balance after payment of $amount_paid is : $amount_paid - $accrued_interest = $real_interest_balance \n";
-		}
-
-		// Total payoff amount
-		$total_payoff = $remaining_principal + $real_interest_balance;
-
-		echo json_encode( [
-			'status' => 'success',
-			'current_balance' => number_format($remaining_principal, 2, '.', ''),
-			'accrued_interest' => number_format($accrued_interest, 2, '.', ''),
-			'accrued_interest_balance' => number_format($real_interest_balance, 2, '.', ''),
-			'total_payoff' => number_format($total_payoff, 2, '.', ''),
-			'debug' => [
-				'loan_id' => $loan_id,
-				'payoff_date' => $payoff_date,
-				'loan_date' => $loan->loan_date,
-				'next_month_date' => $next_month_date->format('Y-m-d'),
-				'loan_principal' => $loan->loan_principal,
-				'monthly_interest_rate' => $monthly_interest_rate,
-				'full_monthly_interest' => $full_monthly_interest,
-				'daily_interest' => $daily_interest,
-				'remaining_principal' => $remaining_principal,
-				'calculation_explanation' => $calculation_explanation,
-				'elapsed_days' => $days_elapsed1
-			]
-		] );
-
-		
+		$result = $this->_compute_bullet_payoff($loan_id, $payoff_date);
+		echo json_encode($result);
 	}
 	public function calculate_payoff_inline($lid) {
+		return $this->_compute_bullet_payoff($lid, date('Y-m-d'));
+	}
 
+	public function get_early_settlement_amount($loan_id)
+	{
+		if (!$this->input->is_ajax_request()) {
+			show_error('No direct script access allowed', 403);
+			return;
+		}
 
-		$loan_id = $lid;
-		$payoff_date = date('Y-m-d');
-//		$payoff_date = date('2025-8-5');
-
-
+		$date = $this->input->get('date');
+		if (!$loan_id || !$date) {
+			echo json_encode(['status' => 'error', 'message' => 'Missing parameters']);
+			return;
+		}
 
 		$loan = $this->Loan_model->get_by_id($loan_id);
+		if (!$loan || $loan->loan_status === 'CLOSED') {
+			echo json_encode(['status' => 'error', 'message' => 'Loan is already closed']);
+			return;
+		}
 
+		$breakdown     = $this->Payement_schedules_model->calculate_payoff_amount($loan_id, $date);
+		$currency      = get_by_id('currencies', 'currency_id', $loan->currency);
+		$currency_code = $currency ? $currency->currency_code : '';
 
-		// Get all unpaid schedules
+		echo json_encode([
+			'status'           => 'success',
+			'overdue_amount'   => $breakdown['overdue_amount'],
+			'future_principal' => $breakdown['future_principal'],
+			'interest_waived'  => $breakdown['interest_waived'],
+			'total_payoff'     => $breakdown['total_payoff'],
+			'currency_code'    => $currency_code,
+		]);
+	}
+
+	/**
+	 * Compute bullet loan payoff with compound interest on arrears.
+	 *
+	 * Before maturity: simple interest on principal (principal × rate × months elapsed).
+	 * After maturity:  interest compounds monthly on OUTSTANDING BALANCE (after payments).
+	 *   - At maturity the total owed = principal + (principal × rate × term)
+	 *   - Payments reduce the outstanding balance BEFORE compounding
+	 *   - Each full month past maturity: balance = balance × (1 + rate)
+	 *   - Remaining days: daily pro-rata on the current compounded balance
+	 */
+	private function _compute_bullet_payoff($loan_id, $payoff_date)
+	{
+		$loan = $this->Loan_model->get_by_id($loan_id);
+
+		// Get all unpaid schedules to find total payments already made
 		$unpaid_schedules = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
-
-		// Calculate remaining principal
-		$remaining_principal = 0;
 		$amount_paid = 0;
 		foreach ($unpaid_schedules as $schedule) {
-
-			//remaining principal is total after deducting current accrued interest and that current accrued interest is fully paid and the remainder or remaining is what is deducted to $loan->loan_principal to get the principal balance
-           $amount_paid += $schedule->paid_amount;
-			// Check if partial paid
-//			if ($schedule->partial_paid == 'YES') {
-//				// Calculate remaining amount
-//
-//				$remaining_principal += $schedule->principal * (1 - ($schedule->paid_amount / $schedule->amount));
-//			} else {
-//				$remaining_principal += $schedule->principal;
-//			}
+			$amount_paid += $schedule->paid_amount;
 		}
 
-		// Convert loan date and payoff date to DateTime objects
-		$loan_date = new DateTime($loan->loan_date);
-		$payoff_date_obj = new DateTime($payoff_date);
+		// Basic loan parameters
+		$principal         = floatval($loan->loan_principal);
+		$monthly_rate      = $loan->loan_interest / 100; // e.g. 10% = 0.10
+		$term              = intval($loan->loan_period);  // months
 
-		// Calculate monthly interest amount
-		$monthly_interest_rate = $loan->loan_interest / 100; // Convert percentage to decimal
-		$full_monthly_interest = $loan->loan_principal * $monthly_interest_rate;
-		$daily_interest = $full_monthly_interest / 30; // Daily interest based on 30-day month
+		// Dates
+		$loan_date_obj     = new DateTime($loan->loan_date);
+		$payoff_date_obj   = new DateTime($payoff_date);
+		$maturity_date_obj = clone $loan_date_obj;
+		$maturity_date_obj->modify("+{$term} months");
 
-		// Initialize interest amount
-		$accrued_interest = 0;
+		// Interest at maturity (simple interest for the original term)
+		$original_interest = $principal * $monthly_rate * $term;
+		$maturity_total    = $principal + $original_interest;
 
-		// Get the next month date (one month after loan date)
-		$next_month_date = clone $loan_date;
-		$next_month_date->modify('+1 month');
+		$accrued_interest        = 0;
+		$calculation_explanation = '';
+		$days_past_maturity      = 0;
+		$full_months_past        = 0;
+		$remaining_days          = 0;
+		$running_balance         = 0;
+		$outstanding_at_maturity = 0;
 
-		// Simple algorithm:
-		// 1. If payoff date is before or equal to loan date + 1 month: full interest
-		// 2. Otherwise: full interest + daily accruals for elapsed days beyond first month
-		$calculation_explanation = "";
-		$days_elapsed1 = 0;
-		$real_interest_balance = 0;
+		if ($payoff_date_obj <= $maturity_date_obj) {
+			// ── BEFORE OR AT MATURITY ──
+			// Charge simple interest for elapsed time (minimum 1 full month)
+			$total_days_elapsed = max(1, $loan_date_obj->diff($payoff_date_obj)->days);
+			$months_elapsed     = ceil($total_days_elapsed / 30);
+			if ($months_elapsed > $term) $months_elapsed = $term;
 
-		if ($payoff_date_obj <= $next_month_date) {
-			// Case 1: Payoff within first month - charge full interest
-			$accrued_interest = $full_monthly_interest;
-			$interest_balance = abs($amount_paid - $accrued_interest);
-			if($accrued_interest < $amount_paid){
-				$real_interest_balance = 0;
-				$remaining_principal = $loan->loan_principal - $interest_balance;
-			}else{
-				$real_interest_balance = $interest_balance;
-				$remaining_principal = $loan->loan_principal;
+			$accrued_interest = round($principal * $monthly_rate * $months_elapsed, 2);
+
+			$calculation_explanation = "Before maturity (term = {$term} months):\n" .
+				"Months elapsed: {$months_elapsed}\n" .
+				"Interest = {$principal} x {$monthly_rate} x {$months_elapsed} = {$accrued_interest}\n";
+
+			// Determine remaining balances after any payments made
+			$remaining_principal    = $principal;
+			$real_interest_balance  = $accrued_interest;
+
+			if ($amount_paid > 0) {
+				if ($amount_paid >= $accrued_interest) {
+					$real_interest_balance  = 0;
+					$remaining_principal    = $principal - ($amount_paid - $accrued_interest);
+					if ($remaining_principal < 0) $remaining_principal = 0;
+				} else {
+					$real_interest_balance = $accrued_interest - $amount_paid;
+				}
+				$calculation_explanation .= "\nPayments made: " . number_format($amount_paid, 2) . "\n" .
+					"Interest balance: " . number_format($real_interest_balance, 2) . "\n" .
+					"Principal balance: " . number_format($remaining_principal, 2) . "\n";
 			}
 
+			$total_payoff = round($remaining_principal + $real_interest_balance, 2);
 
-			$calculation_explanation = "Payoff within first month - full interest applied: " .
-				"$remaining_principal × $monthly_interest_rate = $accrued_interest";
-			$days_elapsed1 = 0;
 		} else {
-			// Case 2: Payoff after first month
-			// Start with full interest for the first month
-			$accrued_interest = $full_monthly_interest;
+			// ── AFTER MATURITY – COMPOUND INTEREST ON OUTSTANDING BALANCE ──
+			$days_past_maturity = $maturity_date_obj->diff($payoff_date_obj)->days;
+			$full_months_past   = floor($days_past_maturity / 30);
+			$remaining_days     = $days_past_maturity % 30;
 
-			// Calculate days elapsed after first month
-			$days_elapsed = $payoff_date_obj->diff($next_month_date)->days;
-			$days_elapsed1 = $days_elapsed;
-			// Add daily accruals for elapsed days
-			$daily_accrual = $daily_interest * $days_elapsed;
-			$accrued_interest += $daily_accrual;
-			$interest_balance = abs($amount_paid - $accrued_interest);
-			if($accrued_interest < $amount_paid){
-				$real_interest_balance = 0;
-				$remaining_principal = $loan->loan_principal - $interest_balance;
-			}else{
-				$real_interest_balance = $interest_balance;
-				$remaining_principal = $loan->loan_principal;
+			// Calculate outstanding balance at maturity (after payments)
+			// Payments reduce the balance BEFORE interest compounds
+			$outstanding_at_maturity = $maturity_total - $amount_paid;
+			if ($outstanding_at_maturity < 0) $outstanding_at_maturity = 0;
+
+			$calculation_explanation = "After maturity – compound interest on OUTSTANDING balance:\n" .
+				"Principal: " . number_format($principal, 2) . "\n" .
+				"Original interest ({$term} months): " . number_format($original_interest, 2) . "\n" .
+				"Total at maturity: " . number_format($maturity_total, 2) . "\n" .
+				"Payments made: " . number_format($amount_paid, 2) . "\n" .
+				"Outstanding balance at maturity: " . number_format($outstanding_at_maturity, 2) . "\n" .
+				"Days past maturity: {$days_past_maturity} ({$full_months_past} months + {$remaining_days} days)\n\n";
+
+			// Start compounding from outstanding balance
+			$running_balance = $outstanding_at_maturity;
+
+			// Compound for each full month past maturity
+			for ($m = 1; $m <= $full_months_past; $m++) {
+				$month_interest = round($running_balance * $monthly_rate, 2);
+				$balance_before = $running_balance;
+				$running_balance += $month_interest;
+				$calculation_explanation .= "Month {$m} arrears: " . number_format($balance_before, 2) .
+					" x " . ($monthly_rate * 100) . "% = " . number_format($month_interest, 2) .
+					" → Balance: " . number_format($running_balance, 2) . "\n";
 			}
-			$calculation_explanation = "Payoff after first month:\n" .
-				"Full interest for first month: $loan->loan_principal × $monthly_interest_rate = $full_monthly_interest\n" .
-				"Days elapsed after first month: $days_elapsed\n" .
-				"Daily interest: $full_monthly_interest ÷ 30 = $daily_interest\n" .
-				"Daily accrual: $daily_interest × $days_elapsed = $daily_accrual\n" .
-				"Total interest: $full_monthly_interest + $daily_accrual = $accrued_interest\n".
-				"Total interest balance after payment of $amount_paid is : $amount_paid - $accrued_interest = $real_interest_balance \n";
+
+			// Pro-rate remaining days
+			if ($remaining_days > 0) {
+				$daily_interest = round(($running_balance * $monthly_rate) / 30, 2);
+				$partial_interest = round($daily_interest * $remaining_days, 2);
+				$running_balance += $partial_interest;
+				$calculation_explanation .= "Remaining {$remaining_days} days: " . number_format($daily_interest, 2) .
+					"/day x {$remaining_days} = " . number_format($partial_interest, 2) .
+					" → Balance: " . number_format($running_balance, 2) . "\n";
+			}
+
+			$running_balance = round($running_balance, 2);
+
+			// Calculate how much of the outstanding is principal vs interest
+			// After payments, we track remaining principal separately
+			$principal_paid = max(0, $amount_paid - $original_interest);
+			$remaining_principal = $principal - $principal_paid;
+			if ($remaining_principal < 0) $remaining_principal = 0;
+
+			// Total interest accrued = current balance - remaining principal
+			$accrued_interest = $running_balance - $remaining_principal;
+			if ($accrued_interest < 0) $accrued_interest = 0;
+
+			$real_interest_balance = $accrued_interest;
+			$total_payoff = $running_balance;
 		}
 
-		// Total payoff amount
-		$total_payoff = $remaining_principal + $real_interest_balance;
+		// Calculate arrears interest (compound interest portion past maturity)
+		$arrears_interest = ($days_past_maturity > 0 && $outstanding_at_maturity > 0)
+			? round($running_balance - $outstanding_at_maturity, 2)
+			: 0;
 
 		return [
-			'status' => 'success',
-			'current_balance' => number_format($remaining_principal, 2, '.', ''),
-			'accrued_interest' => number_format($accrued_interest, 2, '.', ''),
+			'status'                   => 'success',
+			'payoff_amount'            => number_format($total_payoff, 2, '.', ''),
+			'current_balance'          => number_format($remaining_principal, 2, '.', ''),
+			'accrued_interest'         => number_format($accrued_interest, 2, '.', ''),
 			'accrued_interest_balance' => number_format($real_interest_balance, 2, '.', ''),
-			'total_payoff' => number_format($total_payoff, 2, '.', ''),
+			'total_payoff'             => number_format($total_payoff, 2, '.', ''),
+			// Additional fields for JavaScript breakdown display
+			'principal'                => number_format($principal, 2, '.', ''),
+			'maturity_total'           => number_format($maturity_total, 2, '.', ''),
+			'outstanding_at_maturity'  => number_format($outstanding_at_maturity, 2, '.', ''),
+			'arrears_interest'         => number_format($arrears_interest, 2, '.', ''),
+			'amount_paid'              => number_format($amount_paid, 2, '.', ''),
+			'days_past_maturity'       => $days_past_maturity,
+			'full_months_past'         => $full_months_past,
+			'remaining_days'           => $remaining_days,
+			'monthly_rate'             => $monthly_rate,
+			'maturity_date'            => $maturity_date_obj->format('Y-m-d'),
 			'debug' => [
-				'loan_id' => $loan_id,
-				'payoff_date' => $payoff_date,
-				'loan_date' => $loan->loan_date,
-				'next_month_date' => $next_month_date->format('Y-m-d'),
-				'loan_principal' => $loan->loan_principal,
-				'monthly_interest_rate' => $monthly_interest_rate,
-				'full_monthly_interest' => $full_monthly_interest,
-				'daily_interest' => $daily_interest,
-				'remaining_principal' => $remaining_principal,
-				'calculation_explanation' => $calculation_explanation,
-				'elapsed_days' => $days_elapsed1
+				'loan_id'                => $loan_id,
+				'payoff_date'            => $payoff_date,
+				'loan_date'              => $loan->loan_date,
+				'maturity_date'          => $maturity_date_obj->format('Y-m-d'),
+				'loan_principal'         => $principal,
+				'monthly_interest_rate'  => $monthly_rate,
+				'term_months'            => $term,
+				'original_interest'      => $original_interest,
+				'maturity_total'         => $maturity_total,
+				'amount_paid'            => $amount_paid,
+				'days_past_maturity'     => $days_past_maturity,
+				'full_months_arrears'    => $full_months_past,
+				'remaining_days'         => $remaining_days,
+				'daily_interest'         => ($monthly_rate > 0 && $running_balance > 0) ? round(($running_balance * $monthly_rate) / 30, 2) : 0,
+				'remaining_principal'    => $remaining_principal,
+				'calculation_explanation'=> $calculation_explanation,
+				'elapsed_days'           => $days_past_maturity
 			]
-		 ] ;
+		];
 	}
+
 	/**
 	 * Process loan pay-off
 	 */
@@ -5294,5 +7391,1206 @@ public function get_loan_product_details() {
 
 		$this->toaster->success('Success: Loan has been paid off and closed.');
 		redirect('loan/repayment_view/' . $loan_id);
+	}
+
+	/**
+	 * Upload files for a loan via AJAX
+	 */
+	public function upload_files() {
+		header('Content-Type: application/json');
+
+		$loan_id = $this->input->post('loan_id');
+		$loan_number = $this->input->post('loan_number');
+
+		if (empty($loan_id) || empty($loan_number)) {
+			echo json_encode(array('status' => 'error', 'message' => 'Missing loan information'));
+			return;
+		}
+
+		// Create upload directory if it doesn't exist
+		$upload_path = FCPATH . 'uploads/' . $loan_number . '/';
+		if (!is_dir($upload_path)) {
+			mkdir($upload_path, 0755, true);
+		}
+
+		$uploaded_files = array();
+
+		// Check if files were uploaded
+		if (!empty($_FILES['files']['name'][0])) {
+			$file_count = count($_FILES['files']['name']);
+
+			for ($i = 0; $i < $file_count; $i++) {
+				$file_name = $_FILES['files']['name'][$i];
+				$file_tmp = $_FILES['files']['tmp_name'][$i];
+				$file_error = $_FILES['files']['error'][$i];
+
+				if ($file_error === UPLOAD_ERR_OK) {
+					// Generate unique filename
+					$file_ext = pathinfo($file_name, PATHINFO_EXTENSION);
+					$new_file_name = time() . '_' . $i . '_' . preg_replace('/[^a-zA-Z0-9_.-]/', '_', $file_name);
+					$file_path = $upload_path . $new_file_name;
+
+					if (move_uploaded_file($file_tmp, $file_path)) {
+						// Save file record to database
+						$file_data = array(
+							'file_name' => $file_name,
+							'real_file' => $loan_number . '/' . $new_file_name,
+							'loan_id' => $loan_id,
+							'file_stamp' => date('Y-m-d H:i:s')
+						);
+
+						$this->Loan_files_model->insert($file_data);
+						$insert_id = $this->db->insert_id();
+
+						$uploaded_files[] = array(
+							'id' => $insert_id,
+							'name' => $file_name,
+							'path' => $loan_number . '/' . $new_file_name
+						);
+					}
+				}
+			}
+
+			if (!empty($uploaded_files)) {
+				// Log activity
+				$logger = array(
+					'user_id' => $this->session->userdata('user_id'),
+					'activity' => 'Uploaded ' . count($uploaded_files) . ' file(s) to loan #' . $loan_number,
+					'activity_cate' => 'loan_file_upload'
+				);
+				log_activity($logger);
+
+				echo json_encode(array(
+					'status' => 'success',
+					'message' => 'Files uploaded successfully',
+					'files' => $uploaded_files
+				));
+			} else {
+				echo json_encode(array('status' => 'error', 'message' => 'Failed to upload files'));
+			}
+		} else {
+			echo json_encode(array('status' => 'error', 'message' => 'No files selected'));
+		}
+	}
+
+	/**
+	 * Delete a loan file via AJAX
+	 */
+	public function delete_file() {
+		header('Content-Type: application/json');
+
+		$file_id = $this->input->post('file_id');
+
+		if (empty($file_id)) {
+			echo json_encode(array('status' => 'error', 'message' => 'Missing file ID'));
+			return;
+		}
+
+		// Get file info before deleting
+		$file = $this->Loan_files_model->get_by_id($file_id);
+
+		if (empty($file)) {
+			echo json_encode(array('status' => 'error', 'message' => 'File not found'));
+			return;
+		}
+
+		// Delete physical file
+		$file_path = FCPATH . 'uploads/' . $file->real_file;
+		if (file_exists($file_path)) {
+			unlink($file_path);
+		}
+
+		// Delete from database
+		$this->Loan_files_model->delete($file_id);
+
+		// Log activity
+		$logger = array(
+			'user_id' => $this->session->userdata('user_id'),
+			'activity' => 'Deleted file: ' . $file->file_name . ' from loan',
+			'activity_cate' => 'loan_file_delete'
+		);
+		log_activity($logger);
+
+		echo json_encode(array(
+			'status' => 'success',
+			'message' => 'File deleted successfully'
+		));
+	}
+
+	/**
+	 * Add a note to a loan
+	 */
+	public function add_note() {
+		header('Content-Type: application/json');
+
+		$loan_id = $this->input->post('loan_id');
+		$notes = $this->input->post('notes');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($loan_id) || empty($notes)) {
+			echo json_encode(array(
+				'status' => 'error',
+				'message' => 'Loan ID and notes are required'
+			));
+			return;
+		}
+
+		$data = array(
+			'loan_id' => $loan_id,
+			'notes' => $notes,
+			'notes_by' => $user_id,
+			'datetime' => date('Y-m-d H:i:s')
+		);
+
+		$note_id = $this->Loan_notes_model->insert($data);
+
+		if ($note_id) {
+			// Get user info for response
+			$user = get_by_id('employees', 'id', $user_id);
+			$user_name = $user ? $user->Firstname . ' ' . $user->Lastname : 'Unknown';
+
+			// Log activity
+			$logger = array(
+				'user_id' => $user_id,
+				'activity' => 'Added note to loan ID: ' . $loan_id,
+				'activity_cate' => 'loan_note_add'
+			);
+			log_activity($logger);
+
+			// Get loan details for notification
+			$loan = $this->Loan_model->get_by_id($loan_id);
+			if ($loan) {
+				// Get customer name
+				$customer_name = 'Unknown';
+				if ($loan->customer_type == 'individual') {
+					$customer = $this->Individual_customers_model->get_by_id($loan->loan_customer);
+					if ($customer) {
+						$customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+					}
+				} elseif ($loan->customer_type == 'group') {
+					$group = $this->Groups_model->get_by_id($loan->loan_customer);
+					if ($group) {
+						$customer_name = $group->group_name;
+					}
+				} elseif ($loan->customer_type == 'institution') {
+					$inst = get_by_id('corporate_customers', 'id', $loan->loan_customer);
+					if ($inst) {
+						$customer_name = $inst->EntityName;
+					}
+				}
+
+				// Send email notification to stakeholders
+				$loan_data = array(
+					'loan_id' => $loan_id,
+					'loan_number' => $loan->loan_number,
+					'customer_name' => $customer_name
+				);
+				notify_loan_note_added($loan_data, $notes, $user_id);
+			}
+
+			echo json_encode(array(
+				'status' => 'success',
+				'message' => 'Note added successfully',
+				'note' => array(
+					'note_id' => $note_id,
+					'notes' => $notes,
+					'notes_by' => $user_name,
+					'datetime' => date('d M Y H:i')
+				)
+			));
+		} else {
+			echo json_encode(array(
+				'status' => 'error',
+				'message' => 'Failed to add note'
+			));
+		}
+	}
+
+	/**
+	 * Get all notes for a loan
+	 */
+	public function get_notes($loan_id) {
+		header('Content-Type: application/json');
+
+		if (empty($loan_id)) {
+			echo json_encode(array(
+				'status' => 'error',
+				'message' => 'Loan ID is required'
+			));
+			return;
+		}
+
+		$notes = $this->Loan_notes_model->get_by_loan($loan_id);
+
+		$formatted_notes = array();
+		foreach ($notes as $note) {
+			$formatted_notes[] = array(
+				'note_id' => $note->note_id,
+				'notes' => $note->notes,
+				'notes_by' => $note->Firstname . ' ' . $note->Lastname,
+				'user_id' => $note->notes_by,
+				'datetime' => date('d M Y H:i', strtotime($note->datetime))
+			);
+		}
+
+		echo json_encode(array(
+			'status' => 'success',
+			'data' => $formatted_notes,
+			'count' => count($formatted_notes)
+		));
+	}
+
+	/**
+	 * Delete a note
+	 */
+	public function delete_note() {
+		header('Content-Type: application/json');
+
+		$note_id = $this->input->post('note_id');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($note_id)) {
+			echo json_encode(array(
+				'status' => 'error',
+				'message' => 'Note ID is required'
+			));
+			return;
+		}
+
+		// Get note to check ownership
+		$note = $this->Loan_notes_model->get_by_id($note_id);
+
+		if (!$note) {
+			echo json_encode(array(
+				'status' => 'error',
+				'message' => 'Note not found'
+			));
+			return;
+		}
+
+		// Only allow deletion by the note creator or admin
+		if ($note->notes_by != $user_id && $this->session->userdata('user_type') != 'admin') {
+			echo json_encode(array(
+				'status' => 'error',
+				'message' => 'You can only delete your own notes'
+			));
+			return;
+		}
+
+		if ($this->Loan_notes_model->delete($note_id)) {
+			// Log activity
+			$logger = array(
+				'user_id' => $user_id,
+				'activity' => 'Deleted note ID: ' . $note_id,
+				'activity_cate' => 'loan_note_delete'
+			);
+			log_activity($logger);
+
+			echo json_encode(array(
+				'status' => 'success',
+				'message' => 'Note deleted successfully'
+			));
+		} else {
+			echo json_encode(array(
+				'status' => 'error',
+				'message' => 'Failed to delete note'
+			));
+		}
+	}
+
+	// ==================== NEW COLLATERAL MANAGEMENT SYSTEM ====================
+
+	/**
+	 * Get customer collaterals (for individual customer page and loan application)
+	 */
+	public function get_customer_collaterals($customer_id, $customer_type = 'individual') {
+		header('Content-Type: application/json');
+
+		if (empty($customer_id)) {
+			echo json_encode(array('success' => false, 'message' => 'Customer ID is required'));
+			return;
+		}
+
+		$collaterals = $this->Collateral_model->get_by_customer($customer_id, $customer_type);
+
+		$formatted = array();
+		foreach ($collaterals as $c) {
+			$utilized = $c->utilized_amount ?? $this->Collateral_model->get_utilized_amount($c->id);
+			$available = $c->available_balance ?? max(0, ($c->force_sale_value ?? 0) - $utilized);
+
+			$added_by_name = 'N/A';
+			if (!empty($c->added_by)) {
+				$added_by = get_by_id('employees', 'id', $c->added_by);
+				$added_by_name = $added_by ? $added_by->Firstname . ' ' . $added_by->Lastname : 'N/A';
+			}
+
+			$formatted[] = array(
+				'id' => $c->id,
+				'collateral_name' => $c->collateral_name,
+				'collateral_type' => $c->collateral_type,
+				'collateral_serial' => $c->collateral_serial ?? '',
+				'market_value' => floatval($c->market_value ?? 0),
+				'force_sale_value' => floatval($c->force_sale_value ?? 0),
+				'utilized_amount' => floatval($utilized),
+				'available_balance' => floatval($available),
+				'description' => $c->collateral_desc ?? '',
+				'status' => $c->collateral_status ?? 'ACTIVE',
+				'added_by' => $added_by_name,
+				'added_at' => !empty($c->added_at) ? date('d M Y', strtotime($c->added_at)) : 'N/A'
+			);
+		}
+
+		echo json_encode(array(
+			'success' => true,
+			'collaterals' => $formatted,
+			'count' => count($formatted)
+		));
+	}
+
+	/**
+	 * Add collateral to customer
+	 */
+	public function add_customer_collateral() {
+		header('Content-Type: application/json');
+
+		$customer_id = $this->input->post('customer_id');
+		$customer_type = $this->input->post('customer_type') ?? 'individual';
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($customer_id)) {
+			echo json_encode(array('status' => 'error', 'message' => 'Customer ID is required'));
+			return;
+		}
+
+		// Handle file upload
+		$file_name = '';
+		if (!empty($_FILES['collateral_file']['name'])) {
+			$upload_path = FCPATH . 'uploads/collaterals/' . $customer_type . '_' . $customer_id . '/';
+			if (!is_dir($upload_path)) {
+				mkdir($upload_path, 0777, true);
+			}
+
+			$config['upload_path'] = $upload_path;
+			$config['allowed_types'] = 'gif|jpg|jpeg|png|pdf|doc|docx';
+			$config['max_size'] = 10240;
+			$config['file_name'] = time() . '_' . $_FILES['collateral_file']['name'];
+
+			$this->load->library('upload', $config);
+
+			if ($this->upload->do_upload('collateral_file')) {
+				$upload_data = $this->upload->data();
+				$file_name = 'collaterals/' . $customer_type . '_' . $customer_id . '/' . $upload_data['file_name'];
+			}
+		}
+
+		$data = array(
+			'customer_id' => $customer_id,
+			'customer_type' => $customer_type,
+			'collateral_name' => $this->input->post('collateral_name'),
+			'collateral_type' => $this->input->post('collateral_type'),
+			'collateral_serial' => $this->input->post('collateral_serial'),
+			'market_value' => $this->input->post('market_value'),
+			'force_sale_value' => $this->input->post('force_sale_value'),
+			'collateral_desc' => $this->input->post('description'),
+			'collateral_status' => 'ACTIVE',
+			'location_status' => $this->input->post('location_status') ?? 'In Our Possession',
+			'added_by' => $user_id,
+			'added_at' => date('Y-m-d H:i:s')
+		);
+
+		$collateral_id = $this->Collateral_model->insert($data);
+
+		if ($collateral_id) {
+			$logger = array(
+				'user_id' => $user_id,
+				'activity' => 'Added collateral "' . $data['collateral_name'] . '" for customer',
+				'activity_cate' => 'collateral_add'
+			);
+			log_activity($logger);
+
+			echo json_encode(array(
+				'success' => true,
+				'message' => 'Collateral added successfully',
+				'collateral_id' => $collateral_id
+			));
+		} else {
+			echo json_encode(array('success' => false, 'message' => 'Failed to add collateral'));
+		}
+	}
+
+	/**
+	 * Update customer collateral
+	 */
+	public function update_customer_collateral() {
+		header('Content-Type: application/json');
+
+		$collateral_id = $this->input->post('collateral_id');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($collateral_id)) {
+			echo json_encode(array('status' => 'error', 'message' => 'Collateral ID is required'));
+			return;
+		}
+
+		$collateral = $this->Collateral_model->get_by_id($collateral_id);
+		if (!$collateral) {
+			echo json_encode(array('status' => 'error', 'message' => 'Collateral not found'));
+			return;
+		}
+
+		$data = array(
+			'collateral_name' => $this->input->post('collateral_name'),
+			'collateral_type' => $this->input->post('collateral_type'),
+			'collateral_serial' => $this->input->post('collateral_serial'),
+			'market_value' => $this->input->post('market_value'),
+			'force_sale_value' => $this->input->post('force_sale_value'),
+			'collateral_desc' => $this->input->post('collateral_desc'),
+			'location_status' => $this->input->post('location_status'),
+			'updated_by' => $user_id,
+			'updated_at' => date('Y-m-d H:i:s')
+		);
+
+		// Handle file upload
+		if (!empty($_FILES['collateral_file']['name'])) {
+			$upload_path = FCPATH . 'uploads/collaterals/' . $collateral->customer_type . '_' . $collateral->customer_id . '/';
+			if (!is_dir($upload_path)) {
+				mkdir($upload_path, 0777, true);
+			}
+
+			$config['upload_path'] = $upload_path;
+			$config['allowed_types'] = 'gif|jpg|jpeg|png|pdf|doc|docx';
+			$config['max_size'] = 10240;
+			$config['file_name'] = time() . '_' . $_FILES['collateral_file']['name'];
+
+			$this->load->library('upload', $config);
+
+			if ($this->upload->do_upload('collateral_file')) {
+				$upload_data = $this->upload->data();
+				$data['collateral_file'] = 'collaterals/' . $collateral->customer_type . '_' . $collateral->customer_id . '/' . $upload_data['file_name'];
+			}
+		}
+
+		$result = $this->Collateral_model->update($collateral_id, $data);
+
+		if ($result) {
+			echo json_encode(array('success' => true, 'message' => 'Collateral updated successfully'));
+		} else {
+			echo json_encode(array('success' => false, 'message' => 'Failed to update collateral'));
+		}
+	}
+
+	/**
+	 * Delete customer collateral
+	 */
+	public function delete_collateral() {
+		header('Content-Type: application/json');
+
+		$collateral_id = $this->input->post('collateral_id');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($collateral_id)) {
+			echo json_encode(array('success' => false, 'message' => 'Collateral ID is required'));
+			return;
+		}
+
+		$collateral = $this->Collateral_model->get_by_id($collateral_id);
+		if (!$collateral) {
+			echo json_encode(array('success' => false, 'message' => 'Collateral not found'));
+			return;
+		}
+
+		// Check if collateral is linked to any active loans
+		$loans = $this->Collateral_model->get_collateral_loans($collateral_id);
+		$active_loans = array_filter($loans, function($l) { return $l->status == 'ACTIVE'; });
+		if (count($active_loans) > 0) {
+			echo json_encode(array('success' => false, 'message' => 'Cannot delete collateral linked to active loans'));
+			return;
+		}
+
+		$result = $this->Collateral_model->delete($collateral_id);
+
+		if ($result) {
+			$logger = array(
+				'user_id' => $user_id,
+				'activity' => 'Deleted collateral "' . $collateral->collateral_name . '"',
+				'activity_cate' => 'collateral_delete'
+			);
+			log_activity($logger);
+
+			echo json_encode(array('success' => true, 'message' => 'Collateral deleted successfully'));
+		} else {
+			echo json_encode(array('success' => false, 'message' => 'Failed to delete collateral'));
+		}
+	}
+
+	/**
+	 * Link collateral to a loan
+	 */
+	public function link_collateral_to_loan() {
+		header('Content-Type: application/json');
+
+		$loan_id = $this->input->post('loan_id');
+		$collateral_id = $this->input->post('collateral_id');
+		$amount_utilized = $this->input->post('amount_utilized');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($loan_id) || empty($collateral_id) || empty($amount_utilized)) {
+			echo json_encode(array('success' => false, 'message' => 'Loan ID, Collateral ID and Amount are required'));
+			return;
+		}
+
+		// Check available balance
+		$available = $this->Collateral_model->get_available_balance($collateral_id);
+		if ($amount_utilized > $available) {
+			echo json_encode(array('success' => false, 'message' => 'Amount exceeds available balance. Available: ' . number_format($available, 2)));
+			return;
+		}
+
+		$data = array(
+			'loan_id' => $loan_id,
+			'collateral_id' => $collateral_id,
+			'amount_utilized' => $amount_utilized,
+			'status' => 'ACTIVE',
+			'linked_by' => $user_id,
+			'linked_at' => date('Y-m-d H:i:s')
+		);
+
+		$link_id = $this->Collateral_model->link_to_loan($data);
+
+		if ($link_id) {
+			$collateral = $this->Collateral_model->get_by_id($collateral_id);
+			$loan = $this->Loan_model->get_by_id($loan_id);
+
+			$logger = array(
+				'user_id' => $user_id,
+				'activity' => 'Linked collateral "' . $collateral->collateral_name . '" to loan ' . $loan->loan_number . ' (Amount: ' . number_format($amount_utilized, 2) . ')',
+				'activity_cate' => 'collateral_link'
+			);
+			log_activity($logger);
+
+			echo json_encode(array('success' => true, 'message' => 'Collateral linked successfully', 'link_id' => $link_id));
+		} else {
+			echo json_encode(array('success' => false, 'message' => 'Failed to link collateral'));
+		}
+	}
+
+	/**
+	 * Get collaterals linked to a loan
+	 */
+	public function get_loan_collaterals($loan_id) {
+		header('Content-Type: application/json');
+
+		if (empty($loan_id)) {
+			echo json_encode(array('success' => false, 'message' => 'Loan ID is required'));
+			return;
+		}
+
+		$collaterals = $this->Collateral_model->get_loan_collaterals($loan_id);
+
+		$formatted = array();
+		$total_utilized_this_loan = 0;
+		$total_utilized_other_loans = 0;
+
+		foreach ($collaterals as $c) {
+			$linked_by_name = 'N/A';
+			if (!empty($c->linked_by)) {
+				$linked_by = get_by_id('employees', 'id', $c->linked_by);
+				$linked_by_name = $linked_by ? $linked_by->Firstname . ' ' . $linked_by->Lastname : 'N/A';
+			}
+
+			// Get total utilized for this collateral across all loans
+			$total_collateral_utilized = $this->Collateral_model->get_utilized_amount($c->collateral_id);
+			$other_loans_utilized = floatval($total_collateral_utilized) - floatval($c->amount_utilized ?? 0);
+			$available_balance = max(0, ($c->force_sale_value ?? 0) - $total_collateral_utilized);
+
+			$formatted[] = array(
+				'link_id' => $c->id,
+				'collateral_id' => $c->collateral_id,
+				'collateral_name' => $c->collateral_name,
+				'collateral_type' => $c->collateral_type,
+				'collateral_serial' => $c->collateral_serial ?? '',
+				'market_value' => floatval($c->market_value ?? 0),
+				'force_sale_value' => floatval($c->force_sale_value ?? 0),
+				'amount_utilized' => floatval($c->amount_utilized ?? 0),
+				'total_utilized' => floatval($total_collateral_utilized),
+				'other_loans_utilized' => floatval($other_loans_utilized),
+				'available_balance' => floatval($available_balance),
+				'link_status' => $c->status ?? 'ACTIVE',
+				'status' => $c->status ?? 'ACTIVE',
+				'collateral_status' => $c->collateral_status ?? 'ACTIVE',
+				'description' => $c->collateral_desc ?? '',
+				'linked_by' => $linked_by_name,
+				'linked_at' => !empty($c->linked_at) ? date('d M Y H:i', strtotime($c->linked_at)) : 'N/A'
+			);
+
+			if ($c->status == 'ACTIVE') {
+				$total_utilized_this_loan += floatval($c->amount_utilized ?? 0);
+				$total_utilized_other_loans += floatval($other_loans_utilized);
+			}
+		}
+
+		// Calculate summary
+		$summary = array(
+			'total_force_sale' => array_sum(array_column($formatted, 'force_sale_value')),
+			'this_loan_utilization' => $total_utilized_this_loan,
+			'other_loans_utilization' => $total_utilized_other_loans
+		);
+
+		echo json_encode(array(
+			'success' => true,
+			'collaterals' => $formatted,
+			'count' => count($formatted),
+			'summary' => $summary
+		));
+	}
+
+	/**
+	 * Release collateral from loan (when loan is paid/closed)
+	 */
+	public function release_loan_collateral() {
+		header('Content-Type: application/json');
+
+		$link_id = $this->input->post('link_id');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($link_id)) {
+			echo json_encode(array('status' => 'error', 'message' => 'Link ID is required'));
+			return;
+		}
+
+		$link = $this->Collateral_model->get_link_by_id($link_id);
+		if (!$link) {
+			echo json_encode(array('status' => 'error', 'message' => 'Link not found'));
+			return;
+		}
+
+		$result = $this->Collateral_model->update_link_status($link_id, 'RELEASED', $user_id);
+
+		if ($result) {
+			$collateral = $this->Collateral_model->get_by_id($link->collateral_id);
+
+			$logger = array(
+				'user_id' => $user_id,
+				'activity' => 'Released collateral "' . $collateral->collateral_name . '" from loan',
+				'activity_cate' => 'collateral_release'
+			);
+			log_activity($logger);
+
+			echo json_encode(array('status' => 'success', 'message' => 'Collateral released successfully'));
+		} else {
+			echo json_encode(array('status' => 'error', 'message' => 'Failed to release collateral'));
+		}
+	}
+
+	/**
+	 * Remove collateral link from loan
+	 */
+	public function unlink_collateral() {
+		header('Content-Type: application/json');
+
+		$link_id = $this->input->post('link_id');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($link_id)) {
+			echo json_encode(array('success' => false, 'message' => 'Link ID is required'));
+			return;
+		}
+
+		$result = $this->Collateral_model->delete_link($link_id);
+
+		if ($result) {
+			echo json_encode(array('success' => true, 'message' => 'Collateral unlinked successfully'));
+		} else {
+			echo json_encode(array('success' => false, 'message' => 'Failed to unlink collateral'));
+		}
+	}
+
+	/**
+	 * Update collateral status
+	 */
+	public function update_collateral_status() {
+		header('Content-Type: application/json');
+
+		$collateral_id = $this->input->post('collateral_id');
+		$new_status = $this->input->post('status');
+		$remarks = $this->input->post('remarks');
+		$user_id = $this->session->userdata('user_id');
+
+		if (empty($collateral_id) || empty($new_status)) {
+			echo json_encode(array('success' => false, 'message' => 'Collateral ID and status are required'));
+			return;
+		}
+
+		$valid_statuses = array('ACTIVE', 'RELEASED', 'SOLD', 'DAMAGED', 'LOST', 'RETURNED', 'RECOVERED');
+		if (!in_array($new_status, $valid_statuses)) {
+			echo json_encode(array('success' => false, 'message' => 'Invalid status'));
+			return;
+		}
+
+		$collateral = $this->Collateral_model->get_by_id($collateral_id);
+		if (!$collateral) {
+			echo json_encode(array('success' => false, 'message' => 'Collateral not found'));
+			return;
+		}
+
+		$old_status = $collateral->collateral_status ?? 'ACTIVE';
+
+		$data = array(
+			'collateral_status' => $new_status
+		);
+
+		$result = $this->Collateral_model->update($collateral_id, $data);
+
+		if ($result) {
+			$this->Collateral_model->log_history(array(
+				'collateral_id' => $collateral_id,
+				'old_status' => $old_status,
+				'new_status' => $new_status,
+				'remarks' => $remarks,
+				'changed_by' => $user_id,
+				'changed_at' => date('Y-m-d H:i:s')
+			));
+
+			echo json_encode(array('success' => true, 'message' => 'Collateral status updated'));
+		} else {
+			echo json_encode(array('success' => false, 'message' => 'Failed to update status'));
+		}
+	}
+
+	/**
+	 * Get collateral history
+	 */
+	public function get_collateral_history($collateral_id) {
+		header('Content-Type: application/json');
+
+		if (empty($collateral_id)) {
+			echo json_encode(array('success' => false, 'message' => 'Collateral ID is required'));
+			return;
+		}
+
+		$history = $this->Collateral_model->get_history($collateral_id);
+
+		$formatted = array();
+		foreach ($history as $h) {
+			$changed_by = get_by_id('employees', 'id', $h->changed_by);
+			$formatted[] = array(
+				'old_status' => $h->old_status,
+				'new_status' => $h->new_status,
+				'remarks' => $h->remarks,
+				'changed_by' => $changed_by ? $changed_by->Firstname . ' ' . $changed_by->Lastname : 'N/A',
+				'changed_at' => date('d M Y H:i', strtotime($h->changed_at))
+			);
+		}
+
+		echo json_encode(array('success' => true, 'history' => $formatted));
+	}
+
+	/**
+	 * Get loans using a specific collateral
+	 */
+	public function get_collateral_loans($collateral_id) {
+		header('Content-Type: application/json');
+
+		if (empty($collateral_id)) {
+			echo json_encode(array('success' => false, 'message' => 'Collateral ID is required'));
+			return;
+		}
+
+		$loans = $this->Collateral_model->get_collateral_loans($collateral_id);
+
+		$formatted = array();
+		foreach ($loans as $l) {
+			$formatted[] = array(
+				'link_id' => $l->id,
+				'loan_id' => $l->loan_id,
+				'loan_number' => $l->loan_number,
+				'loan_principal' => floatval($l->loan_principal),
+				'loan_status' => $l->loan_status,
+				'amount_utilized' => floatval($l->amount_utilized),
+				'link_status' => $l->status
+			);
+		}
+
+		echo json_encode(array('success' => true, 'loans' => $formatted));
+	}
+
+	// ==================== CREATED LOANS (API-created, awaiting completion) ====================
+
+	/**
+	 * List all loans with status CREATED
+	 */
+	function created_loans()
+	{
+		$data['loan_data'] = $this->Loan_model->get_all('CREATED');
+		$menu_toggle['toggles'] = 23;
+		$this->load->view('admin/header', $menu_toggle);
+		$this->load->view('loan/created_loans_list', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/**
+	 * Show form to complete a CREATED loan
+	 */
+	function complete_loan($id)
+	{
+		$row = $this->Loan_model->get_by_id($id);
+
+		if (!$row) {
+			$this->toaster->error('Loan not found');
+			redirect('Loan/created_loans');
+			return;
+		}
+
+		if ($row->loan_status != 'CREATED') {
+			$this->toaster->error('This loan is not in CREATED status');
+			redirect('Loan/created_loans');
+			return;
+		}
+
+		// Determine customer info based on type
+		if ($row->customer_type == 'individual') {
+			$indi = $this->Individual_customers_model->get_by_id($row->loan_customer);
+			$customer_name = $indi->Firstname . ' ' . $indi->Lastname;
+		} elseif ($row->customer_type == 'institution') {
+			$institution = $this->Corporate_customers_model->get_by_id($row->loan_customer);
+			$customer_name = $institution->EntityName . ' (' . $institution->RegistrationNumber . ')';
+		} else {
+			$group = $this->Groups_model->get_by_id($row->loan_customer);
+			$customer_name = $group->group_name . ' (' . $group->group_code . ')';
+		}
+
+		$data = array(
+			'loan_id' => $row->loan_id,
+			'loan_number' => $row->loan_number,
+			'loan_product' => $row->product_name,
+			'loan_product_id' => $row->loan_product,
+			'customer_type' => $row->customer_type,
+			'loan_customer' => $customer_name,
+			'customer_id' => $row->loan_customer,
+			'loan_date' => $row->loan_date,
+			'loan_principal' => $row->loan_principal,
+			'loan_period' => $row->loan_period,
+			'period_type' => $row->period_type,
+			'loan_interest' => $row->loan_interest,
+			'currency' => $row->currency,
+			'processing_fee' => $row->processing_fee,
+			'off_taker' => $row->off_taker,
+			'narration' => $row->narration,
+			'crb_search' => isset($row->crb_search) ? $row->crb_search : '',
+			'pacra_search' => isset($row->pacra_search) ? $row->pacra_search : '',
+			'previous_facilities' => isset($row->previous_facilities) ? $row->previous_facilities : '',
+			'past_loans_comment' => isset($row->past_loans_comment) ? $row->past_loans_comment : '',
+			'security_notes' => isset($row->security_notes) ? $row->security_notes : '',
+			'bank_statement_notes' => isset($row->bank_statement_notes) ? $row->bank_statement_notes : '',
+			'about_transaction' => isset($row->about_transaction) ? $row->about_transaction : '',
+			'risk_analysis' => isset($row->risk_analysis) ? $row->risk_analysis : '',
+		);
+
+		$menu_toggle['toggles'] = 23;
+		$this->load->view('admin/header', $menu_toggle);
+		$this->load->view('loan/complete_loan', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/**
+	 * Process the complete loan form submission
+	 * Updates loan details and changes status from CREATED to INITIATED
+	 */
+	function complete_loan_action()
+	{
+		$loan_id = $this->input->post('loan_id');
+		$row = $this->Loan_model->get_by_id($loan_id);
+
+		if (!$row) {
+			$this->toaster->error('Loan not found');
+			redirect('Loan/created_loans');
+			return;
+		}
+
+		if ($row->loan_status != 'CREATED') {
+			$this->toaster->error('This loan is not in CREATED status');
+			redirect('Loan/created_loans');
+			return;
+		}
+
+		// Gather appraisal data
+		$update_data = array(
+			'processing_fee' => $this->input->post('processing_fee'),
+			'off_taker' => $this->input->post('off_taker'),
+			'narration' => $this->input->post('narration'),
+			'crb_search' => $this->input->post('crb_search'),
+			'pacra_search' => $this->input->post('pacra_search'),
+			'previous_facilities' => $this->input->post('previous_facilities'),
+			'past_loans_comment' => $this->input->post('past_loans_comment'),
+			'security_notes' => $this->input->post('security_notes'),
+			'bank_statement_notes' => $this->input->post('bank_statement_notes'),
+			'about_transaction' => $this->input->post('about_transaction'),
+			'risk_analysis' => $this->input->post('risk_analysis'),
+			'loan_status' => 'INITIATED',
+			'loan_added_by' => $this->session->userdata('user_id'),
+		);
+
+		// Update the loan record
+		$this->Loan_model->update($loan_id, $update_data);
+
+		// Create upload directory
+		$imagePath = APPPATH . '../uploads/' . $row->loan_number;
+		if (!is_dir($imagePath)) {
+			mkdir($imagePath, 0777, true);
+		}
+
+		// Create file library folders if they don't exist
+		$existing_folder = $this->db->where('folder_name', $row->loan_number)->where('parent_folder_id', 10)->get('file_folders')->row();
+		if ($existing_folder) {
+			$folder_id = $existing_folder->id;
+			$existing_loan_files_folder = $this->db->where('folder_name', $row->loan_number . " loan files")->where('parent_folder_id', $folder_id)->get('file_folders')->row();
+			$folder_id_loan_files = $existing_loan_files_folder ? $existing_loan_files_folder->id : 0;
+		} else {
+			$folder_data = [
+				'folder_name' => $row->loan_number,
+				'parent_folder_id' => 10,
+				'owner_id' => $loan_id,
+				'is_public' => 1,
+				'date_created' => date('Y-m-d H:i:s'),
+				'date_modified' => date('Y-m-d H:i:s'),
+				'description' => 'Loan folder'
+			];
+			$folder_id = $this->File_folders_model->insert($folder_data);
+
+			$folder_data_loan_files = [
+				'folder_name' => $row->loan_number . " loan files",
+				'parent_folder_id' => $folder_id,
+				'owner_id' => $loan_id,
+				'is_public' => 1,
+				'date_created' => date('Y-m-d H:i:s'),
+				'date_modified' => date('Y-m-d H:i:s'),
+				'description' => 'Loan files folder'
+			];
+			$folder_id_loan_files = $this->File_folders_model->insert($folder_data_loan_files);
+		}
+
+		// Handle file uploads
+		$this->load->library('upload');
+		$number_of_files_uploaded = isset($_FILES['loan_files']['name']) ? count($_FILES['loan_files']['name']) : 0;
+
+		for ($i = 0; $i < $number_of_files_uploaded; $i++) {
+			if (empty($_FILES['loan_files']['name'][$i])) continue;
+
+			$_FILES['userfile']['name']     = $_FILES['loan_files']['name'][$i];
+			$_FILES['userfile']['type']     = $_FILES['loan_files']['type'][$i];
+			$_FILES['userfile']['tmp_name'] = $_FILES['loan_files']['tmp_name'][$i];
+			$_FILES['userfile']['error']    = $_FILES['loan_files']['error'][$i];
+			$_FILES['userfile']['size']     = $_FILES['loan_files']['size'][$i];
+
+			$config = array(
+				'file_name'     => $_FILES['userfile']['name'],
+				'allowed_types' => '*',
+				'max_size'      => 200000,
+				'overwrite'     => FALSE,
+				'upload_path'   => $imagePath
+			);
+
+			$this->upload->initialize($config);
+
+			if ($this->upload->do_upload()) {
+				$uploaded_data = $this->upload->data();
+
+				$data = array(
+					'loan_id' => $loan_id,
+					'file_name' => $uploaded_data['file_name'],
+					'real_file' => $row->loan_number . '/' . $uploaded_data['file_name'],
+				);
+				$this->Loan_files_model->insert($data);
+
+				$insert_data = [
+					'owner_type' => 'loan',
+					'owner_id' => $loan_id,
+					'file_category' => 'loan_files',
+					'file_type' => $_FILES['userfile']['type'],
+					'file_name' => $uploaded_data['file_name'],
+					'file_path' => "uploads/" . $row->loan_number . "/" . $uploaded_data['file_name'],
+					'file_size' => $_FILES['userfile']['size'],
+					'is_public' => 1,
+					'date_added' => date('Y-m-d H:i:s'),
+					'date_modified' => date('Y-m-d H:i:s'),
+					'added_by' => $this->session->userdata('user_id'),
+					'description' => "loan file for loan",
+					'tags' => ""
+				];
+
+				$file_id = $this->File_library_model->insert($insert_data);
+
+				if ($folder_id_loan_files) {
+					$this->File_folder_mapping_model->insert([
+						'file_id' => $file_id,
+						'folder_id' => $folder_id_loan_files,
+						'date_added' => date('Y-m-d H:i:s')
+					]);
+				}
+			}
+		}
+
+		// Handle bank statements
+		$customer_type = $this->input->post('customer_type');
+		$statement_type = ($customer_type == 'institution') ? 'corporate' : 'personal';
+		$credit_field = ($customer_type == 'institution') ? 'corporate_credit' : 'personal_credit';
+		$debit_field = ($customer_type == 'institution') ? 'corporate_debit' : 'personal_debit';
+		$month_field = ($customer_type == 'institution') ? 'corporate_statement_month' : 'personal_statement_month';
+		$file_field = ($customer_type == 'institution') ? 'corporate_statement_file' : 'personal_statement_file';
+
+		$credits = $this->input->post($credit_field);
+		$debits = $this->input->post($debit_field);
+		$months = $this->input->post($month_field);
+
+		if (is_array($credits) && is_array($debits) && is_array($months)) {
+			$num_statements = count($credits);
+
+			for ($i = 0; $i < $num_statements; $i++) {
+				$credit = isset($credits[$i]) ? $credits[$i] : null;
+				$debit = isset($debits[$i]) ? $debits[$i] : null;
+				$month = isset($months[$i]) ? $months[$i] : null;
+
+				if (empty($credit) && empty($debit) && empty($month)) {
+					continue;
+				}
+
+				$statement_filename = null;
+
+				// Handle file upload for this statement
+				if (isset($_FILES[$file_field]) &&
+					isset($_FILES[$file_field]['name'][$i]) &&
+					$_FILES[$file_field]['name'][$i] != '') {
+
+					$_FILES['userfile']['name']     = $_FILES[$file_field]['name'][$i];
+					$_FILES['userfile']['type']     = $_FILES[$file_field]['type'][$i];
+					$_FILES['userfile']['tmp_name'] = $_FILES[$file_field]['tmp_name'][$i];
+					$_FILES['userfile']['error']    = $_FILES[$file_field]['error'][$i];
+					$_FILES['userfile']['size']     = $_FILES[$file_field]['size'][$i];
+
+					$config = array(
+						'file_name'     => 'statement_' . time() . '_' . $i . '_' . $_FILES['userfile']['name'],
+						'allowed_types' => '*',
+						'max_size'      => 200000,
+						'overwrite'     => FALSE,
+						'upload_path'   => $imagePath
+					);
+
+					$this->upload->initialize($config);
+
+					if ($this->upload->do_upload()) {
+						$uploaded_data = $this->upload->data();
+						$statement_filename = $uploaded_data['file_name'];
+
+						$insert_data_statement = [
+							'owner_type' => 'loan',
+							'owner_id' => $loan_id,
+							'file_category' => 'bank_statement',
+							'file_type' => $_FILES['userfile']['type'],
+							'file_name' => $uploaded_data['file_name'],
+							'file_path' => "uploads/" . $row->loan_number . "/" . $uploaded_data['file_name'],
+							'file_size' => $_FILES['userfile']['size'],
+							'is_public' => 1,
+							'date_added' => date('Y-m-d H:i:s'),
+							'date_modified' => date('Y-m-d H:i:s'),
+							'added_by' => $this->session->userdata('user_id'),
+							'description' => "Bank statement for loan - " . $month,
+							'tags' => ""
+						];
+
+						$file_id_statement = $this->File_library_model->insert($insert_data_statement);
+
+						if ($folder_id_loan_files) {
+							$this->File_folder_mapping_model->insert([
+								'file_id' => $file_id_statement,
+								'folder_id' => $folder_id_loan_files,
+								'date_added' => date('Y-m-d H:i:s')
+							]);
+						}
+					}
+				}
+
+				$bank_statement_data = [
+					'loan_id' => $loan_id,
+					'statement_type' => $statement_type,
+					'credit' => $credit ? str_replace(',', '', $credit) : 0,
+					'debit' => $debit ? str_replace(',', '', $debit) : 0,
+					'month' => $month,
+					'year' => date('Y'),
+					'file' => $statement_filename,
+					'added_by' => $this->session->userdata('user_id'),
+					'date_added' => date('Y-m-d H:i:s')
+				];
+
+				$this->db->insert('bank_statements', $bank_statement_data);
+			}
+		}
+
+		// Link selected collaterals to the loan
+		$collateral_ids = $this->input->post('collateral_ids');
+		$collateral_amounts = $this->input->post('collateral_amounts');
+
+		if (!empty($collateral_ids) && is_array($collateral_ids)) {
+			$user_id = $this->session->userdata('user_id');
+
+			for ($i = 0; $i < count($collateral_ids); $i++) {
+				$collateral_id = $collateral_ids[$i];
+				$amount_utilized = isset($collateral_amounts[$i]) ? floatval($collateral_amounts[$i]) : 0;
+
+				if ($collateral_id && $amount_utilized > 0) {
+					$available = $this->Collateral_model->get_available_balance($collateral_id);
+
+					if ($amount_utilized <= $available) {
+						$link_data = array(
+							'loan_id' => $loan_id,
+							'collateral_id' => $collateral_id,
+							'amount_utilized' => $amount_utilized,
+							'linked_by' => $user_id,
+							'linked_at' => date('Y-m-d H:i:s'),
+							'status' => 'ACTIVE'
+						);
+
+						$this->Collateral_model->link_to_loan($link_data);
+					}
+				}
+			}
+		}
+
+		// Insert approval trail record
+		$this->Loan_approval_trail_model->insert(array(
+			'loan_id' => $loan_id,
+			'user_id' => $this->session->userdata('user_id'),
+			'action' => 'COMPLETED',
+			'comment' => 'Loan completed from API-created state and submitted for approval'
+		));
+
+		// Send email notification to users who can recommend loans (same as INITIATE flow)
+		$customer_name = 'N/A';
+		if ($row->customer_type == 'individual') {
+			$cust = $this->db->get_where('individual_customers', array('id' => $row->loan_customer))->row();
+			if ($cust) {
+				$customer_name = $cust->Firstname . ' ' . $cust->Lastname;
+			}
+		} else {
+			$cust = $this->db->get_where('corporate_customers', array('id' => $row->loan_customer))->row();
+			if ($cust) {
+				$customer_name = $cust->EntityName;
+			}
+		}
+
+		$currency_data = $this->db->get_where('currency', array('id' => $row->currency))->row();
+		$currency_code = $currency_data ? $currency_data->code : 'ZMW';
+
+		$loan_notification_data = array(
+			'loan_id' => $loan_id,
+			'loan_number' => $row->loan_number,
+			'customer_name' => $customer_name,
+			'amount' => $row->loan_principal,
+			'currency' => $currency_code
+		);
+
+		notify_loan_recommenders($loan_notification_data, $this->session->userdata('user_id'));
+
+		$this->toaster->success('Loan completed successfully and submitted for approval');
+		redirect('Loan/created_loans');
 	}
 }
