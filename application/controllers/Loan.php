@@ -7030,6 +7030,11 @@ public function get_loan_product_details() {
 			return;
 		}
 
+		if ($loan->calculation_type == 'Bullet Payment') {
+			echo json_encode(['status' => 'error', 'message' => 'Early settlement is not available for bullet payment loans']);
+			return;
+		}
+
 		$breakdown = $this->Payement_schedules_model->calculate_payoff_amount($loan_id, $date);
 		if (!is_array($breakdown)) {
 			echo json_encode(['status' => 'error', 'message' => 'Failed to calculate payoff amount']);
@@ -7068,6 +7073,12 @@ public function get_loan_product_details() {
 		$loan = $this->Loan_model->get_by_id($loan_id);
 		if (!$loan || $loan->loan_status !== 'ACTIVE') {
 			$this->toaster->error('This loan is not active.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		if ($loan->calculation_type == 'Bullet Payment') {
+			$this->toaster->error('Early settlement is not available for bullet payment loans.');
 			redirect($_SERVER['HTTP_REFERER']);
 			return;
 		}
@@ -7137,7 +7148,7 @@ public function get_loan_product_details() {
 			$deposit = $this->Account_model->cash_transaction(
 				$get_account->account, $loan_account->loan_number, $amount, 'deposit', $tid, $paid_date, $unique_name
 			);
-			if (!$deposit) {
+			if ($deposit !== 'success') {
 				$this->toaster->error('Cash deposit failed.');
 				redirect($_SERVER['HTTP_REFERER']);
 				return;

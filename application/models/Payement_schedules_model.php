@@ -1872,9 +1872,10 @@ else{
 		$this->db->where('payment_schedule <=', $date);
 		$this->db->update($this->table);
 
-		// Mark future schedules (due > date) as PAID; zero interest, set paid_amount = principal only
+		// Mark future schedules (due > date) as PAID; zero interest, set amount = principal, paid_amount = principal
 		$this->db->set('status',       'PAID');
 		$this->db->set('interest',     0);
+		$this->db->set('amount',       'principal', FALSE);
 		$this->db->set('paid_amount',  'principal', FALSE);
 		$this->db->set('paid_date',    $date);
 		$this->db->set('partial_paid', 'NO');
@@ -1887,6 +1888,18 @@ else{
 		$this->db->where('loan_id', $loan_id)->update('loan', [
 			'loan_status' => 'CLOSED',
 			'paid_off'    => 'Yes',
+		]);
+
+		// Record one transaction row (type=3) for the total payoff amount
+		$this->db->insert('transactions', [
+			'ref'              => 'ES.' . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
+			'loan_id'          => $loan_id,
+			'amount'           => $amount,
+			'payment_number'   => 0,
+			'transaction_type' => 3,
+			'payment_proof'    => 'null',
+			'added_by'         => $this->session->userdata('user_id'),
+			'date_stamp'       => $date,
 		]);
 
 		$this->db->trans_complete();
