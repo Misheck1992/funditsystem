@@ -7049,6 +7049,100 @@ public function get_loan_product_details() {
 		]);
 	}
 
+	public function process_early_settlement()
+	{
+		$loan_id    = (int)$this->input->post('loan_id');
+		$paid_date  = $this->input->post('paid_date');
+		$amount     = (float)$this->input->post('amount');
+		$pay_method = $this->input->post('payment_method');
+
+		// Guard: loan must be active
+		$loan = $this->Loan_model->get_by_id($loan_id);
+		if (!$loan || $loan->loan_status !== 'ACTIVE') {
+			$this->toaster->error('This loan is not active.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Guard: amount must match the calculated payoff (±0.01 tolerance)
+		$breakdown = $this->Payement_schedules_model->calculate_payoff_amount($loan_id, $paid_date);
+		if (abs($amount - $breakdown['total_payoff']) > 0.01) {
+			$this->toaster->error('Settlement amount does not match the calculated payoff of ' .
+				number_format($breakdown['total_payoff'], 2) . '. Please recalculate.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Handle proof of payment upload
+		$unique_name = '';
+		$config = [
+			'upload_path'   => './uploads/',
+			'allowed_types' => 'jpg|png|jpeg|gif|pdf|docx|txt|zip',
+			'max_size'      => 2048,
+			'remove_spaces' => TRUE,
+		];
+		$this->load->library('upload', $config);
+		if (!empty($_FILES['pay_proof']['name'])) {
+			$file_ext    = pathinfo($_FILES['pay_proof']['name'], PATHINFO_EXTENSION);
+			$unique_name = 'file_' . time() . '_' . uniqid() . '.' . $file_ext;
+			$config['file_name'] = $unique_name;
+			$this->upload->initialize($config);
+			$this->upload->do_upload('pay_proof');
+		}
+
+		$tid          = 'ES-' . rand(1000, 9999) . date('Ymd');
+		$loan_account = get_by_id('loan', 'loan_id', $loan_id);
+		$recepientt   = get_by_id('account', 'collection_account', 'Yes');
+
+		if ($pay_method == '0') {
+			// Institution's Bank Savings path
+			$check = $this->Account_model->get_account($loan_account->loan_number);
+			if ($check->balance < $amount) {
+				$this->toaster->error('Insufficient funds in loan savings account.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+			$txn = $this->Account_model->transfer_funds(
+				$loan_account->loan_number, $recepientt->account_number, $amount, $tid, $paid_date, $unique_name
+			);
+			if ($txn !== 'success') {
+				$this->toaster->error('Account transfer failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+		} else {
+			// Cash deposit via teller
+			$get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+			if (empty($get_account)) {
+				$this->toaster->error('You are not authorized to do this transaction, only cashiers.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+			$deposit = $this->Account_model->cash_transaction(
+				$get_account->account, $loan_account->loan_number, $amount, 'deposit', $tid, $paid_date, $unique_name
+			);
+			if (!$deposit) {
+				$this->toaster->error('Cash deposit failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+			$txn = $this->Account_model->transfer_funds(
+				$loan_account->loan_number, $recepientt->account_number, $amount, $tid, $paid_date, $unique_name
+			);
+			if ($txn !== 'success') {
+				$this->toaster->error('Transfer to collection account failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+		}
+
+		// Execute the payoff
+		$this->Payement_schedules_model->payoff_loan($loan_id, $amount, $paid_date);
+
+		$this->toaster->success('Loan settled successfully. All remaining schedules have been closed and interest waived.');
+		redirect($_SERVER['HTTP_REFERER']);
+	}
+
 	/**
 	 * Compute bullet loan payoff with compound interest on arrears.
 	 *
