@@ -548,22 +548,20 @@ $currency = get_by_id('currencies','currency_id',$currency);
                     <?php
                             }
                         } else {
-                            // Non-bullet loans - original logic
-                            if(!$fover) {
-                                if (!empty($repp)) {
+                            // Non-bullet loans - show payment button even when overdue
+                            if (!empty($repp)) {
                     ?>
-                                    <button onclick="pay_current_r()" class="btn-action btn-success" style="width: 100%; justify-content: center;">
+                                <button onclick="pay_current_r()" class="btn-action btn-success" style="width: 100%; justify-content: center;">
+                                    <i class="fa fa-money-bill-wave"></i> Make Payment
+                                </button>
+                    <?php
+                            } else {
+                                if (!empty($next_payment_details)) {
+                    ?>
+                                    <button onclick="pay_current()" class="btn-action btn-success" style="width: 100%; justify-content: center;">
                                         <i class="fa fa-money-bill-wave"></i> Make Payment
                                     </button>
                     <?php
-                                } else {
-                                    if (!empty($next_payment_details)) {
-                    ?>
-                                        <button onclick="pay_current()" class="btn-action btn-success" style="width: 100%; justify-content: center;">
-                                            <i class="fa fa-money-bill-wave"></i> Make Payment
-                                        </button>
-                    <?php
-                                    }
                                 }
                             }
                         }
@@ -1134,7 +1132,12 @@ $currency = get_by_id('currencies','currency_id',$currency);
 
                 <div class="form-group">
                     <label style="font-weight:600; color:#374151;">Settlement Date</label>
-                    <input type="date" class="form-control" id="es_date" value="<?php echo date('Y-m-d'); ?>" onchange="fetchEarlySettlementAmount()" oninput="fetchEarlySettlementAmount()">
+                    <div style="display:flex; gap:0.5rem;">
+                        <input type="date" class="form-control" id="es_date" value="<?php echo date('Y-m-d'); ?>">
+                        <button type="button" class="btn-action btn-info" onclick="fetchEarlySettlementAmount()" style="white-space:nowrap; padding:0.5rem 1rem;">
+                            <i class="fa fa-calculator"></i> Calculate
+                        </button>
+                    </div>
                 </div>
 
                 <div id="es_breakdown" style="display:none; background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
@@ -1309,14 +1312,9 @@ function get_transaction_usage(transaction_id) {
 }
 
 function open_early_settlement() {
-    var breakdown = document.getElementById('es_breakdown');
-    var amount    = document.getElementById('es_amount');
-    if (breakdown) breakdown.style.display = 'none';
-    if (amount)    amount.value = '';
-    $('#early_settlement_modal').on('shown.bs.modal.es', function() {
-        $('#early_settlement_modal').off('shown.bs.modal.es');
-        fetchEarlySettlementAmount();
-    }).modal('show');
+    document.getElementById('es_breakdown').style.display = 'none';
+    document.getElementById('es_amount').value = '';
+    $('#early_settlement_modal').modal('show');
 }
 
 function fetchEarlySettlementAmount() {
