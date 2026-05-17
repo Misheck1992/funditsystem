@@ -7003,13 +7003,6 @@ public function get_loan_product_details() {
 
 	public function get_early_settlement_amount($loan_id)
 	{
-		header('Content-Type: application/json');
-
-		if (!$this->input->is_ajax_request()) {
-			show_error('No direct script access allowed', 403);
-			return;
-		}
-
 		$loan_id = (int) $loan_id;
 		$date    = $this->input->get('date');
 

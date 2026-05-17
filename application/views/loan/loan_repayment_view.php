@@ -1134,7 +1134,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
 
                 <div class="form-group">
                     <label style="font-weight:600; color:#374151;">Settlement Date</label>
-                    <input type="date" class="form-control" id="es_date" value="<?php echo date('Y-m-d'); ?>" onchange="fetchEarlySettlementAmount()">
+                    <input type="date" class="form-control" id="es_date" value="<?php echo date('Y-m-d'); ?>" onchange="fetchEarlySettlementAmount()" oninput="fetchEarlySettlementAmount()">
                 </div>
 
                 <div id="es_breakdown" style="display:none; background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
@@ -1309,15 +1309,20 @@ function get_transaction_usage(transaction_id) {
 }
 
 function open_early_settlement() {
-    document.getElementById('es_breakdown').style.display = 'none';
-    document.getElementById('es_amount').value = '';
-    $('#early_settlement_modal').modal('show');
-    fetchEarlySettlementAmount();
+    var breakdown = document.getElementById('es_breakdown');
+    var amount    = document.getElementById('es_amount');
+    if (breakdown) breakdown.style.display = 'none';
+    if (amount)    amount.value = '';
+    $('#early_settlement_modal').on('shown.bs.modal.es', function() {
+        $('#early_settlement_modal').off('shown.bs.modal.es');
+        fetchEarlySettlementAmount();
+    }).modal('show');
 }
 
 function fetchEarlySettlementAmount() {
     var date = document.getElementById('es_date').value;
-    if (!date) return;
+    console.log('[ES] fetchEarlySettlementAmount called, date=', date);
+    if (!date) { console.log('[ES] no date, returning'); return; }
     document.getElementById('es_hidden_date').value = date;
 
     $.ajax({
@@ -1326,7 +1331,11 @@ function fetchEarlySettlementAmount() {
         data: { date: date },
         dataType: 'json',
         success: function(r) {
-            if (r.status !== 'success') return;
+            console.log('[ES] AJAX success, response=', JSON.stringify(r));
+            if (r.status !== 'success') {
+                alert('Settlement error: ' + (r.message || 'Unknown error'));
+                return;
+            }
             var fmt = function(v) {
                 return parseFloat(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
@@ -1338,8 +1347,9 @@ function fetchEarlySettlementAmount() {
             document.getElementById('es_amount').value      = parseFloat(r.total_payoff).toFixed(2);
             document.getElementById('es_breakdown').style.display = 'block';
         },
-        error: function() {
-            alert('Could not calculate settlement amount. Please try again.');
+        error: function(xhr, status, err) {
+            console.log('[ES] AJAX error, status=', status, 'response=', xhr.responseText);
+            alert('Could not calculate settlement amount.\nStatus: ' + xhr.status + '\nResponse: ' + xhr.responseText.substring(0, 300));
         }
     });
 }
