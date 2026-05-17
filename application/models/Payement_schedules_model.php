@@ -1841,7 +1841,7 @@ else{
 		$this->db->select('SUM(principal) AS future_principal, SUM(interest) AS interest_waived')
 				 ->from($this->table)
 				 ->where('loan_id', $loan_id)
-				 ->where('status', 'NOT PAID')
+				 ->where('status !=', 'PAID')
 				 ->where('payment_schedule >', $date);
 		$future          = $this->db->get()->row();
 		$future_principal = $future->future_principal ? (float)$future->future_principal : 0;
@@ -1857,13 +1857,14 @@ else{
 
 	public function payoff_loan($loan_id, $amount, $date)
 	{
-		// Snapshot interest_waived before making changes (for the activity log)
 		$breakdown       = $this->calculate_payoff_amount($loan_id, $date);
 		$interest_waived = $breakdown['interest_waived'];
 
-		// Mark overdue schedules (due <= date) as PAID; set paid_amount = the full schedule amount
+		$this->db->trans_start();
+
+		// Mark overdue schedules (due <= date) as PAID; set paid_amount = full schedule amount
 		$this->db->set('status',       'PAID');
-		$this->db->set('paid_amount',  'amount', FALSE); // FALSE = treat 'amount' as a column reference
+		$this->db->set('paid_amount',  'amount', FALSE);
 		$this->db->set('paid_date',    $date);
 		$this->db->set('partial_paid', 'NO');
 		$this->db->where('loan_id',    $loan_id);
@@ -1874,7 +1875,7 @@ else{
 		// Mark future schedules (due > date) as PAID; zero interest, set paid_amount = principal only
 		$this->db->set('status',       'PAID');
 		$this->db->set('interest',     0);
-		$this->db->set('paid_amount',  'principal', FALSE); // FALSE = column reference
+		$this->db->set('paid_amount',  'principal', FALSE);
 		$this->db->set('paid_date',    $date);
 		$this->db->set('partial_paid', 'NO');
 		$this->db->where('loan_id',    $loan_id);
@@ -1888,18 +1889,26 @@ else{
 			'paid_off'    => 'Yes',
 		]);
 
-		// Log the settlement
-		$loan          = $this->db->where('loan_id', $loan_id)->get('loan')->row();
-		$currency      = $this->db->where('currency_id', $loan->currency)->get('currencies')->row();
-		$currency_code = $currency ? $currency->currency_code : '';
+		$this->db->trans_complete();
 
-		$this->db->insert('activity_logger', [
-			'user_id'       => $this->session->userdata('user_id'),
-			'activity'      => 'Early payoff settlement — Loan ID: ' . $loan_id .
-							   ' | Settled: ' . number_format((float)$amount, 2) .
-							   ' | ' . $currency_code . ' ' . number_format($interest_waived, 2) . ' interest waived',
-			'activity_cate' => 'loan_closure',
-		]);
+		if ($this->db->trans_status() === FALSE) {
+			return false;
+		}
+
+		// Log the settlement (outside transaction - log failure should not roll back the payment)
+		$loan = $this->db->where('loan_id', $loan_id)->get('loan')->row();
+		if ($loan) {
+			$currency      = $this->db->where('currency_id', $loan->currency)->get('currencies')->row();
+			$currency_code = $currency ? $currency->currency_code : '';
+
+			$this->db->insert('activity_logger', [
+				'user_id'       => $this->session->userdata('user_id'),
+				'activity'      => 'Early payoff settlement - Loan ID: ' . $loan_id .
+								   ' | Settled: ' . number_format((float)$amount, 2) .
+								   ' | ' . $currency_code . ' ' . number_format($interest_waived, 2) . ' interest waived',
+				'activity_cate' => 'loan_closure',
+			]);
+		}
 
 		return true;
 	}
