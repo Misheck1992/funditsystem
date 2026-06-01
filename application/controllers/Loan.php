@@ -2520,6 +2520,8 @@ exit();
 
 		$loan_account = get_by_id('loan', 'loan_id', $loan_number);
 		$recepientt = get_by_id('account', 'collection_account', 'Yes');
+		$loan_full    = $this->Loan_model->get_by_id($loan_number);
+		$is_non_bullet = ($loan_full && $loan_full->calculation_type !== 'Bullet Payment');
 
 		if($this->input->post('payment_method')=="0") {
 			$get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
@@ -2535,9 +2537,13 @@ exit();
 					if ($do_transactions == 'success') {
 
 
-						$result = $this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
+						if ($is_non_bullet) {
+							$result = $this->_process_non_bullet_payment($loan_number, $amount, $paid_date);
+						} else {
+							$result = $this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
+						}
 
-						if ($result == true) {
+						if ($result) {
 
 							$logger = array(
 
@@ -2622,8 +2628,11 @@ exit();
 
 
 					if ($pay_late_first == 'success') {
-						$this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
-						// $this->Rescheduled_payments_model->new__late_pay($loan_number, $pay_number, $amount);
+						if ($is_non_bullet) {
+							$this->_process_non_bullet_payment($loan_number, $amount, $paid_date);
+						} else {
+							$this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
+						}
 						$logger = array(
 
 							'user_id' => $this->session->userdata('user_id'),
@@ -6977,28 +6986,41 @@ public function get_loan_product_details() {
 	 * This method handles AJAX requests to calculate the total payoff amount
 	 */
 	public function calculate_payoff() {
-		// Check if this is an AJAX request
 		if (!$this->input->is_ajax_request()) {
 			show_error('No direct script access allowed', 403);
 			return;
 		}
 
-		$loan_id = $this->input->post('loan_id');
+		$loan_id     = $this->input->post('loan_id');
 		$payoff_date = $this->input->post('payoff_date');
 
 		if (!$loan_id || !$payoff_date) {
-			echo json_encode([
-				'status' => 'error',
-				'message' => 'Missing required parameters'
-			]);
+			echo json_encode(['status' => 'error', 'message' => 'Missing required parameters']);
 			return;
 		}
 
-		$result = $this->_compute_bullet_payoff($loan_id, $payoff_date);
+		$loan = $this->Loan_model->get_by_id($loan_id);
+		if (!$loan) {
+			echo json_encode(['status' => 'error', 'message' => 'Loan not found']);
+			return;
+		}
+
+		if ($loan->calculation_type == 'Bullet Payment') {
+			$result = $this->_compute_bullet_payoff($loan_id, $payoff_date);
+		} else {
+			$result = $this->_compute_non_bullet_payoff($loan_id, $payoff_date);
+		}
+
 		echo json_encode($result);
 	}
+
 	public function calculate_payoff_inline($lid) {
-		return $this->_compute_bullet_payoff($lid, date('Y-m-d'));
+		$loan = $this->Loan_model->get_by_id($lid);
+		if (!$loan) return ['status' => 'error', 'message' => 'Loan not found'];
+		if ($loan->calculation_type == 'Bullet Payment') {
+			return $this->_compute_bullet_payoff($lid, date('Y-m-d'));
+		}
+		return $this->_compute_non_bullet_payoff($lid, date('Y-m-d'));
 	}
 
 	public function get_early_settlement_amount($loan_id)
@@ -7212,19 +7234,32 @@ public function get_loan_product_details() {
 		$remaining_days          = 0;
 		$running_balance         = 0;
 		$outstanding_at_maturity = 0;
+		$total_days_elapsed      = 0;
+		$daily_rate              = 0;
 
 		if ($payoff_date_obj <= $maturity_date_obj) {
 			// ── BEFORE OR AT MATURITY ──
-			// Charge simple interest for elapsed time (minimum 1 full month)
+			// Month 1 (days 1–30): always 1 full month flat.
+			// Month 2+ (day 31+): whole months at monthly rate + daily accrual for remaining days.
 			$total_days_elapsed = max(1, $loan_date_obj->diff($payoff_date_obj)->days);
-			$months_elapsed     = ceil($total_days_elapsed / 30);
-			if ($months_elapsed > $term) $months_elapsed = $term;
+			$daily_rate         = $monthly_rate / 30;
+			$full_months        = max(1, (int) floor($total_days_elapsed / 30));
+			if ($full_months > $term) $full_months = $term;
+			$extra_days         = max(0, $total_days_elapsed - ($full_months * 30));
 
-			$accrued_interest = round($principal * $monthly_rate * $months_elapsed, 2);
+			$accrued_interest = round(
+				$principal * $monthly_rate * $full_months + $principal * $daily_rate * $extra_days,
+				2
+			);
+
+			// Cap at full-term interest
+			$max_interest = round($principal * $monthly_rate * $term, 2);
+			if ($accrued_interest > $max_interest) $accrued_interest = $max_interest;
 
 			$calculation_explanation = "Before maturity (term = {$term} months):\n" .
-				"Months elapsed: {$months_elapsed}\n" .
-				"Interest = {$principal} x {$monthly_rate} x {$months_elapsed} = {$accrued_interest}\n";
+				"Days elapsed: {$total_days_elapsed}\n" .
+				"Full months: {$full_months}, Extra days: {$extra_days}\n" .
+				"Interest = ({$principal} x {$monthly_rate} x {$full_months}) + ({$principal} x {$daily_rate} x {$extra_days}) = {$accrued_interest}\n";
 
 			// Determine remaining balances after any payments made
 			$remaining_principal    = $principal;
@@ -7340,12 +7375,235 @@ public function get_loan_product_details() {
 				'days_past_maturity'     => $days_past_maturity,
 				'full_months_arrears'    => $full_months_past,
 				'remaining_days'         => $remaining_days,
-				'daily_interest'         => ($monthly_rate > 0 && $running_balance > 0) ? round(($running_balance * $monthly_rate) / 30, 2) : 0,
+				'daily_interest'         => $days_past_maturity > 0
+					? round(($running_balance * $monthly_rate) / 30, 2)
+					: round($principal * $daily_rate, 2),
 				'remaining_principal'    => $remaining_principal,
 				'calculation_explanation'=> $calculation_explanation,
-				'elapsed_days'           => $days_past_maturity
+				'elapsed_days'           => $days_past_maturity > 0 ? $days_past_maturity : $total_days_elapsed
 			]
 		];
+	}
+
+	private function _compute_non_bullet_payoff($loan_id, $payoff_date)
+	{
+		$loan      = $this->Loan_model->get_by_id($loan_id);
+		$schedules = $this->Payement_schedules_model->get_all_by_id($loan_id);
+
+		$payoff_date_obj = new DateTime($payoff_date);
+
+		// Sort schedules by payment_number ascending
+		usort($schedules, function($a, $b) {
+			return intval($a->payment_number) - intval($b->payment_number);
+		});
+
+		$total_payoff            = 0;
+		$amount_due_total        = 0;  // started periods only
+		$total_accrued_interest  = 0;
+		$remaining_principal     = 0;
+		$interest_waived         = 0;
+		$daily_interest          = 0;
+		$days_elapsed            = 0;
+		$explanation             = '';
+
+		foreach ($schedules as $s) {
+			if ($s->status === 'PAID') continue;
+
+			$remaining_principal += floatval($s->principal);
+
+			// Period start = previous schedule's due date, or loan_date for period 1
+			$period_start_obj = null;
+			foreach ($schedules as $prev) {
+				if (intval($prev->payment_number) === intval($s->payment_number) - 1) {
+					$period_start_obj = new DateTime($prev->payment_schedule);
+					break;
+				}
+			}
+			if (!$period_start_obj) {
+				$period_start_obj = new DateTime($loan->loan_date);
+			}
+
+			$due_date_obj = new DateTime($s->payment_schedule);
+
+			if ($payoff_date_obj <= $period_start_obj) {
+				// Future period — principal only, interest waived (early settlement benefit)
+				$total_payoff    += floatval($s->principal);
+				$interest_waived += floatval($s->interest);
+				continue;
+			}
+
+			// Period has started
+			$period_interest = floatval($s->interest);
+			$daily_rate      = $period_interest / 30;
+
+			if ($payoff_date_obj <= $due_date_obj) {
+				// On or before the due date — charge the full scheduled interest (first-month flat rule)
+				// This ensures the modal matches the amortization schedule exactly on the due date
+				$accrued      = $period_interest;
+				$days_elapsed = $period_start_obj->diff($payoff_date_obj)->days;
+				$explanation .= "Period {$s->payment_number} (due {$due_date_obj->format('Y-m-d')}): within period, flat interest=" . number_format($accrued, 2) . "\n";
+			} else {
+				// Past the due date — scheduled interest + daily penalty for overdue days
+				$days_overdue = $due_date_obj->diff($payoff_date_obj)->days;
+				$accrued      = round($period_interest + $daily_rate * $days_overdue, 2);
+				$days_elapsed = $days_overdue;
+				$explanation .= "Period {$s->payment_number} (due {$due_date_obj->format('Y-m-d')}): {$days_overdue} days overdue, " .
+					"interest=" . number_format($accrued, 2) . " (sched=" . number_format($period_interest, 2) . " + daily=" . number_format($daily_rate * $days_overdue, 2) . ")\n";
+			}
+
+			$amount_due = max(0, floatval($s->principal) + $accrued - floatval($s->paid_amount));
+			$total_payoff           += $amount_due;
+			$amount_due_total       += $amount_due;
+			$total_accrued_interest += $accrued;
+			$daily_interest          = $daily_rate;
+		}
+
+		$total_payoff     = round($total_payoff, 2);
+		$amount_due_total = round($amount_due_total, 2);
+
+		return [
+			'status'           => 'success',
+			'current_balance'  => number_format($remaining_principal,    2, '.', ''),
+			'accrued_interest' => number_format($total_accrued_interest, 2, '.', ''),
+			'amount_due'       => number_format($amount_due_total,       2, '.', ''),
+			'total_payoff'     => number_format($total_payoff,           2, '.', ''),
+			'payoff_amount'    => number_format($total_payoff,           2, '.', ''),
+			'debug' => [
+				'loan_date'               => $loan->loan_date,
+				'payoff_date'             => $payoff_date,
+				'calculation_type'        => $loan->calculation_type,
+				'total_accrued_interest'  => $total_accrued_interest,
+				'interest_waived'         => $interest_waived,
+				'amount_due'              => $amount_due_total,
+				'elapsed_days'            => $days_elapsed,
+				'daily_interest'          => round($daily_interest, 2),
+				'monthly_interest_rate'   => floatval($loan->loan_interest) / 100,
+				'calculation_explanation' => $explanation,
+			]
+		];
+	}
+
+	private function _process_non_bullet_payment($loan_id, $amount_paid, $paid_date)
+	{
+		$payoff = $this->_compute_non_bullet_payoff($loan_id, $paid_date);
+		if ($payoff['status'] !== 'success') return false;
+
+		$total_payoff    = floatval($payoff['total_payoff']);
+		$amount_paid     = floatval($amount_paid);
+		$tolerance       = 0.01;
+		$is_full_payoff  = ($amount_paid >= $total_payoff - $tolerance);
+
+		$loan      = $this->Loan_model->get_by_id($loan_id);
+		$schedules = $this->Payement_schedules_model->get_all_by_id($loan_id);
+		usort($schedules, function($a, $b) {
+			return intval($a->payment_number) - intval($b->payment_number);
+		});
+
+		$payoff_date_obj = new DateTime($paid_date);
+		$remaining       = $amount_paid;
+		$last_pay_num    = 1;
+
+		// Returns the period-start DateTime for a given schedule row
+		$get_period_start = function($s) use ($schedules, $loan) {
+			foreach ($schedules as $prev) {
+				if (intval($prev->payment_number) === intval($s->payment_number) - 1) {
+					return new DateTime($prev->payment_schedule);
+				}
+			}
+			return new DateTime($loan->loan_date);
+		};
+
+		// Returns what is owed for one schedule row as of payoff_date, minus already-paid
+		$get_period_due = function($s) use ($payoff_date_obj, $get_period_start) {
+			$period_start_obj = $get_period_start($s);
+			if ($payoff_date_obj <= $period_start_obj) {
+				// Future period: principal only (interest waived)
+				return max(0, floatval($s->principal) - floatval($s->paid_amount));
+			}
+			$due_date_obj    = new DateTime($s->payment_schedule);
+			$period_interest = floatval($s->interest);
+			if ($payoff_date_obj <= $due_date_obj) {
+				$accrued = $period_interest;  // flat scheduled interest within period
+			} else {
+				$days_overdue = $due_date_obj->diff($payoff_date_obj)->days;
+				$accrued      = round($period_interest + ($period_interest / 30) * $days_overdue, 2);
+			}
+			return max(0, floatval($s->principal) + $accrued - floatval($s->paid_amount));
+		};
+
+		foreach ($schedules as $s) {
+			if ($s->status === 'PAID') continue;
+
+			$period_due = $get_period_due($s);
+
+			if ($is_full_payoff) {
+				// Mark every unpaid schedule as PAID with its calculated due amount
+				$this->db->where('loan_id', $loan_id)
+					->where('payment_number', $s->payment_number)
+					->update('payement_schedules', [
+						'status'       => 'PAID',
+						'partial_paid' => 'NO',
+						'paid_amount'  => floatval($s->paid_amount) + $period_due,
+						'paid_date'    => $paid_date,
+					]);
+				$last_pay_num = $s->payment_number;
+				continue;
+			}
+
+			// Partial / cascade path
+			if ($remaining <= 0) break;
+
+			if ($remaining >= $period_due - $tolerance) {
+				// Fully covers this period
+				$this->db->where('loan_id', $loan_id)
+					->where('payment_number', $s->payment_number)
+					->update('payement_schedules', [
+						'status'       => 'PAID',
+						'partial_paid' => 'NO',
+						'paid_amount'  => floatval($s->paid_amount) + $period_due,
+						'paid_date'    => $paid_date,
+					]);
+				$this->db->where('loan_id', $loan_id)
+					->update('loan', ['next_payment_id' => intval($s->payment_number) + 1]);
+				$remaining   -= $period_due;
+				$last_pay_num = $s->payment_number;
+			} else {
+				// Partial payment on this period
+				$this->db->where('loan_id', $loan_id)
+					->where('payment_number', $s->payment_number)
+					->update('payement_schedules', [
+						'status'       => 'PARTIAL PAID',
+						'partial_paid' => 'YES',
+						'paid_amount'  => floatval($s->paid_amount) + $remaining,
+						'paid_date'    => $paid_date,
+					]);
+				$last_pay_num = $s->payment_number;
+				$remaining    = 0;
+				break;
+			}
+		}
+
+		if ($is_full_payoff) {
+			$this->db->where('loan_id', $loan_id)->update('loan', [
+				'loan_status'     => 'CLOSED',
+				'paid_off'        => 'Yes',
+				'next_payment_id' => $last_pay_num + 1,
+			]);
+		}
+
+		// Record transaction
+		$this->db->insert('transactions', [
+			'ref'              => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
+			'loan_id'          => $loan_id,
+			'amount'           => $amount_paid,
+			'payment_number'   => $last_pay_num,
+			'transaction_type' => 3,
+			'payment_proof'    => 'null',
+			'added_by'         => $this->session->userdata('user_id'),
+			'date_stamp'       => $paid_date,
+		]);
+
+		return $is_full_payoff ? 'closed' : 'paid';
 	}
 
 	/**
@@ -7525,6 +7783,159 @@ public function get_loan_product_details() {
 		log_activity($logger);
 
 		$this->toaster->success('Success: Loan has been paid off and closed.');
+		redirect('loan/repayment_view/' . $loan_id);
+	}
+
+	public function force_close_loan()
+	{
+		$loan_id        = $this->input->post('loan_id');
+		$amount         = (float) $this->input->post('amount');
+		$reason         = trim($this->input->post('reason'));
+		$paid_date      = $this->input->post('paid_date');
+		$payment_method = $this->input->post('payment_method');
+		$reference      = $this->input->post('reference');
+
+		// Handle optional proof-of-payment upload
+		$unique_name = "";
+		if (!empty($_FILES['pay_proof']['name'])) {
+			$config['upload_path']   = './uploads/';
+			$config['allowed_types'] = 'jpg|png|jpeg|gif|pdf|docx|txt|zip';
+			$config['max_size']      = 2048;
+			$config['remove_spaces'] = TRUE;
+			$this->load->library('upload', $config);
+			$file_ext    = pathinfo($_FILES['pay_proof']['name'], PATHINFO_EXTENSION);
+			$unique_name = 'file_' . time() . '_' . uniqid() . '.' . $file_ext;
+			$config['file_name'] = $unique_name;
+			$this->upload->initialize($config);
+			$this->upload->do_upload('pay_proof');
+		}
+
+		// Load and validate loan
+		$loan = $this->Loan_model->get_by_id($loan_id);
+		if (!$loan) {
+			$this->toaster->error('Error: Loan not found.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+		if ($loan->loan_status === 'CLOSED' || $loan->loan_status === 'WRITTEN_OFF') {
+			$this->toaster->error('Error: This loan is already ' . $loan->loan_status . '.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Amount must be at least the original principal
+		if ($amount < (float) $loan->loan_principal) {
+			$this->toaster->error('Error: Amount must be at least the principal balance (' . number_format($loan->loan_principal, 2) . ').');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Reason is mandatory
+		if (empty($reason)) {
+			$this->toaster->error('Error: A reason for forced closure is required.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		// Get collection account
+		$recepientt = get_by_id('account', 'collection_account', 'Yes');
+		if (!$recepientt) {
+			$this->toaster->error('Error: Collection account not configured.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
+		$tid = "FCL-" . rand(1000, 9999) . date('Ymd');
+
+		// Process fund movement
+		if ($payment_method == "0") {
+			// From loan savings account
+			$check = $this->Account_model->get_account($loan->loan_number);
+			if (!$check || $check->balance < $amount) {
+				$this->toaster->error('Error: Insufficient funds in loan account.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+			$transfer = $this->Account_model->transfer_funds(
+				$loan->loan_number, $recepientt->account_number,
+				$amount, $tid, $paid_date, $unique_name
+			);
+			if ($transfer != 'success') {
+				$this->toaster->error('Error: Fund transfer failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+		} else {
+			// Cash via teller
+			$get_account = $this->Tellering_model->get_teller_account($this->session->userdata('user_id'));
+			if (empty($get_account)) {
+				$this->toaster->error('Error: Only cashiers can process this payment.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+			$deposit = $this->Account_model->cash_transaction(
+				$get_account->account, $loan->loan_number,
+				$amount, 'deposit', $tid, $paid_date, $unique_name
+			);
+			if (!$deposit) {
+				$this->toaster->error('Error: Deposit to loan account failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+			$transfer = $this->Account_model->transfer_funds(
+				$loan->loan_number, $recepientt->account_number,
+				$amount, $tid, $paid_date, $unique_name
+			);
+			if ($transfer != 'success') {
+				$this->toaster->error('Error: Fund transfer failed.');
+				redirect($_SERVER['HTTP_REFERER']);
+				return;
+			}
+		}
+
+		// Mark all unpaid/partial schedules as force-settled
+		// paid_amount=0 because the forced amount is not allocated per-instalment;
+		// the view sums $pp->amount (not paid_amount) for PAID rows, so balance shows 0 correctly.
+		$unpaid = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
+		foreach ($unpaid as $schedule) {
+			$this->Payement_schedules_model->update($schedule->id, array(
+				'status'      => 'PAID',
+				'paid_amount' => 0,
+				'paid_date'   => $paid_date,
+			));
+		}
+
+		// Close the loan
+		$this->Loan_model->update($loan_id, array(
+			'loan_status'   => 'CLOSED',
+			'paid_off'      => 'Yes',
+			'closed_date'   => $paid_date,
+			'closed_by'     => $this->session->userdata('user_id'),
+			'closing_notes' => 'FORCED CLOSE: ' . $reason,
+		));
+
+		// Record transaction (type 5 = forced close, distinct from type 4 = normal payoff)
+		$this->Transactions_model->insert(array(
+			'ref'              => $tid,
+			'loan_id'          => $loan_id,
+			'amount'           => $amount,
+			'transaction_type' => 5,
+			'payment_number'   => 0,
+			'date_stamp'       => $paid_date,
+			'method'           => $payment_method,
+			'payment_proof'    => $unique_name,
+			'reference'        => $reference,
+			'added_by'         => $this->session->userdata('user_id'),
+		));
+
+		// Audit log with full detail including the reason
+		log_activity(array(
+			'user_id'       => $this->session->userdata('user_id'),
+			'activity'      => 'Forced close loan ID: ' . $loan_id . ' (Loan #: ' . $loan->loan_number . '), amount: ' . $amount . ', reason: ' . $reason,
+			'activity_cate' => 'force_close_loan',
+		));
+
+		$this->toaster->success('Loan has been forcibly closed.');
 		redirect('loan/repayment_view/' . $loan_id);
 	}
 
