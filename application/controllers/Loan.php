@@ -4483,6 +4483,52 @@ exit();
             }
         }
 
+        // --- Force-close detection and settlement calculations for report ---
+        $is_force_closed       = false;
+        $fcl_amount_paid       = 0;
+        $fcl_payment_date      = null;
+        $accrued_at_settlement = 0;
+        if ($row->loan_status == 'CLOSED') {
+            foreach ($payments as $p) {
+                if ($p->status == 'PAID' && (float)($p->paid_amount ?? 0) == 0) {
+                    $is_force_closed = true;
+                    break;
+                }
+            }
+        }
+        if ($is_force_closed) {
+            $fcl_rows = $this->db->where('loan_id', $row->loan_id)->where('transaction_type', 5)->get('transactions')->result();
+            foreach ($fcl_rows as $ft) {
+                $fcl_amount_paid += (float)$ft->amount;
+                if (!$fcl_payment_date) $fcl_payment_date = $ft->date_stamp;
+            }
+            if ($row->calculation_type == 'Bullet Payment' && $fcl_payment_date) {
+                $mr   = (float)$row->loan_interest / 100;
+                $term = (int)$row->loan_period;
+                $pr   = (float)$row->loan_principal;
+                $ld   = new DateTime($row->loan_date);
+                $pd   = new DateTime(date('Y-m-d', strtotime($fcl_payment_date)));
+                $md   = clone $ld; $md->modify("+{$term} months");
+                $orig_int  = $pr * $mr * $term;
+                $mat_total = $pr + $orig_int;
+                if ($pd <= $md) {
+                    $days   = max(1, $ld->diff($pd)->days);
+                    $fm     = max(1, (int)floor($days / 30)); if ($fm > $term) $fm = $term;
+                    $ed     = max(0, $days - $fm * 30);
+                    $accrued_at_settlement = round($pr * $mr * $fm + $pr * ($mr/30) * $ed, 2);
+                    $cap = round($pr * $mr * $term, 2);
+                    if ($accrued_at_settlement > $cap) $accrued_at_settlement = $cap;
+                } else {
+                    $dp  = $md->diff($pd)->days;
+                    $mpa = (int)floor($dp / 30); $rd = $dp % 30;
+                    $rb  = $mat_total;
+                    for ($m = 1; $m <= $mpa; $m++) $rb += round($rb * $mr, 2);
+                    if ($rd > 0) $rb += round(($rb * $mr / 30) * $rd, 2);
+                    $accrued_at_settlement = round($rb - $pr, 2);
+                }
+            }
+        }
+
       if( $row->customer_type=='individual'){
       $row = $this->Loan_model->get_by_id_report($id);
 
@@ -4517,6 +4563,10 @@ exit();
             'total_schedule_principal' => $total_schedule_principal,
             'total_schedule_amount'    => $total_schedule_amount,
             'total_paid_interest'      => $total_paid_interest,
+            'is_force_closed'          => $is_force_closed,
+            'fcl_amount_paid'          => $fcl_amount_paid,
+            'fcl_payment_date'         => $fcl_payment_date,
+            'accrued_at_settlement'    => $accrued_at_settlement,
         );
         $this->load->library('Pdf');
         $html = $this->load->view('loan/report', $data,true);
@@ -4557,6 +4607,10 @@ $row = $this->Loan_model->get_by_id_group($id);
             'total_schedule_principal' => $total_schedule_principal,
             'total_schedule_amount'    => $total_schedule_amount,
             'total_paid_interest'      => $total_paid_interest,
+            'is_force_closed'          => $is_force_closed,
+            'fcl_amount_paid'          => $fcl_amount_paid,
+            'fcl_payment_date'         => $fcl_payment_date,
+            'accrued_at_settlement'    => $accrued_at_settlement,
         );
         $this->load->library('Pdf');
         $html = $this->load->view('loan/report', $data,true);
