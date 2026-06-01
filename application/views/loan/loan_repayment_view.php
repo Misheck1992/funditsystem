@@ -781,11 +781,59 @@ $currency = get_by_id('currencies','currency_id',$currency);
                             }
                         }
 
-                        // --- Interest breakdown ---
-                        // Interest component of FCL payment = amount above principal
-                        $fcl_interest_paid   = max(0, $fcl_amount_paid - (float)$loan_principal);
-                        $interest_on_maturity = (float)$loan_interest_amount; // contract rate
-                        $interest_discount   = max(0, $interest_on_maturity - $fcl_interest_paid);
+                        // --- Accrued interest at FCL payment date (mirrors _compute_bullet_payoff logic) ---
+                        $accrued_at_settlement = 0;
+                        $interest_on_maturity  = (float)$loan_interest_amount;
+
+                        if ($calculation_type == 'Bullet Payment' && $is_force_closed && $fcl_payment_date) {
+                            $monthly_rate_b  = (float)$loan_interest / 100;
+                            $term_b          = (int)$loan_period;
+                            $principal_b     = (float)$loan_principal;
+
+                            $loan_date_b     = new DateTime($loan_date);
+                            $payoff_date_b   = new DateTime(date('Y-m-d', strtotime($fcl_payment_date)));
+                            $maturity_date_b = clone $loan_date_b;
+                            $maturity_date_b->modify("+{$term_b} months");
+
+                            $original_interest_b = $principal_b * $monthly_rate_b * $term_b;
+                            $maturity_total_b    = $principal_b + $original_interest_b;
+
+                            if ($payoff_date_b <= $maturity_date_b) {
+                                // Before / at maturity: whole months + pro-rated extra days
+                                $total_days_b    = max(1, $loan_date_b->diff($payoff_date_b)->days);
+                                $daily_rate_b    = $monthly_rate_b / 30;
+                                $full_months_b   = max(1, (int)floor($total_days_b / 30));
+                                if ($full_months_b > $term_b) $full_months_b = $term_b;
+                                $extra_days_b    = max(0, $total_days_b - ($full_months_b * 30));
+                                $accrued_at_settlement = round(
+                                    $principal_b * $monthly_rate_b * $full_months_b
+                                    + $principal_b * $daily_rate_b * $extra_days_b,
+                                    2
+                                );
+                                $max_int_b = round($principal_b * $monthly_rate_b * $term_b, 2);
+                                if ($accrued_at_settlement > $max_int_b) $accrued_at_settlement = $max_int_b;
+                            } else {
+                                // After maturity: compound interest on outstanding balance
+                                $days_past_b   = $maturity_date_b->diff($payoff_date_b)->days;
+                                $months_past_b = (int)floor($days_past_b / 30);
+                                $rem_days_b    = $days_past_b % 30;
+                                $running_b     = $maturity_total_b; // assume no prior payments on bullet
+                                for ($m = 1; $m <= $months_past_b; $m++) {
+                                    $running_b += round($running_b * $monthly_rate_b, 2);
+                                }
+                                if ($rem_days_b > 0) {
+                                    $running_b += round(($running_b * $monthly_rate_b / 30) * $rem_days_b, 2);
+                                }
+                                $accrued_at_settlement = round($running_b - $principal_b, 2);
+                            }
+                        }
+
+                        // Interest components
+                        $fcl_interest_paid  = max(0, $fcl_amount_paid - (float)$loan_principal);
+                        // Waived = what accrued but was not paid (the forgiven portion)
+                        $interest_waived    = max(0, $accrued_at_settlement - $fcl_interest_paid);
+                        // Unaccrued = what would have accrued if held to maturity but didn't yet (saved future interest)
+                        $interest_unaccrued = max(0, $interest_on_maturity - $accrued_at_settlement);
                         ?>
 
                         <!-- CONTRACT section -->
@@ -825,17 +873,53 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                 <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($fcl_amount_paid, 2); ?></div>
                             </div>
                             <div class="settlement-item highlight">
-                                <div class="s-label">Principal Component</div>
+                                <div class="s-label">Principal Paid</div>
                                 <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_principal, 2); ?></div>
                             </div>
-                            <div class="settlement-item <?php echo $fcl_interest_paid < $interest_on_maturity ? 'warn' : 'highlight'; ?>">
-                                <div class="s-label">Interest as at Payment Date</div>
+                        </div>
+
+                        <!-- INTEREST BREAKDOWN section -->
+                        <p style="font-size:0.78rem;color:#6b7280;margin:0.9rem 0 0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="fa fa-percentage mr-1"></i> Interest Breakdown
+                        </p>
+                        <div class="settlement-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                            <div class="settlement-item">
+                                <div class="s-label">Interest on Maturity</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($interest_on_maturity, 2); ?></div>
+                                <div style="font-size:0.7rem;color:#9ca3af;margin-top:0.15rem;">As per contract</div>
+                            </div>
+                            <?php if ($calculation_type == 'Bullet Payment' && $accrued_at_settlement > 0): ?>
+                            <div class="settlement-item <?php echo $accrued_at_settlement > $interest_on_maturity ? 'warn' : ''; ?>">
+                                <div class="s-label">Interest Accrued</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($accrued_at_settlement, 2); ?></div>
+                                <div style="font-size:0.7rem;color:#9ca3af;margin-top:0.15rem;">To <?php echo $fcl_payment_date ? date('d M Y', strtotime($fcl_payment_date)) : 'settlement'; ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Interest Paid</div>
                                 <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($fcl_interest_paid, 2); ?></div>
+                                <div style="font-size:0.7rem;color:#9ca3af;margin-top:0.15rem;">Collected at settlement</div>
                             </div>
-                            <div class="settlement-item <?php echo $interest_discount > 0 ? 'warn' : 'highlight'; ?>">
-                                <div class="s-label">Interest Waived / Discount</div>
-                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($interest_discount, 2); ?></div>
+                            <?php if ($calculation_type == 'Bullet Payment' && $accrued_at_settlement > 0): ?>
+                            <div class="settlement-item warn">
+                                <div class="s-label">Interest Waived</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($interest_waived, 2); ?></div>
+                                <div style="font-size:0.7rem;color:#9ca3af;margin-top:0.15rem;">Accrued but not collected</div>
                             </div>
+                            <?php if ($interest_unaccrued > 0): ?>
+                            <div class="settlement-item">
+                                <div class="s-label">Unaccrued Interest</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($interest_unaccrued, 2); ?></div>
+                                <div style="font-size:0.7rem;color:#9ca3af;margin-top:0.15rem;">Future interest saved (not yet accrued)</div>
+                            </div>
+                            <?php endif; ?>
+                            <?php else: ?>
+                            <div class="settlement-item warn">
+                                <div class="s-label">Interest Waived</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format(max(0, $interest_on_maturity - $fcl_interest_paid), 2); ?></div>
+                                <div style="font-size:0.7rem;color:#9ca3af;margin-top:0.15rem;">vs contract interest</div>
+                            </div>
+                            <?php endif; ?>
                         </div>
 
                         <?php if ($normally_paid_amount > 0): ?>
