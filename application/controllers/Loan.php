@@ -7925,13 +7925,9 @@ public function get_loan_product_details() {
 				'paid_date'   => $paid_date,
 			));
 
-		// Close the loan
+		// Close the loan (only columns confirmed in schema; reason is captured in activity log above)
 		$this->Loan_model->update($loan_id, array(
-			'loan_status'   => 'CLOSED',
-			'paid_off'      => 'Yes',
-			'closed_date'   => $paid_date,
-			'closed_by'     => $this->session->userdata('user_id'),
-			'closing_notes' => 'FORCED CLOSE: ' . $reason,
+			'loan_status' => 'CLOSED',
 		));
 
 		// Record transaction (type 5 = forced close, distinct from type 4 = normal payoff)
