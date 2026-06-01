@@ -548,30 +548,24 @@ $currency = get_by_id('currencies','currency_id',$currency);
                     <?php
                             }
                         } else {
-                            // Non-bullet loans - show payment button even when overdue
-                            if (!empty($repp)) {
+                            // Non-bullet loans - same payoff modal as bullet
+                            if (!empty($next_payment_details)) {
                     ?>
-                                <button onclick="pay_current_r()" class="btn-action btn-success" style="width: 100%; justify-content: center;">
+                                <button onclick="calculate_payoff(<?php echo $loan_id; ?>)" class="btn-action btn-success" style="width: 100%; justify-content: center;">
                                     <i class="fa fa-money-bill-wave"></i> Make Payment
                                 </button>
                     <?php
-                            } else {
-                                if (!empty($next_payment_details)) {
-                    ?>
-                                    <button onclick="pay_current()" class="btn-action btn-success" style="width: 100%; justify-content: center;">
-                                        <i class="fa fa-money-bill-wave"></i> Make Payment
-                                    </button>
-                    <?php
-                                }
                             }
                         }
+
+                        // Forced Close — available whenever loan is active (regardless of next payment state)
+                        ?>
+                        <button onclick="open_force_close_modal()" class="btn-action btn-danger" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+                            <i class="fa fa-lock"></i> Forced Close Loan
+                        </button>
+                        <?php
                     endif;
                     ?>
-            <?php if($loan_status == 'ACTIVE' && $calculation_type != 'Bullet Payment'): ?>
-            <button onclick="open_early_settlement()" class="btn-action btn-warning" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
-                <i class="fa fa-flag-checkered"></i> Early Settlement
-            </button>
-            <?php endif; ?>
                 </div>
             </div>
 
@@ -1059,6 +1053,33 @@ $currency = get_by_id('currencies','currency_id',$currency);
                     </div>
                 </div>
 
+                <!-- Non-bullet breakdown: shown only for installment loans -->
+                <div id="non_bullet_breakdown" style="display:none; margin-bottom: 1rem;">
+                    <table class="table table-sm table-bordered" style="margin-bottom:0.5rem;">
+                        <thead style="background:#f3f4f6;">
+                            <tr>
+                                <th>Payment Option</th>
+                                <th>Amount (<?php echo $currency->currency_code; ?>)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Amount Due</strong><br><small class="text-muted">Outstanding started period(s)</small></td>
+                                <td><span id="amount_due_display">0.00</span></td>
+                                <td><button type="button" class="btn btn-sm btn-warning" onclick="setPayAmount('amount_due')">Pay This</button></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Full Pay-off</strong><br><small class="text-muted">Settle all remaining balance</small></td>
+                                <td><span id="full_payoff_display">0.00</span></td>
+                                <td><button type="button" class="btn btn-sm btn-success" onclick="setPayAmount('full_payoff')">Pay This</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <input type="hidden" id="amount_due_value" value="0">
+                    <input type="hidden" id="full_payoff_value" value="0">
+                </div>
+
                 <form action="<?php echo base_url('loan/pay_loan')?>" method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="loan_id" value="<?php echo $loan_id ?>">
                     <input type="hidden" name="payment_number" value="<?php echo $next_payment_id ?>">
@@ -1066,7 +1087,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
 
                     <div class="form-group">
                         <label>Pay-off Amount (<?php echo $currency->currency_code; ?>)</label>
-                        <input type="text" class="form-control" name="amount" id="total_amount" placeholder="Pay off amount">
+                        <input type="text" class="form-control" name="amount" id="total_amount" placeholder="Pay off amount or enter custom">
                     </div>
 
                     <div class="form-group">
@@ -1117,95 +1138,17 @@ $currency = get_by_id('currencies','currency_id',$currency);
     </div>
 </div>
 
-<!-- Early Settlement Modal -->
-<div class="modal fade modern-modal" id="early_settlement_modal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header" style="background: #d97706;">
-                <h5 class="modal-title"><i class="fa fa-flag-checkered mr-2"></i>Early Settlement</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-            </div>
-            <div class="modal-body">
-                <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 1.5rem;">
-                    Select a settlement date. Overdue installments are collected in full; future installments collect principal only — interest is waived.
-                </p>
-
-                <div class="form-group">
-                    <label style="font-weight:600; color:#374151;">Settlement Date</label>
-                    <div style="display:flex; gap:0.5rem;">
-                        <input type="date" class="form-control" id="es_date" value="<?php echo date('Y-m-d'); ?>">
-                        <button type="button" class="btn-action btn-info" onclick="fetchEarlySettlementAmount()" style="white-space:nowrap; padding:0.5rem 1rem;">
-                            <i class="fa fa-calculator"></i> Calculate
-                        </button>
-                    </div>
-                </div>
-
-                <div id="es_breakdown" style="display:none; background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
-                    <div style="font-weight:600; color:#1e3a5f; margin-bottom:0.75rem; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em;">Settlement Breakdown</div>
-                    <div style="display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid #e5e7eb; font-size:0.9rem;">
-                        <span style="color:#6b7280;">Overdue installments (principal + interest)</span>
-                        <span id="es_overdue" style="font-weight:600;"><?php echo $currency->currency_code; ?> 0.00</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid #e5e7eb; font-size:0.9rem;">
-                        <span style="color:#6b7280;">Remaining future principal (interest waived)</span>
-                        <span id="es_future" style="font-weight:600;"><?php echo $currency->currency_code; ?> 0.00</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid #e5e7eb; font-size:0.9rem;">
-                        <span style="color:#6b7280;">Interest being waived</span>
-                        <span id="es_waived" style="font-weight:600; color:#059669;"><?php echo $currency->currency_code; ?> 0.00</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; padding:0.6rem 0; font-size:1rem;">
-                        <span style="font-weight:700; color:#1e3a5f;">Total to pay for full settlement</span>
-                        <span id="es_total" style="font-weight:700; color:#d97706; font-size:1.1rem;"><?php echo $currency->currency_code; ?> 0.00</span>
-                    </div>
-                </div>
-
-                <form action="<?php echo base_url('loan/process_early_settlement'); ?>" method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="loan_id" value="<?php echo $loan_id; ?>">
-                    <input type="hidden" name="paid_date" id="es_hidden_date" value="<?php echo date('Y-m-d'); ?>">
-
-                    <div class="form-group">
-                        <label style="font-weight:600; color:#374151;">Settlement Amount (<?php echo $currency->currency_code; ?>)</label>
-                        <input type="text" class="form-control" name="amount" id="es_amount" placeholder="Enter settlement amount" required>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label style="font-weight:600; color:#374151;">Payment Method</label>
-                                <?php $methods_es = get_all('payment_method'); ?>
-                                <select name="payment_method" class="form-control" required>
-                                    <option value="">-- Select --</option>
-                                    <option value="0">Institution's Bank Savings</option>
-                                    <?php foreach ($methods_es as $method): ?>
-                                    <option value="<?php echo $method->payment_method; ?>"><?php echo $method->payment_method_name; ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label style="font-weight:600; color:#374151;">Reference Number</label>
-                                <input type="text" class="form-control" name="reference" required>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label style="font-weight:600; color:#374151;">Proof of Payment</label>
-                        <input type="file" class="form-control-file" name="pay_proof" style="border:1px solid #ced4da; padding:8px; border-radius:4px; width:100%; background:#fff;">
-                    </div>
-
-                    <button type="submit" class="btn-action btn-warning" style="width:100%; justify-content:center; padding:0.75rem;">
-                        <i class="fa fa-check"></i> Complete Early Settlement
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
+function setPayAmount(type) {
+    var amount = type === 'amount_due'
+        ? document.getElementById('amount_due_value').value
+        : document.getElementById('full_payoff_value').value;
+    document.getElementById('total_amount').value = amount;
+    document.getElementById('total_amount1').value = amount;
+    document.getElementById('payoff_amount').value = amount;
+}
+
 // Toggle payoff details
 function togglePayoffDetails() {
     var details = document.getElementById('payoffDetails');
@@ -1258,42 +1201,6 @@ function pay_due(loan_id, payment_number, amount, paid_amount) {
     $('#late_payment_modal').modal('show');
 }
 
-// Calculate payoff
-function calculate_payoff(loan_id) {
-    $('#payoff_modal').modal('show');
-}
-
-// Fetch payoff amount
-function fetchPayoffAmount() {
-    var payoffDate = document.getElementById('payoff_date').value;
-
-    $.ajax({
-        url: '<?php echo base_url("loan/calculate_payoff/"); ?><?php echo $loan_id; ?>',
-        type: 'POST',
-        data: { payoff_date: payoffDate },
-        dataType: 'json',
-        success: function(response) {
-            if (response.status === 'success') {
-                document.getElementById('current_balance').innerText = parseFloat(response.current_balance).toFixed(2);
-                document.getElementById('accrued_interest').innerText = parseFloat(response.accrued_interest).toFixed(2);
-                document.getElementById('total_payoff').innerText = parseFloat(response.total_payoff).toFixed(2);
-                document.getElementById('total_amount').value = parseFloat(response.total_payoff).toFixed(2);
-                document.getElementById('total_amount1').value = parseFloat(response.total_payoff).toFixed(2);
-                document.getElementById('payoff_amount').value = parseFloat(response.total_payoff).toFixed(2);
-
-                document.getElementById('accrued_interest_row').style.display = 'block';
-                document.getElementById('total_payoff_row').style.display = 'block';
-                document.getElementById('payment_options').style.display = 'block';
-            } else {
-                alert('Error calculating payoff: ' + response.message);
-            }
-        },
-        error: function() {
-            alert('Error connecting to server. Please try again.');
-        }
-    });
-}
-
 // Get transaction usage
 function get_transaction_usage(transaction_id) {
     document.getElementById('breakdown_content').innerHTML = '<div style="text-align: center; padding: 2rem;"><i class="fa fa-spinner fa-spin fa-3x" style="color: #1e3a5f;"></i><p style="margin-top: 1rem;">Loading...</p></div>';
@@ -1311,44 +1218,5 @@ function get_transaction_usage(transaction_id) {
     });
 }
 
-function open_early_settlement() {
-    document.getElementById('es_breakdown').style.display = 'none';
-    document.getElementById('es_amount').value = '';
-    $('#early_settlement_modal').modal('show');
-}
 
-function fetchEarlySettlementAmount() {
-    var date = document.getElementById('es_date').value;
-    console.log('[ES] fetchEarlySettlementAmount called, date=', date);
-    if (!date) { console.log('[ES] no date, returning'); return; }
-    document.getElementById('es_hidden_date').value = date;
-
-    $.ajax({
-        url: '<?php echo base_url("loan/get_early_settlement_amount/"); ?><?php echo (int)$loan_id; ?>',
-        type: 'GET',
-        data: { date: date },
-        dataType: 'json',
-        success: function(r) {
-            console.log('[ES] AJAX success, response=', JSON.stringify(r));
-            if (r.status !== 'success') {
-                alert('Settlement error: ' + (r.message || 'Unknown error'));
-                return;
-            }
-            var fmt = function(v) {
-                return parseFloat(v).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            };
-            var cc = r.currency_code + ' ';
-            document.getElementById('es_overdue').innerText = cc + fmt(r.overdue_amount);
-            document.getElementById('es_future').innerText  = cc + fmt(r.future_principal);
-            document.getElementById('es_waived').innerText  = cc + fmt(r.interest_waived);
-            document.getElementById('es_total').innerText   = cc + fmt(r.total_payoff);
-            document.getElementById('es_amount').value      = parseFloat(r.total_payoff).toFixed(2);
-            document.getElementById('es_breakdown').style.display = 'block';
-        },
-        error: function(xhr, status, err) {
-            console.log('[ES] AJAX error, status=', status, 'response=', xhr.responseText);
-            alert('Could not calculate settlement amount.\nStatus: ' + xhr.status + '\nResponse: ' + xhr.responseText.substring(0, 300));
-        }
-    });
-}
 </script>
