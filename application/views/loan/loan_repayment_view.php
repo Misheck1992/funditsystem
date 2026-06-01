@@ -763,19 +763,47 @@ $currency = get_by_id('currencies','currency_id',$currency);
                         </h5>
                     </div>
                     <div class="view-card-body">
-                        <p style="font-size:0.8rem;color:#6b7280;margin-bottom:0.75rem;font-weight:600;text-transform:uppercase;">Contract (Original)</p>
+                        <?php
+                        // --- Actual FCL payment: read from transactions table (type 5) ---
+                        $fcl_tx = get_all_where('transactions', 'loan_id = '.(int)$loan_id.' AND transaction_type = 5');
+                        $fcl_amount_paid  = 0;
+                        $fcl_payment_date = null;
+                        foreach ($fcl_tx as $ft) {
+                            $fcl_amount_paid  += (float)$ft->amount;
+                            if (!$fcl_payment_date) $fcl_payment_date = $ft->date_stamp;
+                        }
+
+                        // --- Normally-paid amount from fully-paid schedule rows ---
+                        $normally_paid_amount = 0;
+                        foreach ($payments as $pp) {
+                            if ($pp->status == 'PAID' && (float)$pp->paid_amount > 0) {
+                                $normally_paid_amount += (float)$pp->amount;
+                            }
+                        }
+
+                        // --- Interest breakdown ---
+                        // Interest component of FCL payment = amount above principal
+                        $fcl_interest_paid   = max(0, $fcl_amount_paid - (float)$loan_principal);
+                        $interest_on_maturity = (float)$loan_interest_amount; // contract rate
+                        $interest_discount   = max(0, $interest_on_maturity - $fcl_interest_paid);
+                        ?>
+
+                        <!-- CONTRACT section -->
+                        <p style="font-size:0.78rem;color:#6b7280;margin-bottom:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="fa fa-file-contract mr-1"></i> Contract (Original)
+                        </p>
                         <div class="settlement-grid">
                             <div class="settlement-item">
                                 <div class="s-label">Principal</div>
                                 <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_principal, 2); ?></div>
                             </div>
                             <div class="settlement-item">
-                                <div class="s-label">Contract Interest</div>
-                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_interest_amount, 2); ?></div>
+                                <div class="s-label">Interest on Maturity</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($interest_on_maturity, 2); ?></div>
                             </div>
                             <div class="settlement-item">
                                 <div class="s-label">Total Installments</div>
-                                <div class="s-value"><?php echo count($payments); ?> payments</div>
+                                <div class="s-value"><?php echo count($payments); ?> payment<?php echo count($payments) != 1 ? 's' : ''; ?></div>
                             </div>
                             <div class="settlement-item">
                                 <div class="s-label">Total Contract Value</div>
@@ -783,43 +811,74 @@ $currency = get_by_id('currencies','currency_id',$currency);
                             </div>
                         </div>
 
-                        <p style="font-size:0.8rem;color:#6b7280;margin:0.75rem 0;font-weight:600;text-transform:uppercase;">Outcome</p>
-                        <?php
-                        $normally_paid_amount = 0;
-                        $force_settled_scheduled = 0;
-                        foreach ($payments as $pp) {
-                            if ($pp->status == 'PAID') {
-                                if ((float)$pp->paid_amount == 0) {
-                                    $force_settled_scheduled += $pp->amount;
-                                } else {
-                                    $normally_paid_amount += $pp->amount;
-                                }
-                            } elseif ($pp->partial_paid == 'YES') {
-                                $normally_paid_amount += $pp->paid_amount;
-                            }
-                        }
-                        $interest_waived = $is_force_closed ? max(0, $loan_interest_amount - max(0, $normally_paid_amount - $loan_principal)) : 0;
-                        ?>
+                        <?php if ($is_force_closed): ?>
+                        <!-- FORCE CLOSE PAYMENT section -->
+                        <p style="font-size:0.78rem;color:#6b7280;margin:0.9rem 0 0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="fa fa-lock mr-1"></i> Force Close Payment
+                            <?php if ($fcl_payment_date): ?>
+                            <span style="font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;">&mdash; <?php echo date('d M Y', strtotime($fcl_payment_date)); ?></span>
+                            <?php endif; ?>
+                        </p>
                         <div class="settlement-grid">
                             <div class="settlement-item highlight">
-                                <div class="s-label">Normally Paid</div>
-                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($normally_paid_amount, 2); ?></div>
+                                <div class="s-label">Amount Paid</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($fcl_amount_paid, 2); ?></div>
                             </div>
-                            <?php if ($is_force_closed): ?>
-                            <div class="settlement-item warn">
-                                <div class="s-label">Force-Settled (<?php echo $installments_force_settled; ?> row<?php echo $installments_force_settled != 1 ? 's' : ''; ?>)</div>
-                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($force_settled_scheduled, 2); ?> waived</div>
-                            </div>
-                            <?php endif; ?>
                             <div class="settlement-item highlight">
-                                <div class="s-label">Installments Completed</div>
-                                <div class="s-value"><?php echo $installments_paid; ?> / <?php echo count($payments); ?></div>
+                                <div class="s-label">Principal Component</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_principal, 2); ?></div>
                             </div>
-                            <div class="settlement-item <?php echo $is_force_closed ? 'warn' : 'highlight'; ?>">
-                                <div class="s-label"><?php echo $is_force_closed ? 'Interest Waived (est.)' : 'Interest Collected'; ?></div>
-                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($is_force_closed ? $force_settled_scheduled : $loan_interest_amount, 2); ?></div>
+                            <div class="settlement-item <?php echo $fcl_interest_paid < $interest_on_maturity ? 'warn' : 'highlight'; ?>">
+                                <div class="s-label">Interest as at Payment Date</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($fcl_interest_paid, 2); ?></div>
+                            </div>
+                            <div class="settlement-item <?php echo $interest_discount > 0 ? 'warn' : 'highlight'; ?>">
+                                <div class="s-label">Interest Waived / Discount</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($interest_discount, 2); ?></div>
                             </div>
                         </div>
+
+                        <?php if ($normally_paid_amount > 0): ?>
+                        <!-- PRIOR PAYMENTS section (non-bullet loans with partial payments before force close) -->
+                        <p style="font-size:0.78rem;color:#6b7280;margin:0.9rem 0 0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="fa fa-history mr-1"></i> Normally Paid (<?php echo $installments_paid; ?> installment<?php echo $installments_paid != 1 ? 's' : ''; ?>)
+                        </p>
+                        <div class="settlement-grid">
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Scheduled Amount Collected</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($normally_paid_amount, 2); ?></div>
+                            </div>
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Installments Fully Paid</div>
+                                <div class="s-value"><?php echo $installments_paid; ?> / <?php echo count($payments); ?></div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <?php else: ?>
+                        <!-- NORMAL CLOSURE section -->
+                        <p style="font-size:0.78rem;color:#6b7280;margin:0.9rem 0 0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">
+                            <i class="fa fa-check-circle mr-1"></i> Settlement Outcome
+                        </p>
+                        <div class="settlement-grid">
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Total Collected</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_amount_total, 2); ?></div>
+                            </div>
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Interest Collected</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_interest_amount, 2); ?></div>
+                            </div>
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Installments Completed</div>
+                                <div class="s-value"><?php echo count($payments); ?> / <?php echo count($payments); ?></div>
+                            </div>
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Outstanding</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> 0.00</div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endif; ?>
