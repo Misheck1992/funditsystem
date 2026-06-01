@@ -387,9 +387,25 @@ html { font-family:sans-serif; }
                        . "</tr>";
                 }
             } else {
-                // Non-bullet: show each payment received
-                $trans_all = get_all_where('transaction','account_number = "'.$loan_number.'" AND credit !=0');
-                foreach ($trans_all as $tx) {
+                // Non-bullet ledger:
+                // Step 2 – charge interest per instalment on its due date
+                foreach ($payments as $p) {
+                    $int_amt = (float)$p->interest;
+                    if ($int_amt > 0) {
+                        $bal += $int_amt;
+                        echo "<tr class='debit'>"
+                           . "<td>".$p->payment_schedule."</td>"
+                           . "<td>Interest Charged &ndash; Instalment #".$p->payment_number."</td>"
+                           . "<td class='num dr'>".number_format($int_amt,2)."</td>"
+                           . "<td class='num'>&ndash;</td>"
+                           . "<td class='num dr'>".number_format($bal,2)." Dr</td>"
+                           . "</tr>";
+                    }
+                }
+
+                // Step 3 – normal cash payments (exclude FCL- entries to avoid double-count)
+                $normal_pmts = get_all_where('transaction', 'account_number = "'.$loan_number.'" AND credit != 0 AND transaction_id NOT LIKE \'FCL-%\'');
+                foreach ($normal_pmts as $tx) {
                     $bal -= (float)$tx->credit;
                     echo "<tr class='credit'>"
                        . "<td>".date('Y-m-d', strtotime($tx->system_time))."</td>"
@@ -399,11 +415,25 @@ html { font-family:sans-serif; }
                        . "<td class='num ".($bal > 0.005 ? 'dr' : 'cr')."'>".number_format(max(0,$bal),2).($bal > 0.005 ? " Dr" : "")."</td>"
                        . "</tr>";
                 }
+
+                // Step 4 – FCL payment
+                if ($fcl_amt > 0) {
+                    $bal -= $fcl_amt;
+                    echo "<tr class='credit'>"
+                       . "<td>".($fcl_dt ? date('Y-m-d', strtotime($fcl_dt)) : '')."</td>"
+                       . "<td><strong>Payment Received &ndash; Force Close Settlement</strong></td>"
+                       . "<td class='num'>&ndash;</td>"
+                       . "<td class='num cr'>(".number_format($fcl_amt,2).")</td>"
+                       . "<td class='num ".($bal > 0.005 ? 'dr' : 'cr')."'>".number_format(max(0,$bal),2).($bal > 0.005 ? " Dr" : "")."</td>"
+                       . "</tr>";
+                }
+
+                // Step 5 – write off remaining balance as interest waived
                 if ($bal > 0.005) {
                     $waived = $bal; $bal = 0;
                     echo "<tr class='waiver'>"
                        . "<td>".($fcl_dt ? date('Y-m-d', strtotime($fcl_dt)) : date('Y-m-d'))."</td>"
-                       . "<td><em>Balance Waived &ndash; Force Close</em></td>"
+                       . "<td><em>Interest Waived &ndash; Accrued interest not recovered (Force Close)</em></td>"
                        . "<td class='num'>&ndash;</td>"
                        . "<td class='num neg'>(".number_format($waived,2).")</td>"
                        . "<td class='num'>0.00</td>"

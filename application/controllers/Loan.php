@@ -4503,6 +4503,7 @@ exit();
                 if (!$fcl_payment_date) $fcl_payment_date = $ft->date_stamp;
             }
             if ($row->calculation_type == 'Bullet Payment' && $fcl_payment_date) {
+                // Bullet: daily/monthly accrual formula matching _compute_bullet_payoff
                 $mr   = (float)$row->loan_interest / 100;
                 $term = (int)$row->loan_period;
                 $pr   = (float)$row->loan_principal;
@@ -4525,6 +4526,14 @@ exit();
                     for ($m = 1; $m <= $mpa; $m++) $rb += round($rb * $mr, 2);
                     if ($rd > 0) $rb += round(($rb * $mr / 30) * $rd, 2);
                     $accrued_at_settlement = round($rb - $pr, 2);
+                }
+            } elseif ($row->calculation_type != 'Bullet Payment' && $fcl_payment_date) {
+                // Non-bullet: accrued = sum of interest from instalments due on/before settlement date
+                $fcl_date_only = date('Y-m-d', strtotime($fcl_payment_date));
+                foreach ($payments as $p) {
+                    if ($p->payment_schedule <= $fcl_date_only) {
+                        $accrued_at_settlement += (float)$p->interest;
+                    }
                 }
             }
         }
