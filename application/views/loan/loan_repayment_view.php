@@ -361,6 +361,18 @@ $currency = get_by_id('currencies','currency_id',$currency);
             }
         }
         $remaining_balance = $loan_amount_total - $total_paid;
+
+        // Remaining principal = sum of unpaid principal across outstanding schedules.
+        // For PARTIAL rows we cap at the row's outstanding balance so we never overstate it.
+        $remaining_principal_balance = 0;
+        foreach ($payments as $pp) {
+            if ($pp->status == 'NOT PAID' && $pp->partial_paid != 'YES') {
+                $remaining_principal_balance += $pp->principal;
+            } elseif ($pp->partial_paid == 'YES') {
+                $row_outstanding = $pp->amount - $pp->paid_amount;
+                $remaining_principal_balance += min($pp->principal, $row_outstanding);
+            }
+        }
         ?>
 
         <!-- Summary Cards -->
@@ -1160,8 +1172,8 @@ $currency = get_by_id('currencies','currency_id',$currency);
                         <div class="value"><?php echo $loan_number; ?></div>
                     </div>
                     <div class="info-item" style="border-left-color: #dc2626;">
-                        <div class="label">Minimum Amount (Principal Balance)</div>
-                        <div class="value" style="color: #dc2626;"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_principal, 2); ?></div>
+                        <div class="label">Minimum Amount (Remaining Principal Balance)</div>
+                        <div class="value" style="color: #dc2626;"><?php echo $currency->currency_code; ?> <?php echo number_format($remaining_principal_balance, 2); ?></div>
                     </div>
                 </div>
 
@@ -1169,8 +1181,8 @@ $currency = get_by_id('currencies','currency_id',$currency);
                     <input type="hidden" name="loan_id" value="<?php echo $loan_id; ?>">
 
                     <div class="form-group">
-                        <label>Amount Paid (<?php echo $currency->currency_code; ?>) &mdash; minimum: <?php echo number_format($loan_principal, 2); ?></label>
-                        <input type="number" step="0.01" min="<?php echo $loan_principal; ?>" class="form-control" name="amount" value="<?php echo $loan_principal; ?>" required>
+                        <label>Amount Paid (<?php echo $currency->currency_code; ?>) &mdash; minimum: <?php echo number_format($remaining_principal_balance, 2); ?></label>
+                        <input type="number" step="0.01" min="<?php echo $remaining_principal_balance; ?>" class="form-control" name="amount" value="<?php echo $remaining_principal_balance; ?>" required>
                     </div>
 
                     <div class="form-group">

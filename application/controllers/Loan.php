@@ -7814,9 +7814,20 @@ public function get_loan_product_details() {
 			return;
 		}
 
-		// Amount must be at least the original principal
-		if ($amount < (float) $loan->loan_principal) {
-			$this->toaster->error('Error: Amount must be at least the principal balance (' . number_format($loan->loan_principal, 2) . ').');
+		// Amount must be at least the remaining (unpaid) principal balance.
+		// For partial rows we cap the principal at the row's outstanding balance to avoid overstating it.
+		$unpaid_for_min = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
+		$remaining_principal_min = 0;
+		foreach ($unpaid_for_min as $s) {
+			if ($s->partial_paid == 'YES') {
+				$row_outstanding = $s->amount - $s->paid_amount;
+				$remaining_principal_min += min((float) $s->principal, (float) $row_outstanding);
+			} else {
+				$remaining_principal_min += (float) $s->principal;
+			}
+		}
+		if ($amount < $remaining_principal_min) {
+			$this->toaster->error('Error: Amount must be at least the remaining principal balance (' . number_format($remaining_principal_min, 2) . ').');
 			redirect($_SERVER['HTTP_REFERER']);
 			return;
 		}
