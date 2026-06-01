@@ -7910,17 +7910,20 @@ public function get_loan_product_details() {
 			}
 		}
 
-		// Mark all unpaid/partial schedules as force-settled
-		// paid_amount=0 because the forced amount is not allocated per-instalment;
-		// the view sums $pp->amount (not paid_amount) for PAID rows, so balance shows 0 correctly.
-		$unpaid = $this->Payement_schedules_model->get_unpaid_schedules($loan_id);
-		foreach ($unpaid as $schedule) {
-			$this->Payement_schedules_model->update($schedule->id, array(
+		// Force-settle all outstanding schedules in one bulk query.
+		// Avoids Payement_schedules_model::update() which is broken ($this->id = '').
+		// Condition mirrors get_unpaid_schedules(): NOT PAID or partial_paid = YES.
+		// paid_amount=0: view uses $pp->amount for PAID rows so balance displays as 0 correctly.
+		$this->db->where('loan_id', $loan_id)
+			->group_start()
+			->where('status', 'NOT PAID')
+			->or_where('partial_paid', 'YES')
+			->group_end()
+			->update('payement_schedules', array(
 				'status'      => 'PAID',
 				'paid_amount' => 0,
 				'paid_date'   => $paid_date,
 			));
-		}
 
 		// Close the loan
 		$this->Loan_model->update($loan_id, array(
