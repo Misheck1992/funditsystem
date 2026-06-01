@@ -316,6 +316,73 @@ $currency = get_by_id('currencies','currency_id',$currency);
     box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
 }
 
+/* Closure Banner */
+.closure-banner {
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.closure-banner.force-close {
+    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+    color: #fff;
+}
+.closure-banner.normal-close {
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+    color: #fff;
+}
+.closure-banner .cb-icon {
+    font-size: 2rem;
+    opacity: 0.9;
+}
+.closure-banner .cb-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+.closure-banner .cb-meta {
+    font-size: 0.85rem;
+    opacity: 0.85;
+    margin-top: 0.15rem;
+}
+.closure-banner .cb-badge {
+    margin-left: auto;
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 50px;
+    padding: 0.35rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+/* Settlement Analysis */
+.settlement-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.settlement-item {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid #1e3a5f;
+}
+.settlement-item.highlight { border-left-color: #059669; background: #f0fdf4; }
+.settlement-item.warn      { border-left-color: #dc2626; background: #fef2f2; }
+.settlement-item .s-label  { font-size: 0.72rem; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 0.2rem; }
+.settlement-item .s-value  { font-size: 0.95rem; font-weight: 700; color: #1e3a5f; }
+.settlement-item.highlight .s-value { color: #059669; }
+.settlement-item.warn .s-value      { color: #dc2626; }
+
+/* Force-settled row */
+.status-force-settled { background: #fef3c7; color: #78350f; }
+
 /* Responsive */
 @media (max-width: 992px) {
     .summary-row {
@@ -362,6 +429,32 @@ $currency = get_by_id('currencies','currency_id',$currency);
         }
         $remaining_balance = $loan_amount_total - $total_paid;
 
+        // Detect settlement type for closed loans.
+        // Force-settled rows have status=PAID and paid_amount=0 (set by force_close_loan()).
+        $is_force_closed   = false;
+        $settlement_date   = null;
+        $installments_paid = 0;
+        $installments_force_settled = 0;
+        if ($loan_status == 'CLOSED') {
+            foreach ($payments as $pp) {
+                if ($pp->status == 'PAID') {
+                    if ((float)$pp->paid_amount == 0 && $pp->partial_paid == 'YES') {
+                        // Row was partially paid then force-settled (paid_amount reset to 0)
+                        $is_force_closed = true;
+                        $installments_force_settled++;
+                        $settlement_date = $pp->paid_date;
+                    } elseif ((float)$pp->paid_amount == 0 && $pp->partial_paid != 'YES') {
+                        // Fully unpaid row that was force-settled
+                        $is_force_closed = true;
+                        $installments_force_settled++;
+                        if (!$settlement_date) $settlement_date = $pp->paid_date;
+                    } else {
+                        $installments_paid++;
+                    }
+                }
+            }
+        }
+
         // Remaining principal = sum of unpaid principal across outstanding schedules.
         // For PARTIAL rows we cap at the row's outstanding balance so we never overstate it.
         $remaining_principal_balance = 0;
@@ -398,6 +491,32 @@ $currency = get_by_id('currencies','currency_id',$currency);
                 <div class="sc-value"><?php echo $currency->currency_code; ?> <?php echo number_format($remaining_balance, 2); ?></div>
             </div>
         </div>
+
+        <?php if ($loan_status == 'CLOSED'): ?>
+        <?php if ($is_force_closed): ?>
+        <div class="closure-banner force-close">
+            <div class="cb-icon"><i class="fa fa-lock"></i></div>
+            <div>
+                <div class="cb-title">Forced Close</div>
+                <div class="cb-meta">
+                    This loan was forcibly closed<?php if ($settlement_date): ?> on <?php echo date('d M Y', strtotime($settlement_date)); ?><?php endif; ?>.
+                    <?php echo $installments_paid; ?> installment(s) paid normally &mdash;
+                    <?php echo $installments_force_settled; ?> installment(s) force-settled.
+                </div>
+            </div>
+            <div class="cb-badge"><i class="fa fa-lock mr-1"></i> FORCED CLOSE</div>
+        </div>
+        <?php else: ?>
+        <div class="closure-banner normal-close">
+            <div class="cb-icon"><i class="fa fa-check-circle"></i></div>
+            <div>
+                <div class="cb-title">Loan Fully Settled</div>
+                <div class="cb-meta">All <?php echo count($payments); ?> installments paid in full<?php if ($settlement_date): ?> — closed <?php echo date('d M Y', strtotime($settlement_date)); ?><?php endif; ?>.</div>
+            </div>
+            <div class="cb-badge"><i class="fa fa-check mr-1"></i> CLOSED</div>
+        </div>
+        <?php endif; ?>
+        <?php endif; ?>
 
         <div class="row">
             <!-- Left Column - Loan Info -->
@@ -635,6 +754,76 @@ $currency = get_by_id('currencies','currency_id',$currency);
                     <?php endif; ?>
                 <?php endif; ?>
 
+                <?php if ($loan_status == 'CLOSED'): ?>
+                <!-- Settlement Analysis -->
+                <div class="view-card mb-3">
+                    <div class="view-card-header" style="background: <?php echo $is_force_closed ? '#7f1d1d' : '#064e3b'; ?>;">
+                        <h5><i class="fa fa-<?php echo $is_force_closed ? 'lock' : 'check-circle'; ?>"></i>
+                            <?php echo $is_force_closed ? 'Force Close Analysis' : 'Settlement Analysis'; ?>
+                        </h5>
+                    </div>
+                    <div class="view-card-body">
+                        <p style="font-size:0.8rem;color:#6b7280;margin-bottom:0.75rem;font-weight:600;text-transform:uppercase;">Contract (Original)</p>
+                        <div class="settlement-grid">
+                            <div class="settlement-item">
+                                <div class="s-label">Principal</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_principal, 2); ?></div>
+                            </div>
+                            <div class="settlement-item">
+                                <div class="s-label">Contract Interest</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_interest_amount, 2); ?></div>
+                            </div>
+                            <div class="settlement-item">
+                                <div class="s-label">Total Installments</div>
+                                <div class="s-value"><?php echo count($payments); ?> payments</div>
+                            </div>
+                            <div class="settlement-item">
+                                <div class="s-label">Total Contract Value</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_amount_total, 2); ?></div>
+                            </div>
+                        </div>
+
+                        <p style="font-size:0.8rem;color:#6b7280;margin:0.75rem 0;font-weight:600;text-transform:uppercase;">Outcome</p>
+                        <?php
+                        $normally_paid_amount = 0;
+                        $force_settled_scheduled = 0;
+                        foreach ($payments as $pp) {
+                            if ($pp->status == 'PAID') {
+                                if ((float)$pp->paid_amount == 0) {
+                                    $force_settled_scheduled += $pp->amount;
+                                } else {
+                                    $normally_paid_amount += $pp->amount;
+                                }
+                            } elseif ($pp->partial_paid == 'YES') {
+                                $normally_paid_amount += $pp->paid_amount;
+                            }
+                        }
+                        $interest_waived = $is_force_closed ? max(0, $loan_interest_amount - max(0, $normally_paid_amount - $loan_principal)) : 0;
+                        ?>
+                        <div class="settlement-grid">
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Normally Paid</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($normally_paid_amount, 2); ?></div>
+                            </div>
+                            <?php if ($is_force_closed): ?>
+                            <div class="settlement-item warn">
+                                <div class="s-label">Force-Settled (<?php echo $installments_force_settled; ?> row<?php echo $installments_force_settled != 1 ? 's' : ''; ?>)</div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($force_settled_scheduled, 2); ?> waived</div>
+                            </div>
+                            <?php endif; ?>
+                            <div class="settlement-item highlight">
+                                <div class="s-label">Installments Completed</div>
+                                <div class="s-value"><?php echo $installments_paid; ?> / <?php echo count($payments); ?></div>
+                            </div>
+                            <div class="settlement-item <?php echo $is_force_closed ? 'warn' : 'highlight'; ?>">
+                                <div class="s-label"><?php echo $is_force_closed ? 'Interest Waived (est.)' : 'Interest Collected'; ?></div>
+                                <div class="s-value"><?php echo $currency->currency_code; ?> <?php echo number_format($is_force_closed ? $force_settled_scheduled : $loan_interest_amount, 2); ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- Payment Schedule -->
                 <div class="view-card">
                     <div class="view-card-header">
@@ -680,8 +869,15 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                         }
 
                                         if($p->partial_paid == "YES") {
-                                            $status_badge_class = 'status-partial';
-                                            $status_text = 'PARTIAL';
+                                            if ($loan_status == 'CLOSED' && (float)$p->paid_amount == 0) {
+                                                // Row was force-settled — override PARTIAL with a distinct badge
+                                                $status_badge_class = 'status-force-settled';
+                                                $status_text = 'FORCE SETTLED';
+                                                $row_class = 'row-paid';
+                                            } else {
+                                                $status_badge_class = 'status-partial';
+                                                $status_text = 'PARTIAL';
+                                            }
                                         }
                                     ?>
                                     <tr class="<?php echo $row_class; ?>">
