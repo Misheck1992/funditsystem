@@ -1138,6 +1138,88 @@ $currency = get_by_id('currencies','currency_id',$currency);
     </div>
 </div>
 
+<!-- Forced Close Loan Modal -->
+<div class="modal fade modern-modal" id="force_close_modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header" style="background: #7f1d1d;">
+                <h5 class="modal-title"><i class="fa fa-lock mr-2"></i>Forced Close Loan</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 0.75rem; margin-bottom: 1.25rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; color: #991b1b; font-size: 0.9rem;">
+                        <i class="fa fa-exclamation-triangle"></i>
+                        <strong>This will immediately close the loan. All remaining scheduled payments will be marked as settled.</strong>
+                    </div>
+                </div>
+
+                <div class="info-grid mb-4">
+                    <div class="info-item">
+                        <div class="label">Loan Number</div>
+                        <div class="value"><?php echo $loan_number; ?></div>
+                    </div>
+                    <div class="info-item" style="border-left-color: #dc2626;">
+                        <div class="label">Minimum Amount (Principal Balance)</div>
+                        <div class="value" style="color: #dc2626;"><?php echo $currency->currency_code; ?> <?php echo number_format($loan_principal, 2); ?></div>
+                    </div>
+                </div>
+
+                <form action="<?php echo base_url('loan/force_close_loan'); ?>" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="loan_id" value="<?php echo $loan_id; ?>">
+
+                    <div class="form-group">
+                        <label>Amount Paid (<?php echo $currency->currency_code; ?>) &mdash; minimum: <?php echo number_format($loan_principal, 2); ?></label>
+                        <input type="number" step="0.01" min="<?php echo $loan_principal; ?>" class="form-control" name="amount" value="<?php echo $loan_principal; ?>" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Reason for Forced Closure <span style="color: #dc2626;">*</span></label>
+                        <textarea class="form-control" name="reason" rows="3" placeholder="Enter reason why this loan is being forcibly closed..." required></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Payment Method</label>
+                                <?php $methods_fc = get_all('payment_method'); ?>
+                                <select name="payment_method" class="form-control" required>
+                                    <option value="">-- Select --</option>
+                                    <option value="0">Institution's Bank Savings</option>
+                                    <?php foreach ($methods_fc as $method_fc): ?>
+                                    <option value="<?php echo $method_fc->payment_method; ?>"><?php echo $method_fc->payment_method_name; ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Reference Number</label>
+                                <input type="text" class="form-control" name="reference" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Payment Date</label>
+                        <input type="date" class="form-control" name="paid_date" value="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Proof of Payment <span style="color: #6b7280; font-weight: normal;">(optional)</span></label>
+                        <input type="file" class="form-control-file" name="pay_proof" style="border: 1px solid #ced4da; padding: 8px; border-radius: 4px; width: 100%; background: #fff;">
+                    </div>
+
+                    <button type="submit" class="btn-action btn-danger" style="width: 100%; justify-content: center; padding: 0.75rem;"
+                        onclick="return confirm('Are you sure you want to forcibly close this loan? This cannot be undone.')">
+                        <i class="fa fa-lock"></i> Confirm Forced Close
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <script>
 function setPayAmount(type) {
@@ -1216,6 +1298,10 @@ function get_transaction_usage(transaction_id) {
             document.getElementById('breakdown_content').innerHTML = '<div style="text-align: center; padding: 2rem; color: #dc2626;"><i class="fa fa-times-circle fa-3x"></i><p style="margin-top: 1rem;">Error loading data</p></div>';
         }
     });
+}
+
+function open_force_close_modal() {
+    $('#force_close_modal').modal('show');
 }
 
 
