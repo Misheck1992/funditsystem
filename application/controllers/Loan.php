@@ -7788,26 +7788,17 @@ public function get_loan_product_details() {
 
 	public function force_close_loan()
 	{
-		$loan_id        = $this->input->post('loan_id');
+		$loan_id        = (int) $this->input->post('loan_id');
 		$amount         = (float) $this->input->post('amount');
 		$reason         = trim($this->input->post('reason'));
 		$paid_date      = $this->input->post('paid_date');
 		$payment_method = $this->input->post('payment_method');
 		$reference      = $this->input->post('reference');
 
-		// Handle optional proof-of-payment upload
-		$unique_name = "";
-		if (!empty($_FILES['pay_proof']['name'])) {
-			$config['upload_path']   = './uploads/';
-			$config['allowed_types'] = 'jpg|png|jpeg|gif|pdf|docx|txt|zip';
-			$config['max_size']      = 2048;
-			$config['remove_spaces'] = TRUE;
-			$this->load->library('upload', $config);
-			$file_ext    = pathinfo($_FILES['pay_proof']['name'], PATHINFO_EXTENSION);
-			$unique_name = 'file_' . time() . '_' . uniqid() . '.' . $file_ext;
-			$config['file_name'] = $unique_name;
-			$this->upload->initialize($config);
-			$this->upload->do_upload('pay_proof');
+		if (empty($loan_id)) {
+			$this->toaster->error('Error: Invalid loan ID.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
 		}
 
 		// Load and validate loan
@@ -7835,6 +7826,21 @@ public function get_loan_product_details() {
 			$this->toaster->error('Error: A reason for forced closure is required.');
 			redirect($_SERVER['HTTP_REFERER']);
 			return;
+		}
+
+		// Handle optional proof-of-payment upload
+		$unique_name = "";
+		if (!empty($_FILES['pay_proof']['name'])) {
+			$config['upload_path']   = './uploads/';
+			$config['allowed_types'] = 'jpg|png|jpeg|gif|pdf|docx|txt|zip';
+			$config['max_size']      = 2048;
+			$config['remove_spaces'] = TRUE;
+			$this->load->library('upload', $config);
+			$file_ext    = pathinfo($_FILES['pay_proof']['name'], PATHINFO_EXTENSION);
+			$unique_name = 'file_' . time() . '_' . uniqid() . '.' . $file_ext;
+			$config['file_name'] = $unique_name;
+			$this->upload->initialize($config);
+			$this->upload->do_upload('pay_proof'); // Upload failure is non-fatal; continue without proof
 		}
 
 		// Get collection account
