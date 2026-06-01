@@ -560,10 +560,10 @@ $currency = get_by_id('currencies','currency_id',$currency);
 
                         // Forced Close — available whenever loan is active (regardless of next payment state)
                         ?>
-                        <button onclick="open_force_close_modal()" class="btn-action btn-danger" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+                        <button onclick="open_force_close_modal()" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                             <i class="fa fa-lock"></i> Forced Close Loan
                         </button>
-                        <?php
+                    <?php
                     endif;
                     ?>
                 </div>
