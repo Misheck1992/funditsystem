@@ -497,14 +497,14 @@ $currency = get_by_id('currencies','currency_id',$currency);
         <div class="closure-banner force-close">
             <div class="cb-icon"><i class="fa fa-lock"></i></div>
             <div>
-                <div class="cb-title">Forced Close</div>
+                <div class="cb-title">Manual Close</div>
                 <div class="cb-meta">
-                    This loan was forcibly closed<?php if ($settlement_date): ?> on <?php echo date('d M Y', strtotime($settlement_date)); ?><?php endif; ?>.
+                    This loan was manually closed<?php if ($settlement_date): ?> on <?php echo date('d M Y', strtotime($settlement_date)); ?><?php endif; ?>.
                     <?php echo $installments_paid; ?> installment(s) paid normally &mdash;
-                    <?php echo $installments_force_settled; ?> installment(s) force-settled.
+                    <?php echo $installments_force_settled; ?> installment(s) manually settled.
                 </div>
             </div>
-            <div class="cb-badge"><i class="fa fa-lock mr-1"></i> FORCED CLOSE</div>
+            <div class="cb-badge"><i class="fa fa-lock mr-1"></i> MANUAL CLOSE</div>
         </div>
         <?php else: ?>
         <div class="closure-banner normal-close">
@@ -692,7 +692,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
                         // Forced Close — available whenever loan is active (regardless of next payment state)
                         ?>
                         <button onclick="open_force_close_modal()" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
-                            <i class="fa fa-lock"></i> Forced Close Loan
+                            <i class="fa fa-lock"></i> Manual Close Loan
                         </button>
                     <?php
                     endif;
@@ -759,7 +759,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
                 <div class="view-card mb-3">
                     <div class="view-card-header" style="background: <?php echo $is_force_closed ? '#7f1d1d' : '#064e3b'; ?>;">
                         <h5><i class="fa fa-<?php echo $is_force_closed ? 'lock' : 'check-circle'; ?>"></i>
-                            <?php echo $is_force_closed ? 'Force Close Analysis' : 'Settlement Analysis'; ?>
+                            <?php echo $is_force_closed ? 'Manual Close Analysis' : 'Settlement Analysis'; ?>
                         </h5>
                     </div>
                     <div class="view-card-body">
@@ -862,7 +862,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
                         <?php if ($is_force_closed): ?>
                         <!-- FORCE CLOSE PAYMENT section -->
                         <p style="font-size:0.78rem;color:#6b7280;margin:0.9rem 0 0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">
-                            <i class="fa fa-lock mr-1"></i> Force Close Payment
+                            <i class="fa fa-lock mr-1"></i> Manual Close Payment
                             <?php if ($fcl_payment_date): ?>
                             <span style="font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;">&mdash; <?php echo date('d M Y', strtotime($fcl_payment_date)); ?></span>
                             <?php endif; ?>
@@ -1051,8 +1051,30 @@ $currency = get_by_id('currencies','currency_id',$currency);
                         <h5><i class="fa fa-money-bill-wave"></i> Deposit/Payment History</h5>
                     </div>
                     <div class="view-card-body">
-                        <?php $trans = get_all_where('transaction','account_number = "'.$loan_number.'" AND credit !=0'); ?>
-                        <?php if(!empty($trans)): ?>
+                        <?php
+                        // Exclude REV- reversal entries — those are ledger corrections, not payments
+                        $trans = get_all_where('transaction', 'account_number = "' . $loan_number . '" AND credit != 0 AND transaction_id NOT LIKE "REV-%"');
+                        ?>
+                        <?php if(!empty($trans)):
+                            // Build a set of already-reversed transaction IDs
+                            $reversed_tids = array();
+                            $latest_reversible_tid  = null;
+                            $latest_reversible_time = 0;
+                            foreach ($trans as $t) {
+                                $rev_exists = get_all_where('transaction', 'transaction_id = "REV-' . $t->transaction_id . '"');
+                                if (!empty($rev_exists)) {
+                                    $reversed_tids[] = $t->transaction_id;
+                                } else {
+                                    // Candidate for the Reverse button — check server_time (actual record time, not backdatable payment date)
+                                    $t_server_time = strtotime($t->server_time);
+                                    $t_date = date('Y-m-d', $t_server_time);
+                                    if ($t_date >= '2026-06-17' && $t_server_time > $latest_reversible_time) {
+                                        $latest_reversible_time = $t_server_time;
+                                        $latest_reversible_tid  = $t->transaction_id;
+                                    }
+                                }
+                            }
+                        ?>
                         <div class="table-container">
                             <table class="data-table">
                                 <thead>
@@ -1068,7 +1090,12 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                 <tbody>
                                     <?php foreach ($trans as $history): ?>
                                     <tr>
-                                        <td><strong><?php echo $currency->currency_code; ?> <?php echo number_format($history->credit, 2); ?></strong></td>
+                                        <td>
+                                            <strong><?php echo $currency->currency_code; ?> <?php echo number_format($history->credit, 2); ?></strong>
+                                            <?php if(in_array($history->transaction_id, $reversed_tids)): ?>
+                                            <span style="display:inline-block;margin-left:6px;padding:2px 7px;background:#fef3c7;color:#92400e;border-radius:4px;font-size:0.75em;font-weight:600;border:1px solid #d97706;">REVERSED</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><?php echo $history->transaction_id; ?></td>
                                         <td>
                                             <?php if($history->proof): ?>
@@ -1087,9 +1114,11 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                                 <i class="fa fa-list"></i> Breakdown
                                             </button>
                                             <?php endif; ?>
-                                            <button class="btn-action btn-warning">
+                                            <?php if($history->transaction_id === $latest_reversible_tid): ?>
+                                            <button onclick="confirmReverse('<?php echo $history->transaction_id; ?>', '<?php echo number_format($history->credit, 2); ?>')" class="btn-action btn-warning">
                                                 <i class="fa fa-undo"></i> Reverse
                                             </button>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                     <?php endforeach; ?>
@@ -1357,6 +1386,35 @@ $currency = get_by_id('currencies','currency_id',$currency);
     </div>
 </div>
 
+<!-- Reverse Transaction Confirmation Modal -->
+<div class="modal fade modern-modal" id="reverse_confirm_modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header" style="background: #b45309;">
+                <h5 class="modal-title"><i class="fa fa-undo mr-2"></i>Reverse Transaction</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div style="background:#fef3c7; border-left:4px solid #d97706; padding:1rem; border-radius:4px; margin-bottom:1rem;">
+                    <p style="margin:0; font-weight:600; color:#92400e;"><i class="fa fa-exclamation-triangle"></i> This action cannot be undone.</p>
+                </div>
+                <p>You are about to reverse transaction <strong id="rev_tid_display"></strong> of amount <strong><?php echo $currency->currency_code; ?> <span id="rev_amount_display"></span></strong>.</p>
+                <p style="color:#374151;">This will:</p>
+                <ul style="color:#374151; font-size:0.9rem;">
+                    <li>Restore the loan account balance</li>
+                    <li>Revert payment schedule status back to unpaid</li>
+                    <li>Reopen the loan if it was closed by this payment</li>
+                    <li>Record a reversal entry in the ledger</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <a id="reverse_confirm_btn" href="#" class="btn btn-warning"><i class="fa fa-undo"></i> Confirm Reverse</a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Breakdown Usage Modal -->
 <div class="modal fade modern-modal" id="breakdown_usage" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
@@ -1489,12 +1547,12 @@ $currency = get_by_id('currencies','currency_id',$currency);
     </div>
 </div>
 
-<!-- Forced Close Loan Modal -->
+<!-- Manual Close Loan Modal -->
 <div class="modal fade modern-modal" id="force_close_modal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header" style="background: #7f1d1d;">
-                <h5 class="modal-title"><i class="fa fa-lock mr-2"></i>Forced Close Loan</h5>
+                <h5 class="modal-title"><i class="fa fa-lock mr-2"></i>Manual Close Loan</h5>
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body">
@@ -1526,7 +1584,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
 
                     <div class="form-group">
                         <label>Reason for Forced Closure <span style="color: #dc2626;">*</span></label>
-                        <textarea class="form-control" name="reason" rows="3" placeholder="Enter reason why this loan is being forcibly closed..." required></textarea>
+                        <textarea class="form-control" name="reason" rows="3" placeholder="Enter reason why this loan is being manually closed..." required></textarea>
                     </div>
 
                     <div class="row">
@@ -1562,8 +1620,8 @@ $currency = get_by_id('currencies','currency_id',$currency);
                     </div>
 
                     <button type="submit" class="btn-action btn-danger" style="width: 100%; justify-content: center; padding: 0.75rem;"
-                        onclick="return confirm('Are you sure you want to forcibly close this loan? This cannot be undone.')">
-                        <i class="fa fa-lock"></i> Confirm Forced Close
+                        onclick="return confirm('Are you sure you want to manually close this loan? This cannot be undone.')">
+                        <i class="fa fa-lock"></i> Confirm Manual Close
                     </button>
                 </form>
             </div>
@@ -1632,6 +1690,13 @@ function pay_due(loan_id, payment_number, amount, paid_amount) {
     document.getElementById('lm_late').value = amount;
     document.getElementById('spc').innerText = 'Calculate below';
     $('#late_payment_modal').modal('show');
+}
+
+function confirmReverse(transaction_id, amount) {
+    document.getElementById('rev_tid_display').textContent = transaction_id;
+    document.getElementById('rev_amount_display').textContent = amount;
+    document.getElementById('reverse_confirm_btn').href = '<?php echo base_url("loan/reverse_payment/"); ?>' + transaction_id;
+    $('#reverse_confirm_modal').modal('show');
 }
 
 // Get transaction usage

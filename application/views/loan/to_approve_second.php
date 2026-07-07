@@ -11,6 +11,41 @@
 	</div>
 	<div class="card">
 		<div class="card-body" style="border: thick #153505 solid;border-radius: 14px;">
+			
+			<!-- Second Approver Instructions -->
+			<div class="alert alert-info mb-4" style="background-color: #d1ecf1; border-color: #bee5eb; border-radius: 8px;">
+				<div class="d-flex align-items-center">
+					<i class="fas fa-user-shield" style="font-size: 24px; color: #0c5460; margin-right: 15px;"></i>
+					<div>
+						<h5 class="alert-heading mb-2" style="color: #0c5460; font-weight: 600;">
+							<i class="fas fa-certificate"></i> You are acting as: Second Approver
+						</h5>
+						<p class="mb-2" style="color: #0c5460;">
+							<strong>Your Role:</strong> Provide second-level approval for loans that have passed first approval stage.
+						</p>
+						<hr style="border-color: #bee5eb; margin: 10px 0;">
+						<div class="row">
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-check-double text-success"></i> <strong>To Approve:</strong> Click "View" → "Second Approve"
+								</p>
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-ban text-danger"></i> <strong>To Reject:</strong> Click "View" → "Reject"
+								</p>
+							</div>
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-balance-scale"></i> <strong>Review:</strong> Second-level verification of loan terms and risk assessment
+								</p>
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-arrow-right"></i> <strong>Next Step:</strong> Approved loans move to Third Approval stage
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			
             <div style="overflow-y: auto"">
             <form name="frmUser" method="post" action="">
             <table  id="data-table" class="tableCss">
@@ -77,7 +112,7 @@
                         <td><?php echo $loan->loan_added_date ?></td>
                     
 
-                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id.'?action=approve_second'?>" class="btn btn-sm btn-success">View/Final Approve</a></td>
+                        <td><a href="<?php echo base_url('loan/approve/').$loan->loan_id?>" class="btn btn-sm btn-info">View/Approve</a></td>
 
                     </tr>
                     <?php

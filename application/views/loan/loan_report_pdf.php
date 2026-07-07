@@ -193,11 +193,11 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
 					<td><?php echo $loan->product_name ?></td>
 					<td><a href="<?php echo base_url('individual_customers/view/').$loan->cid?>""><?php echo $loan->cfname." ".$loan->clname?></a></td>
 					<td><?php echo $loan->loan_date ?></td>
-					<td>MK<?php echo number_format($loan->loan_principal,2) ?></td>
+					<td>ZMW <?php echo number_format($loan->loan_principal,2) ?></td>
 					<td><?php echo $loan->loan_period ?></td>
 					<td><?php echo $loan->period_type ?></td>
 					<td><?php echo $loan->efname." ".$loan->elname ?></td>
-					<td>MK<?php echo number_format($loan->loan_amount_total,2) ?></td>
+					<td>ZMW <?php echo number_format($loan->loan_amount_total,2) ?></td>
 					<td><?php echo $loan->loan_status ?></td>
 					<td><?php echo $loan->loan_added_date ?></td>
 

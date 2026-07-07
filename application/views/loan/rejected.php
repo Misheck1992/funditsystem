@@ -42,11 +42,11 @@
 			<td><?php echo $loan->product_name ?></td>
 			<td>Misheck Kamuloni</td>
 			<td><?php echo $loan->loan_date ?></td>
-			<td>MK<?php echo number_format($loan->loan_principal,2) ?></td>
+			<td>ZMW <?php echo number_format($loan->loan_principal,2) ?></td>
 			<td><?php echo $loan->loan_period ?></td>
 <!--			<td>--><?php //echo $loan->period_type ?><!--</td>-->
 			<td><?php echo $loan->loan_interest ?>%</td>
-			<td>MK<?php echo number_format($loan->loan_amount_total,2) ?></td>
+			<td>ZMW <?php echo number_format($loan->loan_amount_total,2) ?></td>
 			<td><a href="<?php echo base_url('uploads/').$loan->worthness_file?>" download >Download file <i class="fa fa-download fa-flip"></i></a></td>
 
 

@@ -360,6 +360,7 @@ function get_ta($id){
     {
         $row = $this->Individual_customers_model->get_by_id($id);
         if ($row) {
+            $loans = get_user_loan_individual($id);
             $data = array(
 		'id' => $row->id,
 		'ClientId' => $row->ClientId,
@@ -386,6 +387,8 @@ function get_ta($id){
 		'Branch' => $row->Branch,
 		'LastUpdatedOn' => $row->LastUpdatedOn,
 		'CreatedOn' => $row->CreatedOn,
+		'loans' => $loans,
+		'approval_status' => $row->approval_status,
 	    );
 			$menu_toggle['toggles'] = 43;
 			$this->load->view('admin/header', $menu_toggle);
@@ -395,7 +398,105 @@ function get_ta($id){
             $this->session->set_flashdata('message', 'Record Not Found');
             redirect(site_url('individual_customers'));
         }
-    } public function view_kyc($id)
+    }
+    public function review($id)
+    {
+        $row = $this->Individual_customers_model->get_by_id($id);
+
+        if ($row && $row->approval_status == 'CREATED') {
+            $data = array(
+                'button' => 'Submit for Approval',
+                'action' => site_url('individual_customers/review_action'),
+                'id' => set_value('id', $row->id),
+                'ClientId' => set_value('ClientId', $row->ClientId),
+                'Title' => set_value('Title', $row->Title),
+                'Firstname' => set_value('Firstname', $row->Firstname),
+                'Middlename' => set_value('Middlename', $row->Middlename),
+                'Lastname' => set_value('Lastname', $row->Lastname),
+                'Gender' => set_value('Gender', $row->Gender),
+                'DateOfBirth' => set_value('DateOfBirth', $row->DateOfBirth),
+                'EmailAddress' => set_value('EmailAddress', $row->EmailAddress),
+                'PhoneNumber' => set_value('PhoneNumber', $row->PhoneNumber),
+                'AddressLine1' => set_value('AddressLine1', $row->AddressLine1),
+                'AddressLine2' => set_value('AddressLine2', $row->AddressLine2),
+                'AddressLine3' => set_value('AddressLine3', $row->AddressLine3),
+                'Province' => set_value('Province', $row->Province),
+                'village' => set_value('village', $row->village),
+                'City' => set_value('City', $row->City),
+                'Country' => set_value('Country', $row->Country),
+                'district' => set_value('district', $row->district),
+                'chiefta' => set_value('chiefta', $row->chiefta),
+                'ResidentialStatus' => set_value('ResidentialStatus', $row->ResidentialStatus),
+                'Profession' => set_value('Profession', $row->Profession),
+                'SourceOfIncome' => set_value('SourceOfIncome', $row->SourceOfIncome),
+                'GrossMonthlyIncome' => set_value('GrossMonthlyIncome', $row->GrossMonthlyIncome),
+                'Branch' => set_value('Branch', $row->Branch),
+                'LastUpdatedOn' => set_value('LastUpdatedOn', $row->LastUpdatedOn),
+                'CreatedOn' => set_value('CreatedOn', $row->CreatedOn),
+            );
+            $menu_toggle['toggles'] = 43;
+            $this->load->view('admin/header', $menu_toggle);
+            $this->load->view('individual_customers/individual_customers_edit', $data);
+            $this->load->view('admin/footer');
+        } else {
+            $this->session->set_flashdata('message', 'Record not found or not in CREATED status');
+            redirect(site_url('individual_customers'));
+        }
+    }
+
+    public function review_action()
+    {
+        $this->_rules();
+
+        if ($this->form_validation->run() == FALSE) {
+            $this->review($this->input->post('id', TRUE));
+        } else {
+            $id = $this->input->post('id', TRUE);
+            $data = array(
+                'Title' => $this->input->post('Title', TRUE),
+                'Firstname' => $this->input->post('Firstname', TRUE),
+                'Middlename' => $this->input->post('Middlename', TRUE),
+                'Lastname' => $this->input->post('Lastname', TRUE),
+                'Gender' => $this->input->post('Gender', TRUE),
+                'DateOfBirth' => $this->input->post('DateOfBirth', TRUE),
+                'EmailAddress' => $this->input->post('EmailAddress', TRUE),
+                'PhoneNumber' => $this->input->post('PhoneNumber', TRUE),
+                'AddressLine1' => $this->input->post('AddressLine1', TRUE),
+                'AddressLine2' => $this->input->post('AddressLine2', TRUE),
+                'AddressLine3' => $this->input->post('AddressLine3', TRUE),
+                'Province' => $this->input->post('Province', TRUE),
+                'village' => $this->input->post('village', TRUE),
+                'City' => $this->input->post('City', TRUE),
+                'Country' => $this->input->post('Country', TRUE),
+                'district' => $this->input->post('district', TRUE),
+                'chiefta' => $this->input->post('chiefta', TRUE),
+                'ResidentialStatus' => $this->input->post('ResidentialStatus', TRUE),
+                'Profession' => $this->input->post('Profession', TRUE),
+                'SourceOfIncome' => $this->input->post('SourceOfIncome', TRUE),
+                'GrossMonthlyIncome' => $this->input->post('GrossMonthlyIncome', TRUE),
+                'Branch' => $this->input->post('Branch', TRUE),
+                'approval_status' => 'Not Approved',
+                'LastUpdatedOn' => date('Y-m-d H:i:s'),
+            );
+
+            $logger = array(
+                'user_id' => $this->session->userdata('user_id'),
+                'activity' => 'Reviewed self-registered customer ' . $data['Firstname'] . ' ' . $data['Lastname'],
+                'activity_cate' => 'customer_review'
+            );
+            log_activity($logger);
+
+            $this->Individual_customers_model->update($id, $data);
+
+            // Send email notification to users who can approve customers
+            $this->_notify_approvers($id, $data['Firstname'], $data['Lastname']);
+
+            $this->toaster->success('Customer reviewed and submitted for approval');
+            redirect(site_url('individual_customers/view/' . $id));
+        }
+    }
+
+    public function view_kyc($id)
     {
         $row = $this->Individual_customers_model->get_by_id($id);
         if ($row) {
@@ -603,6 +704,8 @@ function get_ta($id){
             'processing_fee' => set_value('processing_fee'),
             'City' => set_value('City'),
             'Country' => set_value('Country'),
+            'district' => set_value('district'),
+            'chiefta' => set_value('chiefta'),
             'ResidentialStatus' => set_value('ResidentialStatus'),
 
 
@@ -680,11 +783,25 @@ function get_ta($id){
 		$this->load->view('admin/footer');
     }
     
-    public function create_action() 
+    public function create_action()
     {
     	$dd = $this->Individual_customers_model->count_it();
     	$d1 = $this->Corporate_customers_model->count_it();
     	$clientid = rand(100,1000).rand(100,9999);
+
+        // Combine phone country code with phone number
+        $phone_country_code = $this->input->post('phone_country_code', TRUE);
+        $phone_number_input = $this->input->post('phone_number_input', TRUE);
+        $full_phone_number = $phone_country_code . $phone_number_input;
+
+        // Combine guarantor phone
+        $kin_phone_code = $this->input->post('kin_phone_country_code', TRUE);
+        $kin_phone_input = $this->input->post('kin_phone_input', TRUE);
+        $full_kin_phone = !empty($kin_phone_input) ? $kin_phone_code . $kin_phone_input : '';
+
+        // Set combined phone number for validation
+        $_POST['PhoneNumber'] = $full_phone_number;
+
         $this->_rules();
 
         if ($this->form_validation->run() == FALSE) {
@@ -700,9 +817,9 @@ function get_ta($id){
 		'DateOfBirth' => $this->input->post('DateOfBirth',TRUE),
 		'EmailAddress' => $this->input->post('EmailAddress',TRUE),
 		 'kinFullname' => $this->input->post('kinFullname',TRUE),
-	   
-	    'kinPhonenumber' =>$this->input->post('kinPhonenumber',TRUE),
-		'PhoneNumber' => $this->input->post('PhoneNumber',TRUE),
+
+	    'kinPhonenumber' => $full_kin_phone,
+		'PhoneNumber' => $full_phone_number,
 		'AddressLine1' => $this->input->post('AddressLine1',TRUE),
 		'AddressLine2' => $this->input->post('AddressLine2',TRUE),
 		'AddressLine3' => $this->input->post('AddressLine3',TRUE),
@@ -711,7 +828,9 @@ function get_ta($id){
              'village' => $this->input->post('village',TRUE),
               'marital' =>$this->input->post('marital',TRUE),
 		'City' => $this->input->post('City',TRUE),
-		'Country' => 'Malawi',
+		'Country' => $this->input->post('Country',TRUE),
+		'district' => $this->input->post('district',TRUE),
+		'chiefta' => $this->input->post('chiefta',TRUE),
 		'ResidentialStatus' => $this->input->post('ResidentialStatus',TRUE),
 		'Profession' => $this->input->post('Profession',TRUE),
 		'SourceOfIncome' => $this->input->post('SourceOfIncome',TRUE),
@@ -780,12 +899,98 @@ function get_ta($id){
                 // Insert into the `bank_details` table
                 $this->Bank_model->insert($data);
             }
+
+            // Send email notification to users who can approve customers
+            $this->_notify_approvers($insert_id, $this->input->post('Firstname',TRUE), $this->input->post('Lastname',TRUE));
+
 			$this->toaster->success('Success, customer was created  pending Approval');
             redirect(site_url('individual_customers/my_customers'));
         }
     }
 
+    /**
+     * Notify users who have access to approve individual customers
+     */
+    private function _notify_approvers($customer_id, $firstname, $lastname) {
+        // Find the menuitem ID for individual_customers/approve
+        $menuitem = $this->db->get_where('menuitems', array('method' => 'individual_customers/approve'))->row();
 
+        if (!$menuitem) {
+            // Try alternate case
+            $menuitem = $this->db->get_where('menuitems', array('method' => 'Individual_customers/approve'))->row();
+        }
+
+        if (!$menuitem) {
+            log_message('error', 'Could not find menuitem for individual_customers/approve');
+            return;
+        }
+
+        // Find all roles that have access to this menuitem
+        $access_roles = $this->db->distinct()->select('roleid')
+            ->from('access')
+            ->where('controllerid', $menuitem->id)
+            ->get()->result();
+
+        if (empty($access_roles)) {
+            return;
+        }
+
+        $role_ids = array();
+        foreach ($access_roles as $ar) {
+            $role_ids[] = $ar->roleid;
+        }
+
+        // Find all employees with these roles who have email addresses
+        $approvers = $this->db->select('employees.id, employees.Firstname, employees.Lastname, employees.EmailAddress')
+            ->from('employees')
+            ->where_in('Role', $role_ids)
+            ->where('EmailAddress IS NOT NULL')
+            ->where('EmailAddress !=', '')
+            ->get()->result();
+
+        if (empty($approvers)) {
+            return;
+        }
+
+        // Get company settings
+        $settings = $this->db->get_where('settings', array('settings_id' => 1))->row();
+        $company_name = $settings->company_name ?? 'FundIt';
+
+        // Prepare email content
+        $subject = 'New Customer Pending Approval - ' . $firstname . ' ' . $lastname;
+        $approval_url = base_url('individual_customers/approve');
+
+        $message = '
+        <h3>New Customer Registration</h3>
+        <p>A new individual customer has been registered and requires your approval.</p>
+        <table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Customer Name:</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">' . htmlspecialchars($firstname . ' ' . $lastname) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Registered By:</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">' . htmlspecialchars($this->session->userdata('Firstname') . ' ' . $this->session->userdata('Lastname')) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">' . date('d M Y H:i') . '</td>
+            </tr>
+        </table>
+        <p style="margin-top: 20px;">
+            <a href="' . $approval_url . '" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Review & Approve</a>
+        </p>
+        <p style="margin-top: 20px; color: #666; font-size: 12px;">
+            Please log in to the system to review and approve/reject this customer registration.
+        </p>';
+
+        // Send email to each approver
+        foreach ($approvers as $approver) {
+            if (!empty($approver->EmailAddress) && filter_var($approver->EmailAddress, FILTER_VALIDATE_EMAIL)) {
+                send_templated_email($approver->EmailAddress, $subject, $message);
+            }
+        }
+    }
 
     public function create_action_group()
     {
@@ -818,7 +1023,8 @@ function get_ta($id){
                 'village' => $this->input->post('village',TRUE),
                 'marital' =>$this->input->post('marital',TRUE),
                 'City' => $this->input->post('City',TRUE),
-                'Country' => 'Malawi',
+                'Country' => $this->input->post('Country',TRUE),
+                'chiefta' => $this->input->post('chiefta',TRUE),
                 'ResidentialStatus' => $this->input->post('ResidentialStatus',TRUE),
                 'account_name' => $this->input->post('account_name',TRUE),
                 'account_number' =>$this->input->post('account_number',TRUE),
@@ -1009,6 +1215,8 @@ function get_ta($id){
 		'village' => set_value('Province', $row->village),
 		'City' => set_value('City', $row->City),
 		'Country' => set_value('Country', $row->Country),
+		'district' => set_value('district', $row->district),
+		'chiefta' => set_value('chiefta', $row->chiefta),
 		'ResidentialStatus' => set_value('ResidentialStatus', $row->ResidentialStatus),
 		'Profession' => set_value('Profession', $row->Profession),
 		'SourceOfIncome' => set_value('SourceOfIncome', $row->SourceOfIncome),
@@ -1028,8 +1236,25 @@ function get_ta($id){
         }
     }
     
-    public function update_action() 
+    public function update_action()
     {
+        // Support both split fields and single PhoneNumber field
+        $phone_country_code = $this->input->post('phone_country_code', TRUE);
+        $phone_number_input = $this->input->post('phone_number_input', TRUE);
+        if (!empty($phone_country_code) || !empty($phone_number_input)) {
+            $full_phone_number = $phone_country_code . $phone_number_input;
+        } else {
+            $full_phone_number = $this->input->post('PhoneNumber', TRUE);
+        }
+
+        // Combine guarantor phone
+        $kin_phone_code = $this->input->post('kin_phone_country_code', TRUE);
+        $kin_phone_input = $this->input->post('kin_phone_input', TRUE);
+        $full_kin_phone = !empty($kin_phone_input) ? $kin_phone_code . $kin_phone_input : '';
+
+        // Set combined phone number for validation
+        $_POST['PhoneNumber'] = $full_phone_number;
+
         $this->_rules();
 
         if ($this->form_validation->run() == FALSE) {
@@ -1044,7 +1269,8 @@ function get_ta($id){
 		'Gender' => $this->input->post('Gender',TRUE),
 		'DateOfBirth' => $this->input->post('DateOfBirth',TRUE),
 		'EmailAddress' => $this->input->post('EmailAddress',TRUE),
-		'PhoneNumber' => $this->input->post('PhoneNumber',TRUE),
+		'PhoneNumber' => $full_phone_number,
+		'kinPhonenumber' => $full_kin_phone,
 		'AddressLine1' => $this->input->post('AddressLine1',TRUE),
 		'AddressLine2' => $this->input->post('AddressLine2',TRUE),
 		'AddressLine3' => $this->input->post('AddressLine3',TRUE),
@@ -1052,6 +1278,8 @@ function get_ta($id){
 		'village' => $this->input->post('village',TRUE),
 		'City' => $this->input->post('City',TRUE),
 		'Country' => $this->input->post('Country',TRUE),
+		'district' => $this->input->post('district',TRUE),
+		'chiefta' => $this->input->post('chiefta',TRUE),
 		'ResidentialStatus' => $this->input->post('ResidentialStatus',TRUE),
 
 		'Profession' => $this->input->post('Profession',TRUE),
@@ -1105,25 +1333,116 @@ function get_ta($id){
     public function approval_action($id)
     {
         $row = $this->Individual_customers_model->get_by_id($id);
-    $notify = get_by_id('sms_settings','id','1');
+        $notify = get_by_id('sms_settings','id','1');
         if ($row) {
             $this->Individual_customers_model->update($id,array('approval_status'=>'Approved'));
             $this->Account_model->update_approval($id,array('account_status'=>'Active'));
             if($notify->customer_approval=='Yes'){
                 send_sms($row->PhoneNumber,'Dear customer, registration has been approved, you can call numbers below for more');
             }
-            	$logger = array(
+            $logger = array(
+                'user_id' => $this->session->userdata('user_id'),
+                'activity' => 'customer approved',
+                'activity_cate' => 'customer_approval',
+            );
+            log_activity($logger);
 
-				'user_id' => $this->session->userdata('user_id'),
-				'activity' => 'customer approved',
-					'activity_cate' => 'customer_approval',
+            // Send email notification to users who can create customers (notify them of approval)
+            $this->_notify_creators_of_approval($row);
 
-			);
-			log_activity($logger);
             $this->toaster->success('Customer was approved successfully');
             redirect(site_url('individual_customers/approve'));
         } else {
 
+        }
+    }
+
+    /**
+     * Notify users who have access to create individual customers when a customer is approved
+     */
+    private function _notify_creators_of_approval($customer) {
+        // Find the menuitem ID for individual_customers/create
+        $menuitem = $this->db->get_where('menuitems', array('method' => 'individual_customers/create'))->row();
+
+        if (!$menuitem) {
+            // Try alternate case
+            $menuitem = $this->db->get_where('menuitems', array('method' => 'Individual_customers/create'))->row();
+        }
+
+        if (!$menuitem) {
+            log_message('error', 'Could not find menuitem for individual_customers/create');
+            return;
+        }
+
+        // Find all roles that have access to this menuitem
+        $access_roles = $this->db->distinct()->select('roleid')
+            ->from('access')
+            ->where('controllerid', $menuitem->id)
+            ->get()->result();
+
+        if (empty($access_roles)) {
+            return;
+        }
+
+        $role_ids = array();
+        foreach ($access_roles as $ar) {
+            $role_ids[] = $ar->roleid;
+        }
+
+        // Find all employees with these roles who have email addresses
+        $creators = $this->db->select('employees.id, employees.Firstname, employees.Lastname, employees.EmailAddress')
+            ->from('employees')
+            ->where_in('Role', $role_ids)
+            ->where('EmailAddress IS NOT NULL')
+            ->where('EmailAddress !=', '')
+            ->get()->result();
+
+        if (empty($creators)) {
+            return;
+        }
+
+        // Get company settings
+        $settings = $this->db->get_where('settings', array('settings_id' => 1))->row();
+        $company_name = $settings->company_name ?? 'FundIt';
+
+        // Prepare email content
+        $customer_name = $customer->Firstname . ' ' . $customer->Lastname;
+        $subject = 'Customer Approved - ' . $customer_name;
+        $view_url = base_url('individual_customers/view/' . $customer->id);
+
+        $message = '
+        <h3>Customer Approval Notification</h3>
+        <p>An individual customer has been approved and is now active in the system.</p>
+        <table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Customer Name:</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">' . htmlspecialchars($customer_name) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Phone Number:</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">' . htmlspecialchars($customer->PhoneNumber) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Approved By:</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">' . htmlspecialchars($this->session->userdata('Firstname') . ' ' . $this->session->userdata('Lastname')) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd;"><strong>Date:</strong></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">' . date('d M Y H:i') . '</td>
+            </tr>
+        </table>
+        <p style="margin-top: 20px;">
+            <a href="' . $view_url . '" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Customer</a>
+        </p>
+        <p style="margin-top: 20px; color: #666; font-size: 12px;">
+            The customer can now be assigned loans and other services.
+        </p>';
+
+        // Send email to each creator
+        foreach ($creators as $creator) {
+            if (!empty($creator->EmailAddress) && filter_var($creator->EmailAddress, FILTER_VALIDATE_EMAIL)) {
+                send_templated_email($creator->EmailAddress, $subject, $message);
+            }
         }
     }
  public function reject_action($id)
@@ -1144,23 +1463,19 @@ function get_ta($id){
 
 	$this->form_validation->set_rules('Title', 'title', 'trim|required');
 	$this->form_validation->set_rules('Firstname', 'firstname', 'trim|required');
-
 	$this->form_validation->set_rules('Lastname', 'lastname', 'trim|required');
 	$this->form_validation->set_rules('Gender', 'gender', 'trim|required');
 	$this->form_validation->set_rules('DateOfBirth', 'dateofbirth', 'trim|required');
-
-
-
+	$this->form_validation->set_rules('EmailAddress', 'email address', 'trim|required|valid_email');
+	$this->form_validation->set_rules('PhoneNumber', 'phone number', 'trim|required');
 
 	$this->form_validation->set_rules('Province', 'TA', 'trim|required');
 	$this->form_validation->set_rules('City', 'city', 'trim|required');
-
 
 	$this->form_validation->set_rules('Profession', 'profession', 'trim|required');
 	$this->form_validation->set_rules('SourceOfIncome', 'sourceofincome', 'trim|required');
 	$this->form_validation->set_rules('GrossMonthlyIncome', 'grossmonthlyincome', 'trim|required|numeric');
 	$this->form_validation->set_rules('Branch', 'branch', 'trim|required');
-
 
 	$this->form_validation->set_rules('id', 'id', 'trim');
 	$this->form_validation->set_error_delimiters('<span class="text-danger">', '</span>');

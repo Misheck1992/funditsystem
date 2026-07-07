@@ -212,7 +212,7 @@ class Proofofidentity extends CI_Controller
         }
     }
     
-    public function update_action() 
+    public function update_action()
     {
         $this->_rules();
 
@@ -223,9 +223,6 @@ class Proofofidentity extends CI_Controller
 		'IDType' => $this->input->post('IDType',TRUE),
 		'IDNumber' => $this->input->post('IDNumber',TRUE),
 		'IssueDate' => $this->input->post('IssueDate',TRUE),
-		'ExpiryDate' => $this->input->post('ExpiryDate',TRUE),
-
-
 		'ClientId' => $this->input->post('ClientId',TRUE),
 		'photograph' => $this->input->post('photograph',TRUE),
 		'signature' => $this->input->post('signature',TRUE),
@@ -234,8 +231,15 @@ class Proofofidentity extends CI_Controller
 	    );
 
             $this->Proofofidentity_model->update($this->input->post('id', TRUE), $data);
+
+            // Get customer ID to redirect back
+            $customer = $this->Individual_customers_model->get_by_client_id($this->input->post('ClientId',TRUE));
             $this->toaster->success('Success!, KYC updated ');
-            redirect($_SERVER['HTTP_REFERER']);
+            if($customer) {
+                redirect(site_url('individual_customers/view_kyc/'.$customer->id));
+            } else {
+                redirect($_SERVER['HTTP_REFERER']);
+            }
         }
     }
     
@@ -253,12 +257,11 @@ class Proofofidentity extends CI_Controller
         }
     }
 
-    public function _rules() 
+    public function _rules()
     {
 	$this->form_validation->set_rules('IDType', 'idtype', 'trim|required');
 	$this->form_validation->set_rules('IDNumber', 'idnumber', 'trim|required');
 	$this->form_validation->set_rules('IssueDate', 'issuedate', 'trim|required');
-	$this->form_validation->set_rules('ExpiryDate', 'expirydate', 'trim|required');
 
 	$this->form_validation->set_rules('ClientId', 'clientid', 'trim|required');
 	$this->form_validation->set_rules('photograph', 'photograph', 'trim|required');

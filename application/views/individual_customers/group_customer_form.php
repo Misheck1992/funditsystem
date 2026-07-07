@@ -302,10 +302,6 @@ $countryd = $this->Geo_countries_model->get_all();
                                 <label for="date">IssueDate </label>
                                 <input type="date" class="form-control" name="IssueDate" id="IssueDate" placeholder="IssueDate"  />
                             </div>
-                            <div class="form-group col-6">
-                                <label for="date">ExpiryDate * </label>
-                                <input type="date" class="form-control" name="ExpiryDate" id="ExpiryDate" placeholder="ExpiryDate"   />
-                            </div>
                         </div>
                         <div class="row">
                             <div class="form-group col-6">

@@ -74,7 +74,7 @@
                                 <br><br>
                                 <input type="text" hidden value="<?php echo $get_account->account; ?>" id="myacc">
                                 Your-account-Number: <i id="teller_account" style="font-weight: bolder; color: red;"><?php echo $get_account->account; ?></i> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;  Drawer Balance :
-                                <input id="drawer_balance" type="text" value="MK<?php echo number_format($get_account->balance,2); ?>" style="background-color: #C1D797;">
+                                <input id="drawer_balance" type="text" value="ZMW <?php echo number_format($get_account->balance,2); ?>" style="background-color: #C1D797;">
                             </div>
                             <!-- Light table -->
 
@@ -106,7 +106,7 @@
                                             </tr>
 
                                             <tr>
-                                                <td>Balance : MWK</td><td><input type="text" id="account_balance" readonly></td>
+                                                <td>Balance : ZMW</td><td><input type="text" id="account_balance" readonly></td>
                                             </tr>
 
                                             <tr>
@@ -140,10 +140,10 @@
                                         </div>
                                         <br> <label for="paid_date">Enter date</label><br>
                                         <input style="border: thin red solid;"  type="date" name="paid_date"  required/><br><h6></h6>
-                                        <h6> Amount In MWK</h6>
+                                        <h6> Amount In ZMW</h6>
                                         <div class="pages" id="cashp">
 
-                                            MK:<input type="text"  name="amount" id="tt" oninput="validateInput(event)">&nbsp;<button style="background-color: coral;" class="savec" id="svbutton" type="submit">Save Changes</button>
+                                            ZMW:<input type="text"  name="amount" id="tt" oninput="validateInput(event)">&nbsp;<button style="background-color: coral;" class="savec" id="svbutton" type="submit">Save Changes</button>
 
                                         </div>
 

@@ -55,8 +55,10 @@ $products = get_active_loan_products();
 			</form>
 			<hr>
 			<p>Search results</p>
-			<table  id="data-table" class="table">
-				<thead>
+			<!-- Table Container with Horizontal Scroll -->
+			<div style="overflow-x: auto; overflow-y: auto;">
+				<table  id="data-table" class="table">
+					<thead>
 				<tr>
 
 					<th>#</th>
@@ -97,6 +99,7 @@ foreach ($loan_data as $l){
 				?>
 				</tbody>
 			</table>
+			</div>
 		</div>
 	</div>
 </div>

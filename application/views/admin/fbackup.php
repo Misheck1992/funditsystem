@@ -183,7 +183,7 @@ $settings = get_by_id('settings','settings_id','1');
                         <input type="text" class="form-control" name="loan" id="loan_idd" placeholder="Loan number" disabled required  />
                     </div>
                     <div class="form-group col-6">
-                        <label for="date">Total amount MK</label>
+                        <label for="date">Total amount ZMW</label>
                         <input type="text" class="form-control" name="amount" id="charge_amount" readonly required />
                     </div>
 
@@ -1157,7 +1157,7 @@ $get_c = get_all('individual_customers');
 				<label>Customer Number</label>
 			</div>
 			<div class="customer-details">
-<span><label class="amount-label">Total deposit -MWK  :${response.data.amount}</label> </span><input type="text"  style="font-size: 5px;" value="">
+<span><label class="amount-label">Total deposit - ZMW :${response.data.amount}</label> </span><input type="text"  style="font-size: 5px;" value="">
 				<label for="customername">Name</label><input id="customername" type="text" name="customername" value="${account_name}">
 				<span class="detail-tip"><em>(Please print)</em></span>
 				<label for="checkdate">Date</label><input id="checkdate" type="text" name="checkdate" value="${new Date().toISOString()}">
@@ -1254,7 +1254,7 @@ $get_c = get_all('individual_customers');
 											<td>${response.data.account_number}</td>
 										</tr>
 										<tr>
-											<td>Account Balance: MK</td>
+											<td>Account Balance: ZMW</td>
 											<td>${response.data.balance}</td>
 										</tr>
 									</table>

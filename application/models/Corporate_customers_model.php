@@ -13,6 +13,29 @@ class Corporate_customers_model extends CI_Model
     function __construct()
     {
         parent::__construct();
+        $this->ensure_new_columns();
+    }
+
+    /**
+     * Ensure new columns exist in corporate_customers table
+     */
+    private function ensure_new_columns() {
+        // Add financial_year_end column
+        if (!$this->db->field_exists('financial_year_end', $this->table)) {
+            $this->db->query("ALTER TABLE {$this->table} ADD COLUMN financial_year_end DATE DEFAULT NULL AFTER website");
+        }
+        // Add casual_employees column
+        if (!$this->db->field_exists('casual_employees', $this->table)) {
+            $this->db->query("ALTER TABLE {$this->table} ADD COLUMN casual_employees INT DEFAULT 0 AFTER financial_year_end");
+        }
+        // Add permanent_employees column
+        if (!$this->db->field_exists('permanent_employees', $this->table)) {
+            $this->db->query("ALTER TABLE {$this->table} ADD COLUMN permanent_employees INT DEFAULT 0 AFTER casual_employees");
+        }
+        // Add linked_individual_id column for individual-to-corporate linkage
+        if (!$this->db->field_exists('linked_individual_id', $this->table)) {
+            $this->db->query("ALTER TABLE {$this->table} ADD COLUMN linked_individual_id INT DEFAULT NULL");
+        }
     }
 	function count_it() {
 
@@ -136,6 +159,28 @@ class Corporate_customers_model extends CI_Model
     {
         $this->db->where($this->id, $id);
         $this->db->delete($this->table);
+    }
+
+    // search corporate customers
+    function search($term, $limit = 10)
+    {
+        $this->db->select('id, ClientId, EntityName, RegistrationNumber, contact_email, phone_number, linked_individual_id');
+        $this->db->group_start();
+        $this->db->like('EntityName', $term);
+        $this->db->or_like('ClientId', $term);
+        $this->db->or_like('RegistrationNumber', $term);
+        $this->db->or_like('contact_email', $term);
+        $this->db->or_like('phone_number', $term);
+        $this->db->group_end();
+        $this->db->limit($limit);
+        return $this->db->get($this->table)->result();
+    }
+
+    // get corporate customer(s) linked to an individual
+    function get_by_linked_individual($individual_id)
+    {
+        $this->db->where('linked_individual_id', $individual_id);
+        return $this->db->get($this->table)->result();
     }
 
 }

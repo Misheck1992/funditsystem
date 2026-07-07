@@ -22,11 +22,11 @@
 				</tr>
 				<tr>
 					<td>Borrowed Amount</td>
-					<td>MWK<?php  echo  number_format($dd->amount,2); ?></td>
+					<td>ZMW <?php  echo  number_format($dd->amount,2); ?></td>
 				</tr>
 				<tr>
 					<td>Total Borrowed Amount interest to pay</td>
-					<td>MWK<?php  echo  number_format($dd->total_interest,2); ?></td>
+					<td>ZMW <?php  echo  number_format($dd->total_interest,2); ?></td>
 				</tr><tr>
 					<td>Date Borrowed</td>
 					<td><?php  echo  $dd->date_borrowed; ?></td>

@@ -9,8 +9,11 @@ class Admin extends CI_Controller
         $this->load->model('User_access_model');
 	}
 	public function index(){
+		// Get all loan products for dynamic display
+		$data['loan_products'] = get_active_loan_products();
+
 		$this->load->view('admin/header');
-		$this->load->view('admin/index');
+		$this->load->view('admin/index', $data);
 		$this->load->view('admin/footer');
 	}
 	
@@ -81,5 +84,54 @@ curl_close($ch);
 
 echo $response;
 
+	}
+
+	/**
+	 * Setup method to add Collateral Report menu item
+	 * Visit: http://localhost/fundit/Admin/setup_collateral_report_menu
+	 */
+	public function setup_collateral_report_menu() {
+		// Check if menu item already exists
+		$existing = $this->db->get_where('menuitems', array('method' => 'Reports/collateral_report'))->row();
+
+		if ($existing) {
+			echo "Collateral Report menu item already exists (ID: {$existing->id})";
+			return;
+		}
+
+		// Find the Reports menu ID
+		$reports_menu = $this->db->like('label', 'Report')->get('menu')->row();
+
+		if (!$reports_menu) {
+			echo "Error: Reports menu not found. Please add it manually.";
+			return;
+		}
+
+		// Get the next sort order
+		$this->db->select_max('sortt');
+		$this->db->where('mid', $reports_menu->id);
+		$max_sort = $this->db->get('menuitems')->row();
+		$next_sort = ($max_sort->sortt ?? 0) + 1;
+
+		// Insert the menu item
+		$data = array(
+			'mid' => $reports_menu->id,
+			'label' => 'Collateral Report',
+			'method' => 'Reports/collateral_report',
+			'fa_icon' => 'fa fa-shield',
+			'sortt' => $next_sort,
+			'active' => 1,
+			'show_menu' => 'Yes'
+		);
+
+		$this->db->insert('menuitems', $data);
+		$insert_id = $this->db->insert_id();
+
+		if ($insert_id) {
+			echo "Success! Collateral Report menu item added (ID: {$insert_id}). <br>";
+			echo "Note: You may need to grant access to users via User Access settings.";
+		} else {
+			echo "Error: Failed to insert menu item. " . $this->db->error()['message'];
+		}
 	}
 }

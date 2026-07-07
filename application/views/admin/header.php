@@ -88,7 +88,8 @@ if(!empty($toggles)){
             letter-spacing: -1px;
             margin-bottom: 0;
             font-weight: 300;
-        }.dashboard-stat .details .numberr {
+        }
+        .dashboard-stat .details .numberr {
             padding-top: 25px;
             text-align: right;
             font-size: 20px;
@@ -97,12 +98,14 @@ if(!empty($toggles)){
             margin-bottom: 0;
             font-weight: 300;
         }
-        .dashboard-stat .details .number .desc {
+        .dashboard-stat .details .desc {
             text-transform: capitalize;
             text-align: right;
             font-size: 16px;
             letter-spacing: 0;
             font-weight: 300;
+            display: block !important;
+            visibility: visible !important;
         }
         .dashboard-stat.blue {
             background-color: #337ab7;
@@ -136,7 +139,7 @@ if(!empty($toggles)){
 			margin: 0 auto;
 			display: block;
 		}
-		input[type="file"] {
+		label.custom-file-upload input[type="file"] {
 			display: none;
 		}
 		.custom-file-upload {

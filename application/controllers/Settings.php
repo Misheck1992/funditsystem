@@ -14,7 +14,7 @@ class Settings extends CI_Controller
 
 
     
-    public function update($id) 
+    public function update($id)
     {
         $row = $this->Settings_model->get_by_id($id);
 
@@ -36,6 +36,12 @@ class Settings extends CI_Controller
 		'time_zone' => set_value('time_zone', $row->time_zone),
 		'tax' => set_value('tax', $row->tax),
 		'defaulter_durations' => set_value('defaulter_durations', $row->defaulter_durations),
+		// SMTP Email Settings
+		'protocal' => set_value('protocal', $row->protocal),
+		'email_host' => set_value('email_host', $row->email_host),
+		'email_port' => set_value('email_port', $row->email_port),
+		'email_user' => set_value('email_user', $row->email_user),
+		'email_pass' => $row->email_pass, // Don't use set_value for password
 	    );
 			$this->load->view('admin/header');
             $this->load->view('settings/settings_form', $data);
@@ -46,7 +52,7 @@ class Settings extends CI_Controller
         }
     }
     
-    public function update_action() 
+    public function update_action()
     {
         $this->_rules();
 
@@ -67,7 +73,19 @@ class Settings extends CI_Controller
 		'time_zone' => $this->input->post('time_zone',TRUE),
 		'tax' => $this->input->post('tax',TRUE),
 		'defaulter_durations' => $this->input->post('defaulter_durations',TRUE),
+		// SMTP Email Settings
+		'protocal' => $this->input->post('protocal',TRUE),
+		'email_host' => $this->input->post('email_host',TRUE),
+		'email_port' => $this->input->post('email_port',TRUE),
+		'email_user' => $this->input->post('email_user',TRUE),
 	    );
+
+	    // Only update password if a new one was provided
+	    $email_pass = $this->input->post('email_pass', TRUE);
+	    if (!empty($email_pass)) {
+	        $data['email_pass'] = $email_pass;
+	    }
+
 			$logger = array(
 
 				'user_id' => $this->session->userdata('user_id'),
@@ -80,6 +98,46 @@ class Settings extends CI_Controller
 			$this->toaster->success('Success, settings were updated');
 			redirect($_SERVER['HTTP_REFERER']);
         }
+    }
+
+    /**
+     * Send a test email to verify SMTP settings
+     */
+    public function test_email()
+    {
+        $this->load->helper('common_queries');
+
+        // Get logged in user's email
+        $user_id = $this->session->userdata('user_id');
+        $user = $this->db->get_where('employees', array('id' => $user_id))->row();
+
+        if (!$user || empty($user->EmailAddress)) {
+            echo json_encode(array(
+                'success' => false,
+                'message' => 'Your account does not have an email address configured.'
+            ));
+            return;
+        }
+
+        $to = $user->EmailAddress;
+        $subject = 'FundIt Test Email - SMTP Configuration';
+
+        $body = '
+            <h2 style="color: #1e3a5f;">SMTP Configuration Test</h2>
+            <p>Hello ' . htmlspecialchars($user->Firstname) . ',</p>
+            <p>This is a test email to verify that your SMTP email settings are configured correctly.</p>
+            <p>If you received this email, your email configuration is working properly!</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 12px;">
+                <strong>Test Details:</strong><br>
+                Date: ' . date('Y-m-d H:i:s') . '<br>
+                Recipient: ' . htmlspecialchars($to) . '
+            </p>
+        ';
+
+        $result = send_templated_email($to, $subject, $body);
+
+        echo json_encode($result);
     }
     
 

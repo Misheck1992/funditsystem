@@ -871,7 +871,7 @@ class Customer extends CI_Controller
 							if($money_out_limit_calculation >= $sender_moneyout_limit->limit_amount || $money_out_limit_calculation+$data['amount']>$sender_moneyout_limit->limit_amount){
 								$remainder = $sender_moneyout_limit->limit_amount-$money_out_limit_calculation;
 								if($remainder > 0){
-									$concat = ' or you may transfer funds  but not more than MK'. $remainder;
+									$concat = ' or you may transfer funds  but not more than ZMW'. $remainder;
 								}else{
 									$concat ="";
 								}
@@ -885,7 +885,7 @@ class Customer extends CI_Controller
 									$res['message'] ='Sorry this attendant phone number does not exist';
 								}else{
 									$res['status']='success';
-									$res['message']='Are you sure you want to make payment of MWK'.number_format($this->input->post('amount')).' to '.$recepient->company_name.'? ';
+									$res['message']='Are you sure you want to make payment of ZMW'.number_format($this->input->post('amount')).' to '.$recepient->company_name.'? ';
 
 								}
 
@@ -967,7 +967,7 @@ class Customer extends CI_Controller
 							if($money_out_limit_calculation >= $sender_moneyout_limit->limit_amount || $money_out_limit_calculation+$data['amount']>$sender_moneyout_limit->limit_amount){
 								$remainder = $sender_moneyout_limit->limit_amount-$money_out_limit_calculation;
 								if($remainder > 0){
-									$concat = ' or you may transfer funds  but not more than MK'. $remainder;
+									$concat = ' or you may transfer funds  but not more than ZMW'. $remainder;
 								}else{
 									$concat ="";
 								}
@@ -997,8 +997,8 @@ class Customer extends CI_Controller
 											$sms_attendant = $attendant->phone_number;
 											$customer_sender= get_customer($sender);
 											$customer_reciever= $attendant->phone_number;
-											$sender_message='Trans ID:'.$transaction_success.', Dear Customer You have sent MWK'.number_format($data['amount'],2).' to  '.$recepient->company_name.'('.$recepient->merchant_id .')'.' Bal: MWK'.number_format($this->your_balance($sender),2);
-											$reciever_message='Trans ID:'.$transaction_success.', Dear Customer You have received MWK'.number_format($data['amount'],2).' from '.$is_pin_correct['firstname'].' '.$is_pin_correct['lastname'].' ('.$sender.')';
+											$sender_message='Trans ID:'.$transaction_success.', Dear Customer You have sent ZMW'.number_format($data['amount'],2).' to  '.$recepient->company_name.'('.$recepient->merchant_id .')'.' Bal: ZMW'.number_format($this->your_balance($sender),2);
+											$reciever_message='Trans ID:'.$transaction_success.', Dear Customer You have received ZMW'.number_format($data['amount'],2).' from '.$is_pin_correct['firstname'].' '.$is_pin_correct['lastname'].' ('.$sender.')';
 											try{
 
 												send_sms($sender,$sender_message);
@@ -1007,7 +1007,7 @@ class Customer extends CI_Controller
 //														sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //														sendMail($recepient->email_address,'KakuPay Money Transfers',$reciever_message);
 												$res['status']='success';
-												$res['message']='Transaction successful. Your new balance is MWK '.number_format($this->your_balance($sender),2);
+												$res['message']='Transaction successful. Your new balance is ZMW '.number_format($this->your_balance($sender),2);
 												$logger_sms = array(
 													'phone_number' => $sms_attendant,
 													'mesage' => $reciever_message,
@@ -1027,9 +1027,9 @@ class Customer extends CI_Controller
 //														sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //														sendMail($recepient->email_address,'KakuPay Money Transfers',$reciever_message);
 												$res['status']='success';
-												$res['message']="Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is MWK ".number_format($this->your_balance($sender),2);
+												$res['message']="Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is ZMW ".number_format($this->your_balance($sender),2);
 												$res['status']='success';
-												$res['message']='Transaction successful. Your new balance is MWK '.number_format($this->your_balance($sender),2);
+												$res['message']='Transaction successful. Your new balance is ZMW '.number_format($this->your_balance($sender),2);
 												$logger_sms = array(
 													'phone_number' => $sms_attendant,
 													'mesage' => $reciever_message,
@@ -1362,7 +1362,7 @@ class Customer extends CI_Controller
 										if ($money_out_limit_calculation >= $sender_moneyout_limit->limit_amount || $money_out_limit_calculation + $this->input->post('amount') > $sender_moneyout_limit->limit_amount) {
 											$remainder = $sender_moneyout_limit->limit_amount - $money_out_limit_calculation;
 											if ($remainder > 0) {
-												$concat = ' or you may transfer funds  but not more than MK' . $remainder;
+												$concat = ' or you may transfer funds  but not more than ZMW' . $remainder;
 											} else {
 												$concat = "";
 											}
@@ -1372,7 +1372,7 @@ class Customer extends CI_Controller
 										} else {
 
 											$res['status'] = 'success';
-											$res['message'] = 'Are you sure you want to withdraw MWK' . number_format($this->input->post('amount')) . ' from ' . $result['firstname'] . ' ' . $result['lastname'] . '';
+											$res['message'] = 'Are you sure you want to withdraw ZMW' . number_format($this->input->post('amount')) . ' from ' . $result['firstname'] . ' ' . $result['lastname'] . '';
 
 										}
 
@@ -1457,7 +1457,7 @@ class Customer extends CI_Controller
 									if ($money_out_limit_calculation >= $sender_moneyout_limit->limit_amount || $money_out_limit_calculation + $this->input->post('amount') > $sender_moneyout_limit->limit_amount) {
 										$remainder = $sender_moneyout_limit->limit_amount - $money_out_limit_calculation;
 										if ($remainder > 0) {
-											$concat = ' or you may transfer funds  but not more than MK' . $remainder;
+											$concat = ' or you may transfer funds  but not more than ZMW' . $remainder;
 										} else {
 											$concat = "";
 										}
@@ -1486,8 +1486,8 @@ class Customer extends CI_Controller
 												$reciever = $data['recepient'];
 												$customer = get_customer($sender);
 												$agent = get_agent($reciever);
-												$sender_message = 'Trans ID:' . $result3 . ', Dear Customer, Cash out of MWK' . number_format($data['amount'], 2) . ' from ' . $this->input->post('agent_code') . ', ' . $result['firstname'] . ' ' . $result['lastname'] . ', your balance is MWK' . $this->your_balance($sender);
-												$reciever_message = 'Trans ID:' . $result3 . ', Dear Customer  cash in of MWK' . number_format($data['amount'], 2) . ' from ' . $resultt['firstname'] . ' ' . $resultt['lastname'];
+												$sender_message = 'Trans ID:' . $result3 . ', Dear Customer, Cash out of ZMW' . number_format($data['amount'], 2) . ' from ' . $this->input->post('agent_code') . ', ' . $result['firstname'] . ' ' . $result['lastname'] . ', your balance is ZMW' . $this->your_balance($sender);
+												$reciever_message = 'Trans ID:' . $result3 . ', Dear Customer  cash in of ZMW' . number_format($data['amount'], 2) . ' from ' . $resultt['firstname'] . ' ' . $resultt['lastname'];
 												try {
 													$logger = array(
 														'user_type' => 'CUSTOMER',
@@ -1500,7 +1500,7 @@ class Customer extends CI_Controller
 //                                                    sendMail($customer->email_address, 'Kakupay Cashout', $sender_message);
 //                                                    sendMail($agent->email_address, 'Kakupay Cashin', $reciever_message);
 													$res['status'] = 'success';
-													$res['message'] = 'Dear customer, your transaction was successful. Your new balance is MWK' . number_format($this->your_balance($sender), 2);
+													$res['message'] = 'Dear customer, your transaction was successful. Your new balance is ZMW' . number_format($this->your_balance($sender), 2);
 
 												} catch (Exception $e) {
 													$logger = array(
@@ -1514,7 +1514,7 @@ class Customer extends CI_Controller
 													sendMail($customer->email_address, 'Kakupay Cashout', $sender_message);
 													sendMail($agent->email_address, 'Kakupay Cashin', $reciever_message);
 													$res['status'] = 'success';
-													$res['message'] = 'Your transaction was successful. Your balance is MWK' . number_format($this->your_balance($sender), 2);
+													$res['message'] = 'Your transaction was successful. Your balance is ZMW' . number_format($this->your_balance($sender), 2);
 												}
 
 											} else {
@@ -1672,7 +1672,7 @@ class Customer extends CI_Controller
 												$remainder1 = $reciever_moneyin_limit->limit_amount - $money_in_limit_calculation;
 
 												if ($remainder1 > 0) {
-													$note = ' or you may transfer funds  but not more than MK' . $remainder1;
+													$note = ' or you may transfer funds  but not more than ZMW' . $remainder1;
 												} else {
 													$note = "";
 												}
@@ -1686,7 +1686,7 @@ class Customer extends CI_Controller
 												if ($money_out_limit_calculation >= $sender_moneyout_limit->limit_amount || $money_out_limit_calculation + $data['amount'] > $sender_moneyout_limit->limit_amount) {
 													$remainder = $sender_moneyout_limit->limit_amount - $money_out_limit_calculation;
 													if ($remainder > 0) {
-														$concat = ' or you may transfer funds  but not more than MK' . $remainder;
+														$concat = ' or you may transfer funds  but not more than ZMW' . $remainder;
 													} else {
 														$concat = "";
 													}
@@ -1695,7 +1695,7 @@ class Customer extends CI_Controller
 													send_sms($data['sender'], $res['message']);
 												} else {
 													$res['status'] = 'success';
-													$res['message'] = 'Are you sure you want to send money MWK' . number_format($this->input->post('amount')) . ' to ' . $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'] . '';
+													$res['message'] = 'Are you sure you want to send money ZMW' . number_format($this->input->post('amount')) . ' to ' . $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'] . '';
 
 												}
 
@@ -1807,8 +1807,8 @@ class Customer extends CI_Controller
 												$reciever = $data['recepient'];
 												$customer_sender = get_customer($sender);
 												$customer_reciever = get_customer($reciever);
-												$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have sent MWK' . number_format($data['amount'], 2) . ' to ' . $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'] . '(' . $reciever . ')' . ' Bal: MWK' . number_format($this->your_balance($sender), 2);
-												$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received MWK' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
+												$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have sent ZMW' . number_format($data['amount'], 2) . ' to ' . $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'] . '(' . $reciever . ')' . ' Bal: ZMW' . number_format($this->your_balance($sender), 2);
+												$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received ZMW' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
 												try {
 													if ($this->check_favourite_exist($data['sender'], $data['recepient'])) {
 														send_sms($sender, $sender_message);
@@ -1816,7 +1816,7 @@ class Customer extends CI_Controller
 //							sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //                                    sendMail($customer_reciever->email_address,'KakuPay Money Transfers',$reciever_message);
 														$res['status'] = 'success';
-														$res['message'] = 'Transaction successful. Your new balance is MWK ' . number_format($this->your_balance($sender), 2);
+														$res['message'] = 'Transaction successful. Your new balance is ZMW ' . number_format($this->your_balance($sender), 2);
 
 													} else {
 														send_sms($sender, $sender_message);
@@ -1827,7 +1827,7 @@ class Customer extends CI_Controller
 														$res['command'] = 'save_favourite';
 														$res['fav_name'] = $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'];
 														$res['fav_number'] = $reciever;
-														$res['message'] = 'Transaction successful. Your new balance is MWK ' . number_format($this->your_balance($sender), 2);
+														$res['message'] = 'Transaction successful. Your new balance is ZMW ' . number_format($this->your_balance($sender), 2);
 
 													}
 												} catch (Exception $e) {
@@ -1837,7 +1837,7 @@ class Customer extends CI_Controller
 														sendMail($customer_sender->email_address, 'KakuPay Money Transfers', $sender_message);
 														sendMail($customer_reciever->email_address, 'KakuPay Money Transfers', $reciever_message);
 														$res['status'] = 'success';
-														$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is MWK " . number_format($this->your_balance($sender), 2);
+														$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is ZMW " . number_format($this->your_balance($sender), 2);
 
 
 													} else {
@@ -1850,7 +1850,7 @@ class Customer extends CI_Controller
 														$res['fav_name'] = $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'];
 														$res['fav_number'] = $reciever;
 														$res['status'] = 'success';
-														$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is MWK " . number_format($this->your_balance($sender), 2);
+														$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is ZMW " . number_format($this->your_balance($sender), 2);
 
 													}
 												}
@@ -1924,7 +1924,7 @@ class Customer extends CI_Controller
 
 			);
 			$this->Account_model->update_paid_fees($data['sender'], $data2);
-			$res['message']=$transaction_ref.' Dear customer MK'.$data['fees'].' was deducted from your account, for account  Account Reg.';
+			$res['message']=$transaction_ref.' Dear customer ZMW '.$data['fees'].' was deducted from your account, for account  Account Reg.';
 			send_sms($sender,$res['message']);
 		}
 
@@ -2122,7 +2122,7 @@ class Customer extends CI_Controller
 					if ($money_out_limit_calculation >= $sender_moneyout_limit->limit_amount || $money_out_limit_calculation + $data['amount'] > $sender_moneyout_limit->limit_amount) {
 						$remainder = $sender_moneyout_limit->limit_amount - $money_out_limit_calculation;
 						if ($remainder > 0) {
-							$concat = ' or you may transfer funds  but not more than MK' . $remainder;
+							$concat = ' or you may transfer funds  but not more than ZMW' . $remainder;
 						} else {
 							$concat = "";
 						}
@@ -2167,8 +2167,8 @@ class Customer extends CI_Controller
 
 
 
-								$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer, you have paid MWK' . number_format($data['amount'], 2) . ' to '.$this->input->post('service_name').',  Bal: MWK' . number_format($this->your_balance($sender), 2);
-								$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received MWK' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
+								$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer, you have paid ZMW' . number_format($data['amount'], 2) . ' to '.$this->input->post('service_name').',  Bal: ZMW' . number_format($this->your_balance($sender), 2);
+								$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received ZMW' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
 								try {
 
 									send_sms($sender, $sender_message);
@@ -2176,7 +2176,7 @@ class Customer extends CI_Controller
 //														sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //														sendMail($recepient->email_address,'KakuPay Money Transfers',$reciever_message);
 									$res['status'] = 'success';
-									$res['message'] = 'Transaction successful. Your new balance is MWK ' . number_format($this->your_balance($sender), 2);
+									$res['message'] = 'Transaction successful. Your new balance is ZMW ' . number_format($this->your_balance($sender), 2);
 
 
 								} catch (Exception $e) {
@@ -2187,7 +2187,7 @@ class Customer extends CI_Controller
 //														sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //														sendMail($recepient->email_address,'KakuPay Money Transfers',$reciever_message);
 									$res['status'] = 'success';
-									$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is MWK " . number_format($this->your_balance($sender), 2);
+									$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is ZMW " . number_format($this->your_balance($sender), 2);
 
 
 								}
@@ -2845,7 +2845,7 @@ class Customer extends CI_Controller
 							$logger = array(
 								'user_type'=>'MERCHANT',
 								'user_id'=>$data['recepient'],
-								'activity'=>'Reverse MWK'.number_format($data['amount'],2).' '.'from'.' '.$data['recepient']
+								'activity'=>'Reverse ZMW'.number_format($data['amount'],2).' '.'from'.' '.$data['recepient']
 							);
 							log_activity($logger);
 							$dataaa = array(
@@ -2866,8 +2866,8 @@ class Customer extends CI_Controller
 							$sender=$data['sender'];
 							$reciever=$data['recepient'];
 
-							$sender_message='Trans ID:'.$transaction_success.', Dear Customer MWK'.number_format($data['amount'],2).' has been refunded to '.$is_number_exisit['firstname'].' '.$is_number_exisit['lastname'].'('.$reciever.')'.' Bal: MWK'.number_format($this->your_balance($sender),2);
-							$reciever_message='Trans ID:'.$transaction_success.', Dear Customer your  MWK'.number_format($data['amount'],2).' has been refunded from  failed airtime purchase';
+							$sender_message='Trans ID:'.$transaction_success.', Dear Customer ZMW'.number_format($data['amount'],2).' has been refunded to '.$is_number_exisit['firstname'].' '.$is_number_exisit['lastname'].'('.$reciever.')'.' Bal: ZMW'.number_format($this->your_balance($sender),2);
+							$reciever_message='Trans ID:'.$transaction_success.', Dear Customer your  ZMW'.number_format($data['amount'],2).' has been refunded from  failed airtime purchase';
 							try{
 								$dataz= array(
 									'status'=>'Reversed'
@@ -2878,7 +2878,7 @@ class Customer extends CI_Controller
 //									sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //									sendMail($customer_reciever->email_address,'KakuPay Money Transfers',$reciever_message);
 								$res['status']='success';
-								$res['message']='Transaction successful. Your new balance is MWK '.number_format($this->your_balance($sender),2);
+								$res['message']='Transaction successful. Your new balance is ZMW '.number_format($this->your_balance($sender),2);
 
 							}
 							catch(Exception $e){
@@ -2891,7 +2891,7 @@ class Customer extends CI_Controller
 //									sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //									sendMail($customer_reciever->email_address,'KakuPay Money Transfers',$reciever_message);
 								$res['status']='success';
-								$res['message']='Transaction successful. Your new balance is MWK '.number_format($this->your_balance($sender),2);
+								$res['message']='Transaction successful. Your new balance is ZMW '.number_format($this->your_balance($sender),2);
 
 							}
 
@@ -2995,7 +2995,7 @@ class Customer extends CI_Controller
 								$logger = array(
 									'user_type'=>'MERCHANT',
 									'user_id'=>$data['recepient'],
-									'activity'=>'Reverse MWK'.number_format($data['amount'],2).' '.'from'.' '.$data['recepient']
+									'activity'=>'Reverse ZMW'.number_format($data['amount'],2).' '.'from'.' '.$data['recepient']
 								);
 								log_activity($logger);
 								$dataaa = array(
@@ -3016,8 +3016,8 @@ class Customer extends CI_Controller
 								$sender=$data['sender'];
 								$reciever=$data['recepient'];
 
-								$sender_message='Trans ID:'.$transaction_success.', Dear Customer MWK'.number_format($data['amount'],2).' has been refunded to '.$is_number_exisit['firstname'].' '.$is_number_exisit['lastname'].'('.$reciever.')'.' Bal: MWK'.number_format($this->your_balance($sender),2);
-								$reciever_message='Trans ID:'.$transaction_success.', Dear Customer your  MWK'.number_format($data['amount'],2).' has been refunded from  failed airtime purchase';
+								$sender_message='Trans ID:'.$transaction_success.', Dear Customer ZMW'.number_format($data['amount'],2).' has been refunded to '.$is_number_exisit['firstname'].' '.$is_number_exisit['lastname'].'('.$reciever.')'.' Bal: ZMW'.number_format($this->your_balance($sender),2);
+								$reciever_message='Trans ID:'.$transaction_success.', Dear Customer your  ZMW'.number_format($data['amount'],2).' has been refunded from  failed airtime purchase';
 								try{
 									$dataz= array(
 										'status'=>'Reversed'
@@ -3028,7 +3028,7 @@ class Customer extends CI_Controller
 //									sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //									sendMail($customer_reciever->email_address,'KakuPay Money Transfers',$reciever_message);
 									$res['status']='success';
-									$res['message']='Transaction successful. Your new balance is MWK '.number_format($this->your_balance($sender),2);
+									$res['message']='Transaction successful. Your new balance is ZMW '.number_format($this->your_balance($sender),2);
 
 								}
 								catch(Exception $e){
@@ -3041,7 +3041,7 @@ class Customer extends CI_Controller
 //									sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //									sendMail($customer_reciever->email_address,'KakuPay Money Transfers',$reciever_message);
 									$res['status']='success';
-									$res['message']='Transaction successful. Your new balance is MWK '.number_format($this->your_balance($sender),2);
+									$res['message']='Transaction successful. Your new balance is ZMW '.number_format($this->your_balance($sender),2);
 
 								}
 
@@ -3156,7 +3156,7 @@ class Customer extends CI_Controller
 						if ($money_out_limit_calculation >= $sender_moneyout_limit->limit_amount || $money_out_limit_calculation + $data['amount'] > $sender_moneyout_limit->limit_amount) {
 							$remainder = $sender_moneyout_limit->limit_amount - $money_out_limit_calculation;
 							if ($remainder > 0) {
-								$concat = ' or you may transfer funds  but not more than MK' . $remainder;
+								$concat = ' or you may transfer funds  but not more than ZMW' . $remainder;
 							} else {
 								$concat = "";
 							}
@@ -3201,8 +3201,8 @@ class Customer extends CI_Controller
 
 									$customer_sender = get_customer($sender);
 
-									$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer, your account was deducted MWK' . number_format($data['amount'], 2) . ' towards airtime purchase,  Bal: MWK' . number_format($this->your_balance($sender), 2);
-									$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received MWK' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
+									$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer, your account was deducted ZMW' . number_format($data['amount'], 2) . ' towards airtime purchase,  Bal: ZMW' . number_format($this->your_balance($sender), 2);
+									$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received ZMW' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
 									try {
 
 										send_sms($sender, $sender_message);
@@ -3211,7 +3211,7 @@ class Customer extends CI_Controller
 //														sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //														sendMail($recepient->email_address,'KakuPay Money Transfers',$reciever_message);
 										$res['status'] = 'success';
-										$res['message'] = 'Transaction successful. Your new balance is MWK ' . number_format($this->your_balance($sender), 2);
+										$res['message'] = 'Transaction successful. Your new balance is ZMW ' . number_format($this->your_balance($sender), 2);
 
 
 									} catch (Exception $e) {
@@ -3222,7 +3222,7 @@ class Customer extends CI_Controller
 //														sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //														sendMail($recepient->email_address,'KakuPay Money Transfers',$reciever_message);
 										$res['status'] = 'success';
-										$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is MWK " . number_format($this->your_balance($sender), 2);
+										$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is ZMW " . number_format($this->your_balance($sender), 2);
 
 
 									}
@@ -3341,8 +3341,8 @@ class Customer extends CI_Controller
 													$reciever = $data['recepient'];
 													$customer_sender = get_customer($sender);
 													$customer_reciever = get_customer($reciever);
-													$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have sent MWK' . number_format($data['amount'], 2) . ' to ' . $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'] . '(' . $reciever . ')' . ' Bal: MWK' . number_format($this->your_balance($sender), 2);
-													$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received MWK' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
+													$sender_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have sent ZMW' . number_format($data['amount'], 2) . ' to ' . $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'] . '(' . $reciever . ')' . ' Bal: ZMW' . number_format($this->your_balance($sender), 2);
+													$reciever_message = 'Trans ID:' . $transaction_success . ', Dear Customer You have received ZMW' . number_format($data['amount'], 2) . ' from ' . $is_pin_correct['firstname'] . ' ' . $is_pin_correct['lastname'] . ' (' . $sender . ')';
 													try {
 														if ($this->check_favourite_exist($data['sender'], $data['recepient'])) {
 															send_sms($sender, $sender_message);
@@ -3350,7 +3350,7 @@ class Customer extends CI_Controller
 //							sendMail($customer_sender->email_address,'KakuPay Money Transfers',$sender_message);
 //                                    sendMail($customer_reciever->email_address,'KakuPay Money Transfers',$reciever_message);
 															$res['status'] = 'success';
-															$res['message'] = 'Transaction successful. Your new balance is MWK ' . number_format($this->your_balance($sender), 2);
+															$res['message'] = 'Transaction successful. Your new balance is ZMW ' . number_format($this->your_balance($sender), 2);
 
 														} else {
 															send_sms($sender, $sender_message);
@@ -3361,7 +3361,7 @@ class Customer extends CI_Controller
 															$res['command'] = 'save_favourite';
 															$res['fav_name'] = $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'];
 															$res['fav_number'] = $reciever;
-															$res['message'] = 'Transaction successful. Your new balance is MWK ' . number_format($this->your_balance($sender), 2);
+															$res['message'] = 'Transaction successful. Your new balance is ZMW ' . number_format($this->your_balance($sender), 2);
 
 														}
 													} catch (Exception $e) {
@@ -3371,7 +3371,7 @@ class Customer extends CI_Controller
 															sendMail($customer_sender->email_address, 'KakuPay Money Transfers', $sender_message);
 															sendMail($customer_reciever->email_address, 'KakuPay Money Transfers', $reciever_message);
 															$res['status'] = 'success';
-															$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is MWK " . number_format($this->your_balance($sender), 2);
+															$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is ZMW " . number_format($this->your_balance($sender), 2);
 
 
 														} else {
@@ -3384,7 +3384,7 @@ class Customer extends CI_Controller
 															$res['fav_name'] = $is_number_exisit['firstname'] . ' ' . $is_number_exisit['lastname'];
 															$res['fav_number'] = $reciever;
 															$res['status'] = 'success';
-															$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is MWK " . number_format($this->your_balance($sender), 2);
+															$res['message'] = "Transaction Succeeded. Unfortunately we couldn't to send an SMS verification. Your new balance is ZMW " . number_format($this->your_balance($sender), 2);
 
 														}
 													}

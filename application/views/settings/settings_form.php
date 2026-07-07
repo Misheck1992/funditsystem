@@ -74,10 +74,113 @@
 
             <input type="text" class="form-control" name="time_zone" id="time_zone" placeholder="Time Zone" value="<?php echo $time_zone; ?>" />
         </div>
-	    <input type="hidden" name="settings_id" value="<?php echo $settings_id; ?>" /> 
-	    <button type="submit" class="btn btn-primary"><?php echo $button ?></button> 
+
+        <!-- SMTP Email Configuration Section -->
+        <div style="background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 25px 0;">
+            <h4 style="margin: 0 0 20px 0; color: #1e3a5f; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px;">
+                <i class="fa fa-envelope" style="margin-right: 8px;"></i>SMTP Email Configuration
+            </h4>
+            <p style="color: #6b7280; font-size: 13px; margin-bottom: 20px;">
+                Configure your SMTP settings to enable email notifications from the system.
+            </p>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="protocal">Protocol <?php echo form_error('protocal') ?></label>
+                        <select class="form-control" name="protocal" id="protocal">
+                            <option value="smtp" <?php echo (isset($protocal) && $protocal == 'smtp') ? 'selected' : ''; ?>>SMTP</option>
+                            <option value="mail" <?php echo (isset($protocal) && $protocal == 'mail') ? 'selected' : ''; ?>>PHP Mail</option>
+                            <option value="sendmail" <?php echo (isset($protocal) && $protocal == 'sendmail') ? 'selected' : ''; ?>>Sendmail</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="email_host">SMTP Host <?php echo form_error('email_host') ?></label>
+                        <input type="text" class="form-control" name="email_host" id="email_host" placeholder="e.g., smtp.gmail.com" value="<?php echo isset($email_host) ? $email_host : ''; ?>" />
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="email_port">SMTP Port <?php echo form_error('email_port') ?></label>
+                        <select class="form-control" name="email_port" id="email_port">
+                            <option value="587" <?php echo (isset($email_port) && $email_port == '587') ? 'selected' : ''; ?>>587 (TLS - Recommended)</option>
+                            <option value="465" <?php echo (isset($email_port) && $email_port == '465') ? 'selected' : ''; ?>>465 (SSL)</option>
+                            <option value="25" <?php echo (isset($email_port) && $email_port == '25') ? 'selected' : ''; ?>>25 (Unencrypted)</option>
+                            <option value="2525" <?php echo (isset($email_port) && $email_port == '2525') ? 'selected' : ''; ?>>2525 (Alternative)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="email_user">SMTP Username <?php echo form_error('email_user') ?></label>
+                        <input type="text" class="form-control" name="email_user" id="email_user" placeholder="your-email@domain.com" value="<?php echo isset($email_user) ? $email_user : ''; ?>" />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label for="email_pass">SMTP Password <?php echo form_error('email_pass') ?></label>
+                        <input type="password" class="form-control" name="email_pass" id="email_pass" placeholder="<?php echo (!empty($email_pass)) ? '********' : 'Enter password'; ?>" value="" />
+                        <small class="text-muted">Leave empty to keep current password</small>
+                    </div>
+                </div>
+            </div>
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-top: 15px;">
+                <strong style="color: #92400e;"><i class="fa fa-info-circle"></i> Common SMTP Settings:</strong>
+                <ul style="margin: 10px 0 0 20px; color: #92400e; font-size: 12px;">
+                    <li><strong>Gmail:</strong> smtp.gmail.com, Port 587, Use App Password</li>
+                    <li><strong>Outlook/Office 365:</strong> smtp.office365.com, Port 587</li>
+                    <li><strong>Yahoo:</strong> smtp.mail.yahoo.com, Port 587</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Test Email Button -->
+        <div class="form-group">
+            <button type="button" class="btn btn-info" onclick="testEmail()" id="test_email_btn">
+                <i class="fa fa-paper-plane"></i> Send Test Email
+            </button>
+            <span id="test_email_result" style="margin-left: 10px;"></span>
+        </div>
+
+	    <input type="hidden" name="settings_id" value="<?php echo $settings_id; ?>" />
+	    <button type="submit" class="btn btn-primary"><?php echo $button ?></button>
 	    <a href="<?php echo site_url('settings') ?>" class="btn btn-default">Cancel</a>
 	</form>
+
+<script>
+function testEmail() {
+    var btn = document.getElementById('test_email_btn');
+    var result = document.getElementById('test_email_result');
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Sending...';
+    result.innerHTML = '';
+
+    $.ajax({
+        url: '<?php echo base_url("settings/test_email"); ?>',
+        type: 'POST',
+        dataType: 'json',
+        success: function(response) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa fa-paper-plane"></i> Send Test Email';
+
+            if (response.success) {
+                result.innerHTML = '<span class="text-success"><i class="fa fa-check-circle"></i> ' + response.message + '</span>';
+            } else {
+                result.innerHTML = '<span class="text-danger"><i class="fa fa-times-circle"></i> ' + response.message + '</span>';
+            }
+        },
+        error: function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa fa-paper-plane"></i> Send Test Email';
+            result.innerHTML = '<span class="text-danger"><i class="fa fa-times-circle"></i> Error sending test email</span>';
+        }
+    });
+}
+</script>
 		</div>
 	</div>
 </div>

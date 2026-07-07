@@ -72,10 +72,10 @@
               <th>Old Loan Reference No.  </th>
               <th>Currency  </th>
               <th>Approved Amount  </th>
-              <th>	Approved Amount(MWK)  </th>
+              <th>	Approved Amount(ZMW)  </th>
               <th>Disbursed   </th>
               <th>Amount   </th>
-              <th>Disbursed Amount (MWK)   </th>
+              <th>Disbursed Amount (ZMW)   </th>
              <th> Disbursement Date  </th>
              <th>Maturity Date  </th>
             <th> Borrower Type  </th>
@@ -88,14 +88,14 @@
            <th>	Account Status  </th>
            <th>	Account Status Change Date   </th>
           <th> Scheduled Repayment Amount  </th>
-          <th>Scheduled Repayment Amount(MWK)  </th>
+          <th>Scheduled Repayment Amount(ZMW)  </th>
           <th>Total Amount Paid To Date  </th>
-          <th>Total Amount Paid To Date(MWK)</th>
-          <th>Current Balance	Current Balance(MWK)  </th>
+          <th>Total Amount Paid To Date(ZMW)</th>
+          <th>Current Balance	Current Balance(ZMW)  </th>
           <th>	Available Credit  </th>
-          <th>	Available Credit(MWK)  </th>
+          <th>	Available Credit(ZMW)  </th>
           <th>Amount In Arrears  </th>	
-          <th>Amount In Arrears(MWK)  </th>
+          <th>Amount In Arrears(ZMW)  </th>
           <th>	Days In Arrears	  </th> 
           <th>No. of Installments In Arrears   </th>
           <th>	Default Date  </th>
@@ -104,7 +104,7 @@
          <th>First Payment Date  </th>
          <th>	Last Payment Date  </th>	
          <th>Last Payment Amount</th>
-         <th>Last Payment Amount (MWK)</th>
+         <th>Last Payment Amount (ZMW)</th>
                 </tr>
                 </thead>
                 <tbody>

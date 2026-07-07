@@ -11,6 +11,41 @@
 	</div>
 	<div class="card">
 		<div class="card-body" style="border: thick #153505 solid;border-radius: 14px;">
+			
+			<!-- Disburser Instructions -->
+			<div class="alert alert-primary mb-4" style="background-color: #d1ecf1; border-color: #b8daff; border-radius: 8px;">
+				<div class="d-flex align-items-center">
+					<i class="fas fa-money-bill-wave" style="font-size: 24px; color: #004085; margin-right: 15px;"></i>
+					<div>
+						<h5 class="alert-heading mb-2" style="color: #004085; font-weight: 600;">
+							<i class="fas fa-coins"></i> You are acting as: Disburser
+						</h5>
+						<p class="mb-2" style="color: #004085;">
+							<strong>Your Role:</strong> Disburse approved loans to customers and manage fund transfers.
+						</p>
+						<hr style="border-color: #b8daff; margin: 10px 0;">
+						<div class="row">
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #004085; font-size: 14px;">
+									<i class="fas fa-hand-holding-usd text-success"></i> <strong>To Disburse:</strong> Click "View/Disburse" → "Disburse Loan"
+								</p>
+								<p class="mb-1" style="color: #004085; font-size: 14px;">
+									<i class="fas fa-calendar-alt text-info"></i> <strong>Date Adjustment:</strong> You can modify loan start date if needed
+								</p>
+							</div>
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #004085; font-size: 14px;">
+									<i class="fas fa-clipboard-check"></i> <strong>Verify:</strong> Check loan amount and customer account details
+								</p>
+								<p class="mb-1" style="color: #004085; font-size: 14px;">
+									<i class="fas fa-arrow-right"></i> <strong>Next Step:</strong> Disbursed loans become active and generate payment schedules
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			
 		    <div>
                 <?php
                 $products = get_all('loan_products');
@@ -29,10 +64,8 @@
                         }
                         ?>
                     </select> Status: <select name="status" id="">
-                       
-                       
+                        <option value="CLIENT_SIGNED">CLIENT SIGNED (Ready for Disburse)</option>
                         <option value="APPROVED">APPROVED</option>
-                       
                     </select>  Officer: <select name="user" id="" class="select2">
                         <option value="All">All officers</option>
                         <?php
@@ -128,7 +161,7 @@
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
 						<td width="250">
-						<a href="<?php echo base_url('loan/view/').$loan->loan_id.'?action=disburse'?>" class="btn btn-sm btn-danger">View/Disburse</a>
+						<a href="<?php echo base_url('loan/approve/').$loan->loan_id?>" class="btn btn-sm btn-danger">View/Disburse</a>
 						</td>
 
 					</tr>

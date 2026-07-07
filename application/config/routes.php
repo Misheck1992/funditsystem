@@ -55,6 +55,8 @@ $route['404_override'] = '';
 $route['translate_uri_dashes'] = FALSE;
 
 //customer api routes
-
 $route['apiv1/customer/login'] = 'Customer_api/login';
 $route['apiv1/customer/savings/balance'] = 'Customer_api/savings_balance';
+
+// API routes - case-insensitive access
+$route['api/(:any)'] = 'Api/$1';

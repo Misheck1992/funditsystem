@@ -192,13 +192,37 @@ $existing_shareholders = get_all_shareholders($id);
                                 <input type="text" class="form-control" name="postal_code" id="postal_code" placeholder="postal_code" value="<?php echo $postal_code; ?>" />
                             </div>
                             <div class="form-group col-6">
-                                <label for="int">Contact Email <?php echo form_error('contact_email') ?></label>
-                                <input type="text" class="form-control" name="contact_email" id="contact_email" placeholder="province" value="<?php echo $contact_email; ?>" />
+                                <label for="int">Contact Email * <?php echo form_error('contact_email') ?></label>
+                                <input type="email" class="form-control" name="contact_email" id="contact_email" placeholder="email@company.com" value="<?php echo $contact_email; ?>" required />
                             </div>
 
                             <div class="form-group col-6">
-                                <label for="int">phone_number * <?php echo form_error('phone_number') ?></label>
-                                <input type="text" class="form-control" name="corporate_phone" id="corporate_phone" placeholder="Phone number" value="<?php echo $phone_number; ?>" required />
+                                <label for="int">Phone Number * <?php echo form_error('phone_number') ?></label>
+                                <div class="input-group">
+                                    <select class="form-control" name="phone_country_code" id="phone_country_code" style="max-width: 110px; flex: 0 0 110px;">
+                                        <option value="+260">+260 ZM</option>
+                                        <option value="+27">+27 ZA</option>
+                                        <option value="+263">+263 ZW</option>
+                                        <option value="+265">+265 MW</option>
+                                        <option value="+258">+258 MZ</option>
+                                        <option value="+267">+267 BW</option>
+                                        <option value="+264">+264 NA</option>
+                                        <option value="+243">+243 CD</option>
+                                        <option value="+255">+255 TZ</option>
+                                        <option value="+254">+254 KE</option>
+                                    </select>
+                                    <?php
+                                    $corp_phone_display = '';
+                                    if (!empty($phone_number)) {
+                                        $corp_phone_display = preg_replace('/^\+\d{1,3}/', '', $phone_number);
+                                    }
+                                    ?>
+                                    <input type="text" class="form-control" name="phone_number_input" id="phone_number_input"
+                                           placeholder="9XXXXXXXX" value="<?php echo $corp_phone_display; ?>"
+                                           pattern="[789][0-9]{3,}" minlength="4" required
+                                           title="Enter at least 4 digits starting with 7, 8, or 9" />
+                                </div>
+                                <small class="text-muted">At least 4 digits starting with 7, 8, or 9</small>
                             </div>
 
                             <div class="form-group col-6">
@@ -214,6 +238,20 @@ $existing_shareholders = get_all_shareholders($id);
                             <div class="form-group col-12">
                                 <label for="business_info">Business Info <?php echo form_error('business_info') ?></label>
                                 <textarea class="form-control" name="business_info" id="business_info" rows="3" placeholder="Enter business information"><?php echo isset($business_info) ? $business_info : ''; ?></textarea>
+                            </div>
+
+                            <!-- Financial Year End and Employee Count Fields -->
+                            <div class="form-group col-6">
+                                <label for="financial_year_end">Financial Year End</label>
+                                <input type="date" class="form-control" name="financial_year_end" id="financial_year_end" value="<?php echo isset($financial_year_end) ? $financial_year_end : ''; ?>" />
+                            </div>
+                            <div class="form-group col-3">
+                                <label for="casual_employees">Casual Employees</label>
+                                <input type="number" class="form-control" name="casual_employees" id="casual_employees" min="0" value="<?php echo isset($casual_employees) ? $casual_employees : '0'; ?>" />
+                            </div>
+                            <div class="form-group col-3">
+                                <label for="permanent_employees">Permanent Employees</label>
+                                <input type="number" class="form-control" name="permanent_employees" id="permanent_employees" min="0" value="<?php echo isset($permanent_employees) ? $permanent_employees : '0'; ?>" />
                             </div>
 
                             <!-- Updated file upload sections - made optional -->

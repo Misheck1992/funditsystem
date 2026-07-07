@@ -72,6 +72,20 @@ class Currency_model extends CI_Model
         $this->db->delete($this->table);
     }
 
+    // Get all currencies from currencies table
+    function get_all_currencies()
+    {
+        $this->db->order_by('currency_name', 'ASC');
+        return $this->db->get('currencies')->result();
+    }
+
+    // Update exchange rate
+    function update_exchange_rate($currency_id, $data)
+    {
+        $this->db->where('currency_id', $currency_id);
+        return $this->db->update('currencies', $data);
+    }
+
 }
 
 /* End of file Currency_model.php */

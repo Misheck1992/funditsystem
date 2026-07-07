@@ -70,17 +70,23 @@
                         <td><a href="<?php echo base_url($preview_url).$loan->loan_customer?>""><?php echo $customer_name?></a></td>
                         <!--			<td><a href="--><?php //echo base_url('individual_customers/view/').$loan->id?><!--"">--><?php //echo $loan->Firstname." ".$loan->Lastname?><!--</a></td>-->
                         <td><?php echo $loan->loan_date ?></td>
-                        <td>MK<?php echo number_format($loan->loan_principal,2) ?></td>
+                        <td>ZMW <?php echo number_format($loan->loan_principal,2) ?></td>
                         <td><?php echo $loan->loan_period ?></td>
                         <td><?php echo $loan->period_type ?></td>
                         <td><?php echo $loan->loan_interest ?>%</td>
-                        <td>MK<?php echo number_format($loan->loan_amount_total,2) ?></td>
+                        <td>ZMW <?php echo number_format($loan->loan_amount_total,2) ?></td>
 
                         <td><a href="#" onclick="get_loan_files('<?php  echo $loan->loan_id ;?>')" >Download file <i class="fa fa-download fa-flip"></i></a></td>
 
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
-                        <td><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan->loan_id?>">Request To Edit </a></td>
+                        <td>
+                            <?php if($loan->loan_status != 'CLOSED' && $loan->loan_status != 'WRITTEN_OFF'): ?>
+                            <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan->loan_id?>">Request To Edit </a>
+                            <?php else: ?>
+                            <span style="color: #999;">Not Editable</span>
+                            <?php endif; ?>
+                        </td>
 
                     </tr>
                     <?php

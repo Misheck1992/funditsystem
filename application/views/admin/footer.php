@@ -272,18 +272,18 @@ $settings = get_by_id('settings','settings_id','1');
                     <div class="form-group col-12">
                         <label for="pdate">Previous loan start date</label>
                         <input type="text" id="dloan_iddd" name="loan_id" hidden>
-                        <input type="date" id="pdatee" class="form-control" name="pdate" readonly>
+                        <input type="date" id="pdatee" class="form-control" name="pdate" readonly style="background-color: #f8f9fa;">
                     </div>
-                    <!--
                     <div class="form-group col-12">
-                        <label for="cdate">You can change loan start date here</label>
-                        <input type="date" id="cdate" class="form-control" name="cdate">
+                        <label for="cdate">Disburse Date (New loan start date)</label>
+                        <input type="date" id="cdate" class="form-control" name="cdate" required>
+                        <small class="form-text text-muted">If this date is different from the previous loan start date, payment schedules will be recalculated.</small>
                     </div>
-                    -->
                     <div class="form-group col-12">
-                        <textarea name="comment" id="" cols="30" rows="10" placeholder="Write your comments"></textarea>
+                        <label for="comment">Comments</label>
+                        <textarea name="comment" id="comment" cols="30" rows="6" class="form-control" placeholder="Write your comments about the disbursement"></textarea>
                     </div>
-                    <button type="submit"  class="btn btn-primary">Save Changes</button>
+                    <button type="submit" class="btn btn-primary">Disburse Loan</button>
                 </form>
 
 
@@ -885,6 +885,7 @@ $get_c = get_all('individual_customers');
     function disburse_loan_charge_pre_paid(id,date){
         $("#dloan_iddd").val(id);
         $("#pdatee").val(date);
+        $("#cdate").val(date); // Set the disburse date to the original loan date by default
         $("#disburse_modal_pre_paid_charge").modal('show');
     }
     function finish_payment(id){
@@ -1535,7 +1536,7 @@ $get_c = get_all('individual_customers');
 				<label>Customer Number</label>
 			</div>
 			<div class="customer-details">
-<span><label class="amount-label">Total deposit -MWK  :${response.data.amount}</label> </span><input type="text"  style="font-size: 5px;" value="">
+<span><label class="amount-label">Total deposit - ZMW :${response.data.amount}</label> </span><input type="text"  style="font-size: 5px;" value="">
 				<label for="customername">Name</label><input id="customername" type="text" name="customername" value="${account_name}">
 				<span class="detail-tip"><em>(Please print)</em></span>
 				<label for="checkdate">Date</label><input id="checkdate" type="text" name="checkdate" value="${new Date().toISOString()}">
@@ -1878,6 +1879,44 @@ $get_c = get_all('individual_customers');
     CKEDITOR.replace( 'group_description' );
     CKEDITOR.replace( 'AddressLine3' );
     CKEDITOR.replace( 'narration' );
+
+    // Personal Loan Appraisal fields
+    if (document.getElementById('past_loans_comment')) {
+        CKEDITOR.replace('past_loans_comment');
+    }
+    if (document.getElementById('security_notes')) {
+        CKEDITOR.replace('security_notes');
+    }
+    if (document.getElementById('bank_statement_notes')) {
+        CKEDITOR.replace('bank_statement_notes');
+    }
+    if (document.getElementById('about_transaction')) {
+        CKEDITOR.replace('about_transaction');
+    }
+    if (document.getElementById('risk_analysis')) {
+        CKEDITOR.replace('risk_analysis');
+    }
+
+    // Corporate Loan Appraisal fields
+    if (document.getElementById('narration_corp')) {
+        CKEDITOR.replace('narration_corp');
+    }
+    if (document.getElementById('past_loans_comment_corp')) {
+        CKEDITOR.replace('past_loans_comment_corp');
+    }
+    if (document.getElementById('security_notes_corp')) {
+        CKEDITOR.replace('security_notes_corp');
+    }
+    if (document.getElementById('bank_statement_notes_corp')) {
+        CKEDITOR.replace('bank_statement_notes_corp');
+    }
+    if (document.getElementById('about_transaction_corp')) {
+        CKEDITOR.replace('about_transaction_corp');
+    }
+    if (document.getElementById('risk_analysis_corp')) {
+        CKEDITOR.replace('risk_analysis_corp');
+    }
+
     function populate(id,chart,name,balance,currency,cdate,status,photo,si,id_fron,id_back){
         $("#search_modal").modal('hide');
         $("#dacn").val(id);
@@ -1934,18 +1973,14 @@ $get_c = get_all('individual_customers');
     function get_transaction_usage(id){
        $("#breakdown_usage").modal("show");
         $.ajax({
-            url:"<?php echo base_url()?>Transactions/get_transactions/"+id,
+            url:"<?php echo base_url()?>loan/get_transaction_usage/"+id,
             method:"GET",
-            dataType:"json",
-
             beforeSend:()=>{
-                $("#breakdown_content").html("<i class='fa fa-spinner fa-spin'></i>Loading data");
+                $("#breakdown_content").html("<i class='fa fa-spinner fa-spin'></i> Loading data...");
             },success:function(res){
-
-
+                $("#breakdown_content").html(res);
             },error:()=>{
-
-                alert('Failed to interact with server check internet connection')
+                $("#breakdown_content").html("<p class='text-danger'>Failed to load breakdown. Check your connection.</p>");
             }
         });
 
@@ -2611,7 +2646,25 @@ $get_c = get_all('individual_customers');
         fieldId++;
         var html = '<br /><hr/>  <div class="row">\n' +
             '                                    <div class="col-6 mt-2"><input type="text" name="name[]" placeholder="collateral name" class="form-control"></div>\n' +
-            '                                    <div class="col-6 mt-2"><input type="text" name="type[]" placeholder="collateral type" class="form-control"></div>\n' +
+            '                                    <div class="col-6 mt-2">\n' +
+            '                                        <select name="type[]" class="form-control" required>\n' +
+            '                                            <option value="">--Select Collateral Type--</option>\n' +
+            '                                            <option value="Real Estate">Real Estate</option>\n' +
+            '                                            <option value="Vehicle">Vehicle</option>\n' +
+            '                                            <option value="Equipment/Machinery">Equipment/Machinery</option>\n' +
+            '                                            <option value="Inventory/Stock">Inventory/Stock</option>\n' +
+            '                                            <option value="Cash Deposit">Cash Deposit</option>\n' +
+            '                                            <option value="Securities/Bonds">Securities/Bonds</option>\n' +
+            '                                            <option value="Accounts Receivable">Accounts Receivable</option>\n' +
+            '                                            <option value="Personal Guarantee">Personal Guarantee</option>\n' +
+            '                                            <option value="Corporate Guarantee">Corporate Guarantee</option>\n' +
+            '                                            <option value="Life Insurance Policy">Life Insurance Policy</option>\n' +
+            '                                            <option value="Fixed Deposit">Fixed Deposit</option>\n' +
+            '                                            <option value="Gold/Precious Metals">Gold/Precious Metals</option>\n' +
+            '                                            <option value="Intellectual Property">Intellectual Property</option>\n' +
+            '                                            <option value="Other">Other</option>\n' +
+            '                                        </select>\n' +
+            '                                    </div>\n' +
             '                                </div>\n' +
             '                                <div class="row">\n' +
             '                                    <div class="col-6 mt-2"><input type="text" name="serial[]" placeholder="serial number" class="form-control"></div>\n' +
@@ -3017,6 +3070,7 @@ $countries = get_all('geo_countries');
 		document.getElementById('accrued_interest').textContent = '';
 		document.getElementById('total_payoff').textContent = '';
 		document.getElementById('payoff_amount').value = '0';
+		document.getElementById('non_bullet_breakdown').style.display = 'none';
 
 		// Set the default date to today
 		var today = new Date();
@@ -3054,19 +3108,30 @@ $countries = get_all('geo_countries');
 			dataType: 'json',
 			success: function(response) {
 				if (response.status === 'success') {
-					// Update the UI with calculated values
 					document.getElementById('current_balance').textContent = formatNumber(response.current_balance);
 					document.getElementById('accrued_interest').textContent = formatNumber(response.accrued_interest);
 					document.getElementById('total_payoff').textContent = formatNumber(response.total_payoff);
 					document.getElementById('payoff_amount').value = response.total_payoff;
 
-					// Show the rows and payment options
 					document.getElementById('accrued_interest_row').style.display = '';
 					document.getElementById('total_payoff_row').style.display = '';
 					document.getElementById('payment_options').style.display = 'block';
-					$("#total_amount").val(response.total_payoff)
-					$("#total_amount1").val(response.total_payoff)
 
+					if (response.amount_due !== undefined) {
+						// Non-bullet: show breakdown with Amount Due and Full Pay-off options
+						document.getElementById('amount_due_display').textContent = formatNumber(response.amount_due);
+						document.getElementById('full_payoff_display').textContent = formatNumber(response.total_payoff);
+						document.getElementById('amount_due_value').value = response.amount_due;
+						document.getElementById('full_payoff_value').value = response.total_payoff;
+						document.getElementById('non_bullet_breakdown').style.display = 'block';
+						$("#total_amount").val(response.total_payoff);
+						$("#total_amount1").val(response.total_payoff);
+					} else {
+						// Bullet: hide breakdown
+						document.getElementById('non_bullet_breakdown').style.display = 'none';
+						$("#total_amount").val(response.total_payoff);
+						$("#total_amount1").val(response.total_payoff);
+					}
 				} else {
 					alert('Error: ' + response.message);
 				}
@@ -3586,8 +3651,120 @@ $countries = get_all('geo_countries');
                     }
                 ]
             });
+
+            // Loan Track Table
+            $('#loan-track-table').DataTable({
+                responsive: true,
+                pageLength: 25,
+                dom: 'Bfrtip',
+                buttons: [
+                    {
+                        extend: 'copy',
+                        text: '<i class="fa fa-copy"></i> Copy',
+                        className: 'btn btn-sm btn-secondary'
+                    },
+                    {
+                        extend: 'csv',
+                        text: '<i class="fa fa-file-text"></i> CSV',
+                        className: 'btn btn-sm btn-secondary',
+                        title: 'Loan_Track_' + new Date().toISOString().slice(0,10)
+                    },
+                    {
+                        extend: 'excel',
+                        text: '<i class="fa fa-file-excel-o"></i> Excel',
+                        className: 'btn btn-sm btn-success',
+                        title: 'Loan_Track_' + new Date().toISOString().slice(0,10)
+                    },
+                    {
+                        extend: 'pdf',
+                        text: '<i class="fa fa-file-pdf-o"></i> PDF',
+                        className: 'btn btn-sm btn-danger',
+                        title: 'Loan Track Report',
+                        orientation: 'landscape',
+                        pageSize: 'A4'
+                    },
+                    {
+                        extend: 'print',
+                        text: '<i class="fa fa-print"></i> Print',
+                        className: 'btn btn-sm btn-info'
+                    }
+                ],
+                order: [[0, 'desc']]
+            });
+
+            // Individual Customers Table
+            $('#individual-customers-table').DataTable({
+                responsive: true,
+                pageLength: 25,
+                dom: 'Bfrtip',
+                buttons: [
+                    {
+                        extend: 'copy',
+                        text: '<i class="fa fa-copy"></i> Copy',
+                        className: 'btn btn-sm btn-secondary'
+                    },
+                    {
+                        extend: 'csv',
+                        text: '<i class="fa fa-file-text"></i> CSV',
+                        className: 'btn btn-sm btn-secondary',
+                        title: 'Individual_Customers_' + new Date().toISOString().slice(0,10)
+                    },
+                    {
+                        extend: 'excel',
+                        text: '<i class="fa fa-file-excel-o"></i> Excel',
+                        className: 'btn btn-sm btn-success',
+                        title: 'Individual_Customers_' + new Date().toISOString().slice(0,10)
+                    },
+                    {
+                        extend: 'pdf',
+                        text: '<i class="fa fa-file-pdf-o"></i> PDF',
+                        className: 'btn btn-sm btn-danger',
+                        title: 'Individual Customers Report',
+                        orientation: 'landscape',
+                        pageSize: 'A4'
+                    },
+                    {
+                        extend: 'print',
+                        text: '<i class="fa fa-print"></i> Print',
+                        className: 'btn btn-sm btn-info'
+                    }
+                ],
+                order: [[0, 'desc']]
+            });
         }
     });
+
+    // Bank statement month validation - prevent future months
+    $(document).ready(function() {
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+        
+        $('#statement_month').on('change', function() {
+            const selectedMonth = parseInt($(this).val());
+            
+            if (selectedMonth > currentMonth) {
+                alert('You cannot select a future month for bank statements.');
+                $(this).val(''); // Reset selection
+                return false;
+            }
+        });
+        
+        // Also disable future month options visually
+        $('#statement_month option').each(function() {
+            const optionValue = parseInt($(this).val());
+            if (optionValue > currentMonth) {
+                $(this).attr('disabled', true);
+                $(this).css('color', '#ccc');
+            }
+        });
+    });
 </script>
+
+<?php
+// Page-specific scripts - loaded after jQuery
+if (isset($GLOBALS['page_scripts'])) {
+    echo $GLOBALS['page_scripts'];
+}
+?>
 </body>
 </html>

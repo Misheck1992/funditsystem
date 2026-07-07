@@ -57,6 +57,231 @@ class Loan extends CI_Controller
         }
         echo json_encode(array('message'=>"zathela","data"=>array("name"=>"misheck")));
     }
+    public function get_transaction_usage($transaction_id)
+    {
+        $txn = $this->db->where('transaction_id', $transaction_id)
+                        ->where('credit >', 0)
+                        ->get('transaction')->row();
+
+        if (!$txn) {
+            echo '<p class="text-danger"><i class="fa fa-exclamation-circle"></i> Transaction not found: ' . htmlspecialchars($transaction_id) . '</p>';
+            return;
+        }
+
+        $loan = $this->db->get_where('loan', array('loan_number' => $txn->account_number))->row();
+        $currency_code = '';
+        if ($loan) {
+            $currency = $this->db->get_where('currencies', array('currency_id' => $loan->currency))->row();
+            if ($currency) $currency_code = $currency->currency_code;
+        }
+
+        $deposited = (float) $txn->credit;
+        $paid_date = date('Y-m-d', strtotime($txn->system_time));
+
+        // Read pre-stored breakdown from transactions table
+        $breakdown = $this->db->where('ref', $transaction_id)
+                              ->order_by('payment_number', 'ASC')
+                              ->get('transactions')->result();
+
+        $html  = '<table class="table table-sm mb-3" style="font-size:0.9em;">';
+        $html .= '<tr><td><strong>Transaction Ref</strong></td><td>' . htmlspecialchars($transaction_id) . '</td></tr>';
+        $html .= '<tr><td><strong>Loan Account</strong></td><td>' . htmlspecialchars($txn->account_number) . '</td></tr>';
+        $html .= '<tr><td><strong>Amount Deposited</strong></td><td><strong>' . $currency_code . ' ' . number_format($deposited, 2) . '</strong></td></tr>';
+        $html .= '<tr><td><strong>Payment Date</strong></td><td>' . $paid_date . '</td></tr>';
+        $html .= '</table>';
+
+        if (!empty($breakdown)) {
+            $total_applied = 0;
+            $html .= '<h6><i class="fa fa-list-ul"></i> How payment was applied</h6>';
+            $html .= '<table class="table table-bordered table-sm" style="font-size:0.85em;">';
+            $html .= '<thead class="thead-dark"><tr><th>Schedule #</th><th>Amount Applied</th></tr></thead><tbody>';
+
+            foreach ($breakdown as $row) {
+                $applied = (float) $row->amount;
+                $total_applied += $applied;
+                $html .= '<tr>';
+                $html .= '<td>Schedule ' . htmlspecialchars($row->payment_number) . '</td>';
+                $html .= '<td><strong>' . $currency_code . ' ' . number_format($applied, 2) . '</strong></td>';
+                $html .= '</tr>';
+            }
+
+            $html .= '</tbody><tfoot>';
+            $html .= '<tr style="background:#f3f4f6;"><td><strong>Total Applied</strong></td>';
+            $html .= '<td><strong>' . $currency_code . ' ' . number_format($total_applied, 2) . '</strong></td></tr>';
+            if ($deposited - $total_applied > 0.01) {
+                $html .= '<tr style="background:#fef3c7;"><td><strong>Remaining in Loan Account</strong></td>';
+                $html .= '<td><strong>' . $currency_code . ' ' . number_format($deposited - $total_applied, 2) . '</strong></td></tr>';
+            }
+            $html .= '</tfoot></table>';
+        } else {
+            $html .= '<p class="text-muted mt-2"><i class="fa fa-info-circle"></i> No payment breakdown recorded for this transaction.</p>';
+        }
+
+        echo $html;
+    }
+
+    public function reverse_payment($transaction_id)
+    {
+        // Get the credit leg (collection account received money)
+        $credit_leg = $this->db->where('transaction_id', $transaction_id)
+                               ->where('credit >', 0)
+                               ->get('transaction')->row();
+
+        if (!$credit_leg) {
+            $this->toaster->error('Reversal failed: transaction not found.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
+        // Get the debit leg (loan account was debited)
+        $debit_leg = $this->db->where('transaction_id', $transaction_id)
+                              ->where('debit >', 0)
+                              ->get('transaction')->row();
+
+        if (!$debit_leg) {
+            $this->toaster->error('Reversal failed: original debit entry not found.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
+        $amount             = (float) $credit_leg->credit;
+        $loan_account_num   = $debit_leg->account_number;
+        $collection_acc_num = $credit_leg->account_number;
+
+        // Check 1: Only allow reversals for transactions recorded by the server on or after 2026-06-17
+        // Use server_time (actual DB insert time) not system_time (user-entered payment date, can be backdated)
+        $txn_date = date('Y-m-d', strtotime($credit_leg->server_time));
+        if ($txn_date < '2026-06-17') {
+            $this->toaster->error('Transaction ' . $transaction_id . ' was recorded before 17 June 2026 and cannot be reversed.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
+        // Check 2: Must reverse in latest-first order — compare by server_time, not system_time
+        // Exclude REV- correction entries; only real payments count
+        $newer = $this->db
+            ->where('account_number', $loan_account_num)
+            ->where('credit >', 0)
+            ->where('server_time >', $credit_leg->server_time)
+            ->not_like('transaction_id', 'REV-', 'none')
+            ->get('transaction')->result();
+
+        foreach ($newer as $n) {
+            $already_reversed = $this->db
+                ->where('transaction_id', 'REV-' . $n->transaction_id)
+                ->get('transaction')->row();
+            if (!$already_reversed) {
+                $this->toaster->error('Please reverse the latest transaction first: ' . $n->transaction_id);
+                redirect($_SERVER['HTTP_REFERER']);
+                return;
+            }
+        }
+
+        // Get the breakdown records from transactions table
+        $breakdown = $this->db->where('ref', $transaction_id)->get('transactions')->result();
+
+        if (empty($breakdown)) {
+            $this->toaster->error('Reversal failed: no payment breakdown found. Only payments recorded after the latest update can be reversed.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
+        $loan_id = $breakdown[0]->loan_id;
+
+        // Revert each schedule allocation
+        foreach ($breakdown as $row) {
+            $sched = $this->db->where('loan_id', $loan_id)
+                              ->where('payment_number', $row->payment_number)
+                              ->get('payement_schedules')->row();
+            if (!$sched) continue;
+
+            $new_paid = round(max(0, (float)$sched->paid_amount - (float)$row->amount), 2);
+
+            if ($new_paid <= 0) {
+                $this->db->where('loan_id', $loan_id)
+                         ->where('payment_number', $row->payment_number)
+                         ->update('payement_schedules', [
+                             'status'       => 'NOT PAID',
+                             'partial_paid' => 'NO',
+                             'paid_amount'  => 0,
+                             'paid_date'    => NULL,
+                         ]);
+            } else {
+                $this->db->where('loan_id', $loan_id)
+                         ->where('payment_number', $row->payment_number)
+                         ->update('payement_schedules', [
+                             'status'       => 'PARTIAL PAID',
+                             'partial_paid' => 'YES',
+                             'paid_amount'  => $new_paid,
+                         ]);
+            }
+        }
+
+        // Reset next_payment_id to the earliest schedule that is now unpaid/partial
+        $first_unpaid = $this->db
+            ->where('loan_id', $loan_id)
+            ->where_in('status', ['NOT PAID', 'PARTIAL PAID'])
+            ->order_by('payment_number', 'ASC')
+            ->get('payement_schedules')->row();
+
+        if ($first_unpaid) {
+            $this->db->where('loan_id', $loan_id)->update('loan', [
+                'next_payment_id' => $first_unpaid->payment_number,
+            ]);
+        }
+
+        // Reverse the ledger: credit the loan account, debit the collection account
+        $rev_tid = 'REV-' . $transaction_id;
+        $rev_date = date('Y-m-d H:i:s');
+
+        $loan_acc = $this->Account_model->get_account($loan_account_num);
+        $coll_acc = $this->Account_model->get_account($collection_acc_num);
+
+        $new_loan_bal = (float)$loan_acc->balance + $amount;
+        $new_coll_bal = (float)$coll_acc->balance - $amount;
+
+        $this->db->where('account_number', $loan_account_num)->update('account', ['balance' => $new_loan_bal]);
+        $this->db->where('account_number', $collection_acc_num)->update('account', ['balance' => $new_coll_bal]);
+
+        $this->db->insert('transaction', [
+            'account_number' => $loan_account_num,
+            'transaction_id' => $rev_tid,
+            'credit'         => $amount,
+            'debit'          => 0,
+            'balance'        => $new_loan_bal,
+            'system_time'    => $rev_date,
+        ]);
+        $this->db->insert('transaction', [
+            'account_number' => $collection_acc_num,
+            'transaction_id' => $rev_tid,
+            'credit'         => 0,
+            'debit'          => $amount,
+            'balance'        => $new_coll_bal,
+            'system_time'    => $rev_date,
+        ]);
+
+        // Remove breakdown records for this transaction
+        $this->db->where('ref', $transaction_id)->delete('transactions');
+
+        // Reopen loan if it was closed by this payment
+        $loan = $this->db->get_where('loan', ['loan_id' => $loan_id])->row();
+        if ($loan && $loan->loan_status === 'CLOSED') {
+            $this->db->where('loan_id', $loan_id)->update('loan', [
+                'loan_status' => 'ACTIVE',
+                'paid_off'    => 'No',
+            ]);
+        }
+
+        log_activity([
+            'user_id'       => $this->session->userdata('user_id'),
+            'activity'      => 'Reversed transaction ' . $transaction_id . ' (amount: ' . $amount . ') on loan ' . $loan_id,
+            'activity_cate' => 'loan_reversal',
+        ]);
+
+        $this->toaster->success('Transaction ' . $transaction_id . ' has been reversed successfully.');
+        redirect($_SERVER['HTTP_REFERER']);
+    }
+
     function get_loan_files($id){
         $result = $this->Loan_files_model->get_by_loans($id);
         $outpur = '';
@@ -2538,9 +2763,23 @@ exit();
 
 
 						if ($is_non_bullet) {
-							$result = $this->_process_non_bullet_payment($loan_number, $amount, $paid_date);
+							$result = $this->_process_non_bullet_payment($loan_number, $amount, $paid_date, $tid);
 						} else {
 							$result = $this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
+							if ($result) {
+								$this->Transactions_model->insert(array(
+									'ref'              => $tid,
+									'loan_id'          => $loan_number,
+									'amount'           => $amount,
+									'transaction_type' => 3,
+									'payment_number'   => $pay_number,
+									'method'           => $this->input->post('payment_method'),
+									'payment_proof'    => $unique_name,
+									'reference'        => $this->input->post('reference'),
+									'date_stamp'       => $paid_date,
+									'added_by'         => $this->session->userdata('user_id'),
+								));
+							}
 						}
 
 						if ($result) {
@@ -2586,14 +2825,13 @@ exit();
 					);
 					log_activity($logger);
 					$data = array(
-						'ref' => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-						'loan_id' => $this->input->post('loan_id', TRUE),
-						'amount' => $topay_amount,
-						'transaction_type' => 2,
-						'payment_number' => $this->input->post('payment_number'),
-						'date_stamp' => $paid_date,
-						'added_by' => $this->session->userdata('user_id')
-
+						'ref'              => $tid,
+						'loan_id'          => $this->input->post('loan_id', TRUE),
+						'amount'           => $topay_amount,
+						'transaction_type' => 3,
+						'payment_number'   => $this->input->post('payment_number'),
+						'date_stamp'       => $paid_date,
+						'added_by'         => $this->session->userdata('user_id'),
 					);
 
 					$this->Transactions_model->insert($data);
@@ -2629,9 +2867,21 @@ exit();
 
 					if ($pay_late_first == 'success') {
 						if ($is_non_bullet) {
-							$this->_process_non_bullet_payment($loan_number, $amount, $paid_date);
+							$this->_process_non_bullet_payment($loan_number, $amount, $paid_date, $tid);
 						} else {
 							$this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date, $acrued_amount);
+							$this->Transactions_model->insert(array(
+								'ref'              => $tid,
+								'loan_id'          => $loan_number,
+								'amount'           => $amount,
+								'transaction_type' => 3,
+								'payment_number'   => $pay_number,
+								'method'           => $this->input->post('payment_method'),
+								'payment_proof'    => $unique_name,
+								'reference'        => $this->input->post('reference'),
+								'date_stamp'       => $paid_date,
+								'added_by'         => $this->session->userdata('user_id'),
+							));
 						}
 						$logger = array(
 
@@ -2803,6 +3053,17 @@ exit();
 
                     if ($result == true) {
 
+                        $this->Transactions_model->insert(array(
+                            'ref'              => $tid,
+                            'loan_id'          => $loan_number,
+                            'amount'           => $amount,
+                            'transaction_type' => 3,
+                            'payment_number'   => $pay_number,
+                            'payment_proof'    => $unique_name,
+                            'date_stamp'       => $paid_date,
+                            'added_by'         => $this->session->userdata('user_id'),
+                        ));
+
                         $logger = array(
 
                             'user_id' => $this->session->userdata('user_id'),
@@ -2838,14 +3099,14 @@ exit();
                 );
                 log_activity($logger);
                 $data = array(
-                    'ref' => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-                    'loan_id' => $this->input->post('loan_id', TRUE),
-                    'amount' => $topay_amount,
-                    'transaction_type' => 2,
-                    'payment_number' => $this->input->post('payment_number'),
-                    'date_stamp' => $paid_date,
-                    'added_by' => $this->session->userdata('user_id')
-
+                    'ref'              => $tid,
+                    'loan_id'          => $this->input->post('loan_id', TRUE),
+                    'amount'           => $topay_amount,
+                    'transaction_type' => 3,
+                    'payment_number'   => $this->input->post('payment_number'),
+                    'payment_proof'    => $unique_name,
+                    'date_stamp'       => $paid_date,
+                    'added_by'         => $this->session->userdata('user_id'),
                 );
 
                 $this->Transactions_model->insert($data);
@@ -2882,6 +3143,16 @@ exit();
                     if ($pay_late_first == 'success') {
                         $this->Payement_schedules_model->new_pay($loan_number, $pay_number, $amount, $paid_date);
                         // $this->Rescheduled_payments_model->new__late_pay($loan_number, $pay_number, $amount);
+                        $this->Transactions_model->insert(array(
+                            'ref'              => $tid,
+                            'loan_id'          => $loan_number,
+                            'amount'           => $amount,
+                            'transaction_type' => 3,
+                            'payment_number'   => $pay_number,
+                            'payment_proof'    => $unique_name,
+                            'date_stamp'       => $paid_date,
+                            'added_by'         => $this->session->userdata('user_id'),
+                        ));
                         $logger = array(
 
                             'user_id' => $this->session->userdata('user_id'),
@@ -2946,18 +3217,16 @@ exit();
                     );
                     log_activity($logger);
                     $data = array(
-                        'ref' => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-                        'loan_id' => $this->input->post('loan_id', TRUE),
-                        'amount' => $amount,
-                        'transaction_type' => 2,
-                        'payment_number' => $this->input->post('payment_number'),
-
-                        'method' => $this->input->post('payment_method'),
-                        'payment_proof' => $proof,
-                        'reference' => $this->input->post('reference'),
-                        'date_stamp' => $paid_date,
-                        'added_by' => $this->session->userdata('user_id')
-
+                        'ref'              => $transid,
+                        'loan_id'          => $this->input->post('loan_id', TRUE),
+                        'amount'           => $amount,
+                        'transaction_type' => 3,
+                        'payment_number'   => $this->input->post('payment_number'),
+                        'method'           => $this->input->post('payment_method'),
+                        'payment_proof'    => $proof,
+                        'reference'        => $this->input->post('reference'),
+                        'date_stamp'       => $paid_date,
+                        'added_by'         => $this->session->userdata('user_id'),
                     );
 
                     $this->Transactions_model->insert($data);
@@ -2984,18 +3253,16 @@ exit();
                     );
                     log_activity($logger);
                     $data = array(
-                        'ref' => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-                        'loan_id' => $this->input->post('loan_id', TRUE),
-                        'amount' => $topay_amount,
-                        'transaction_type' => 2,
-                        'payment_number' => $this->input->post('payment_number'),
-                        'date_stamp' => $paid_date,
-                        'method' => $this->input->post('payment_method'),
-                        'payment_proof' => $proof,
-                        'reference' => $this->input->post('reference'),
-
-                        'added_by' => $this->session->userdata('user_id')
-
+                        'ref'              => $transid,
+                        'loan_id'          => $this->input->post('loan_id', TRUE),
+                        'amount'           => $topay_amount,
+                        'transaction_type' => 3,
+                        'payment_number'   => $this->input->post('payment_number'),
+                        'date_stamp'       => $paid_date,
+                        'method'           => $this->input->post('payment_method'),
+                        'payment_proof'    => $proof,
+                        'reference'        => $this->input->post('reference'),
+                        'added_by'         => $this->session->userdata('user_id'),
                     );
 
                     $this->Transactions_model->insert($data);
@@ -3036,18 +3303,16 @@ exit();
                             );
                             log_activity($logger);
                             $data = array(
-                                'ref' => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-                                'loan_id' => $this->input->post('loan_id', TRUE),
-                                'amount' => $amount,
-                                'transaction_type' => 2,
-                                'payment_number' => $this->input->post('payment_number'),
-                                'date_stamp' => $paid_date,
-                                'method' => $this->input->post('payment_method'),
-                                'payment_proof' => $proof,
-                                'reference' => $this->input->post('reference'),
-
-                                'added_by' => $this->session->userdata('user_id')
-
+                                'ref'              => $transid,
+                                'loan_id'          => $this->input->post('loan_id', TRUE),
+                                'amount'           => $amount,
+                                'transaction_type' => 3,
+                                'payment_number'   => $this->input->post('payment_number'),
+                                'date_stamp'       => $paid_date,
+                                'method'           => $this->input->post('payment_method'),
+                                'payment_proof'    => $proof,
+                                'reference'        => $this->input->post('reference'),
+                                'added_by'         => $this->session->userdata('user_id'),
                             );
 
                             $this->Transactions_model->insert($data);
@@ -3070,14 +3335,13 @@ exit();
                             );
                             log_activity($logger);
                             $data = array(
-                                'ref' => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-                                'loan_id' => $this->input->post('loan_id', TRUE),
-                                'amount' => $topay_amount,
-                                'transaction_type' => 2,
-                                'payment_number' => $this->input->post('payment_number'),
-                                'date_stamp' => $paid_date,
-                                'added_by' => $this->session->userdata('user_id')
-
+                                'ref'              => $transid,
+                                'loan_id'          => $this->input->post('loan_id', TRUE),
+                                'amount'           => $topay_amount,
+                                'transaction_type' => 3,
+                                'payment_number'   => $this->input->post('payment_number'),
+                                'date_stamp'       => $paid_date,
+                                'added_by'         => $this->session->userdata('user_id'),
                             );
 
                             $this->Transactions_model->insert($data);
@@ -3140,17 +3404,16 @@ exit();
                     log_activity($logger);
 
                     $data = array(
-                        'ref' => "CF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-                        'loan_id' => $loan_number,
-                        'amount' => $amount,
-                        'transaction_type' => 1,
-                        'payment_number' => 0,
-                        'method' => $this->input->post('payment_method'),
-                        'payment_proof' => $proof,
-                        'reference' => $this->input->post('reference'),
-                        'date_stamp' => $paid_date,
-                        'added_by' => $this->session->userdata('user_id')
-
+                        'ref'              => $transid,
+                        'loan_id'          => $loan_number,
+                        'amount'           => $amount,
+                        'transaction_type' => 3,
+                        'payment_number'   => $pay_number,
+                        'method'           => $this->input->post('payment_method'),
+                        'payment_proof'    => $proof,
+                        'reference'        => $this->input->post('reference'),
+                        'date_stamp'       => $paid_date,
+                        'added_by'         => $this->session->userdata('user_id'),
                     );
 
                     $this->Transactions_model->insert($data);
@@ -5787,6 +6050,10 @@ $row = $this->Loan_model->get_by_id_group($id);
                     $send_back_to = 'Recommender';
                 }
                 break;
+            case 'CLIENT_SIGNED':
+                $previous_status = 'APPROVED';
+                $send_back_to = 'Final Approver';
+                break;
             default:
                 $this->toaster->error('Cannot send back loan in current status: ' . $current_status);
                 redirect($_SERVER['HTTP_REFERER']);
@@ -7546,7 +7813,7 @@ public function get_loan_product_details() {
 		];
 	}
 
-	private function _process_non_bullet_payment($loan_id, $amount_paid, $paid_date)
+	private function _process_non_bullet_payment($loan_id, $amount_paid, $paid_date, $tid = '')
 	{
 		$payoff = $this->_compute_non_bullet_payoff($loan_id, $paid_date);
 		if ($payoff['status'] !== 'success') return false;
@@ -7565,6 +7832,7 @@ public function get_loan_product_details() {
 		$payoff_date_obj = new DateTime($paid_date);
 		$remaining       = $amount_paid;
 		$last_pay_num    = 1;
+		$allocations     = array(); // payment_number => amount_applied
 
 		// Returns the period-start DateTime for a given schedule row
 		$get_period_start = function($s) use ($schedules, $loan) {
@@ -7609,6 +7877,7 @@ public function get_loan_product_details() {
 						'paid_amount'  => floatval($s->paid_amount) + $period_due,
 						'paid_date'    => $paid_date,
 					]);
+				$allocations[$s->payment_number] = $period_due;
 				$last_pay_num = $s->payment_number;
 				continue;
 			}
@@ -7628,6 +7897,7 @@ public function get_loan_product_details() {
 					]);
 				$this->db->where('loan_id', $loan_id)
 					->update('loan', ['next_payment_id' => intval($s->payment_number) + 1]);
+				$allocations[$s->payment_number] = $period_due;
 				$remaining   -= $period_due;
 				$last_pay_num = $s->payment_number;
 			} else {
@@ -7640,6 +7910,7 @@ public function get_loan_product_details() {
 						'paid_amount'  => floatval($s->paid_amount) + $remaining,
 						'paid_date'    => $paid_date,
 					]);
+				$allocations[$s->payment_number] = $remaining;
 				$last_pay_num = $s->payment_number;
 				$remaining    = 0;
 				break;
@@ -7654,17 +7925,19 @@ public function get_loan_product_details() {
 			]);
 		}
 
-		// Record transaction
-		$this->db->insert('transactions', [
-			'ref'              => "GF." . date('Y') . date('m') . date('d') . '.' . rand(100, 999),
-			'loan_id'          => $loan_id,
-			'amount'           => $amount_paid,
-			'payment_number'   => $last_pay_num,
-			'transaction_type' => 3,
-			'payment_proof'    => 'null',
-			'added_by'         => $this->session->userdata('user_id'),
-			'date_stamp'       => $paid_date,
-		]);
+		// Record one row per schedule allocation so get_transaction_usage can read it back
+		foreach ($allocations as $pay_num => $applied_amount) {
+			$this->db->insert('transactions', [
+				'ref'              => $tid,
+				'loan_id'          => $loan_id,
+				'amount'           => $applied_amount,
+				'payment_number'   => $pay_num,
+				'transaction_type' => 3,
+				'payment_proof'    => 'null',
+				'added_by'         => $this->session->userdata('user_id'),
+				'date_stamp'       => $paid_date,
+			]);
+		}
 
 		return $is_full_payoff ? 'closed' : 'paid';
 	}
@@ -7897,7 +8170,7 @@ public function get_loan_product_details() {
 
 		// Reason is mandatory
 		if (empty($reason)) {
-			$this->toaster->error('Error: A reason for forced closure is required.');
+			$this->toaster->error('Error: A reason for manual closure is required.');
 			redirect($_SERVER['HTTP_REFERER']);
 			return;
 		}
@@ -8014,7 +8287,7 @@ public function get_loan_product_details() {
 			'activity_cate' => 'force_close_loan',
 		));
 
-		$this->toaster->success('Loan has been forcibly closed.');
+		$this->toaster->success('Loan has been manually closed.');
 		redirect('loan/repayment_view/' . $loan_id);
 	}
 

@@ -50,12 +50,12 @@
 
 				<tr>
 
-					<td>MK<?php echo number_format($amount,2) ?></td>
+					<td>ZMW <?php echo number_format($amount,2) ?></td>
 
-					<td >MK<?php echo number_format($principal,2) ?></td>
-					<td >MK<?php echo number_format($interest,2) ?></td>
+					<td >ZMW <?php echo number_format($principal,2) ?></td>
+					<td >ZMW <?php echo number_format($interest,2) ?></td>
 
-					<td bgcolor="#90ee90">MK<?php echo number_format($paid_amount,2) ?></td>
+					<td bgcolor="#90ee90">ZMW <?php echo number_format($paid_amount,2) ?></td>
 
 				</tr>
 

@@ -48,7 +48,7 @@ foreach ($data as $trans)
 	<td><?php echo $trans->description  ?></td>
 	<td><?php echo $trans->ref  ?></td>
 	<td><?php echo $trans->loan_number  ?></td>
-	<td>MWK<?php echo number_format($trans->amount,2)  ?></td>
+	<td>ZMW <?php echo number_format($trans->amount,2)  ?></td>
 	<td><?php echo $trans->payment_number  ?></td>
 	<td><?php echo $trans->Firstname." ".$trans->Lastname  ?></td>
 	<td><?php echo $trans->date_stamp  ?></td>
@@ -95,7 +95,7 @@ foreach ($data as $trans)
 
 					</div>
 					<div class="form-group col-6">
-						<label for="date">Expense amount MK</label>
+						<label for="date">Expense amount ZMW</label>
 						<input type="number" class="form-control" name="amount" id="charge_amount"  required />
 					</div>
 					<div class="form-group col-12">

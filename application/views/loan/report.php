@@ -101,7 +101,7 @@ html { font-family:sans-serif; }
             </tr>
         </table>
         <hr>
-        <h2 style="text-align:center;">Loan Statement<?php if ($is_fc): ?> &mdash; <span style="color:#991b1b;">FORCED CLOSE</span><?php endif; ?></h2>
+        <h2 style="text-align:center;">Loan Statement<?php if ($is_fc): ?> &mdash; <span style="color:#991b1b;">MANUAL CLOSE</span><?php endif; ?></h2>
 
         <table id="pattern-style-a">
             <tr>
@@ -125,7 +125,7 @@ html { font-family:sans-serif; }
                         <tr><td>Interest Rate:</td><td><strong><?= $loan_interest ?>% per <?= $period_type ?></strong></td></tr>
                         <tr><td>Loan Term:</td><td><strong><?= $loan_period ?> <?= $period_type ?></strong></td></tr>
                         <?php if ($is_fc): ?>
-                        <tr><td>Settlement Type:</td><td><strong style="color:#991b1b;">FORCED CLOSE</strong></td></tr>
+                        <tr><td>Settlement Type:</td><td><strong style="color:#991b1b;">MANUAL CLOSE</strong></td></tr>
                         <?php if ($fcl_dt): ?><tr><td>Settlement Date:</td><td><strong><?= date('d M Y', strtotime($fcl_dt)) ?></strong></td></tr><?php endif; ?>
                         <tr><td>Amount Paid at Settlement:</td><td><strong><?= $cc ?> <?= number_format($fcl_amt,2) ?></strong></td></tr>
                         <?php endif; ?>
@@ -155,7 +155,7 @@ html { font-family:sans-serif; }
     <br>
     <div class="content">
         <div class="settle-box">
-            <div class="settle-box-header">Force Close &mdash; Interest Breakdown</div>
+            <div class="settle-box-header">Manual Close &mdash; Interest Breakdown</div>
             <table style="width:100%;border-collapse:collapse;">
                 <tr>
                     <td style="width:25%;padding:8px;border-right:1px solid #eee;vertical-align:top;">
@@ -368,7 +368,7 @@ html { font-family:sans-serif; }
                 $bal -= $fcl_amt;
                 echo "<tr class='credit'>"
                    . "<td>".date('Y-m-d', strtotime($fcl_dt))."</td>"
-                   . "<td><strong>Payment Received &ndash; Force Close Settlement</strong></td>"
+                   . "<td><strong>Payment Received &ndash; Manual Close Settlement</strong></td>"
                    . "<td class='num'>&ndash;</td>"
                    . "<td class='num cr'>(".number_format($fcl_amt,2).")</td>"
                    . "<td class='num ".($bal > 0.005 ? 'dr' : 'cr')."'>".number_format(max(0,$bal),2).($bal > 0.005 ? " Dr" : "")."</td>"
@@ -380,7 +380,7 @@ html { font-family:sans-serif; }
                     $bal    = 0;
                     echo "<tr class='waiver'>"
                        . "<td>".date('Y-m-d', strtotime($fcl_dt))."</td>"
-                       . "<td><em>Interest Waived &ndash; Accrued interest not recovered (Force Close)</em></td>"
+                       . "<td><em>Interest Waived &ndash; Accrued interest not recovered (Manual Close)</em></td>"
                        . "<td class='num'>&ndash;</td>"
                        . "<td class='num neg'>(".number_format($waived,2).")</td>"
                        . "<td class='num'>0.00</td>"
@@ -421,7 +421,7 @@ html { font-family:sans-serif; }
                     $bal -= $fcl_amt;
                     echo "<tr class='credit'>"
                        . "<td>".($fcl_dt ? date('Y-m-d', strtotime($fcl_dt)) : '')."</td>"
-                       . "<td><strong>Payment Received &ndash; Force Close Settlement</strong></td>"
+                       . "<td><strong>Payment Received &ndash; Manual Close Settlement</strong></td>"
                        . "<td class='num'>&ndash;</td>"
                        . "<td class='num cr'>(".number_format($fcl_amt,2).")</td>"
                        . "<td class='num ".($bal > 0.005 ? 'dr' : 'cr')."'>".number_format(max(0,$bal),2).($bal > 0.005 ? " Dr" : "")."</td>"
@@ -433,7 +433,7 @@ html { font-family:sans-serif; }
                     $waived = $bal; $bal = 0;
                     echo "<tr class='waiver'>"
                        . "<td>".($fcl_dt ? date('Y-m-d', strtotime($fcl_dt)) : date('Y-m-d'))."</td>"
-                       . "<td><em>Interest Waived &ndash; Accrued interest not recovered (Force Close)</em></td>"
+                       . "<td><em>Interest Waived &ndash; Accrued interest not recovered (Manual Close)</em></td>"
                        . "<td class='num'>&ndash;</td>"
                        . "<td class='num neg'>(".number_format($waived,2).")</td>"
                        . "<td class='num'>0.00</td>"

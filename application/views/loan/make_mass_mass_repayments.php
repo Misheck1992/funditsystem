@@ -76,11 +76,11 @@
                         <td><a href="<?php echo base_url($preview_url).$loan->loan_customer?>"><?php echo $customer_name?></a></td>
                         <!--			<td><a href="--><?php //echo base_url('individual_customers/view/').$loan->id?><!--"">--><?php //echo $loan->Firstname." ".$loan->Lastname?><!--</a></td>-->
                         <td><?php echo $loan->loan_date ?></td>
-                        <td>MK<?php echo number_format($loan->loan_principal,2) ?></td>
+                        <td>ZMW <?php echo number_format($loan->loan_principal,2) ?></td>
                         <td><?php echo $loan->loan_period ?></td>
                         <td><?php echo $loan->period_type ?></td>
                         <td><?php echo $loan->loan_interest ?>%</td>
-                        <td>MK<?php echo number_format($loan->loan_amount_total,2) ?></td>
+                        <td>ZMW <?php echo number_format($loan->loan_amount_total,2) ?></td>
 
 
 

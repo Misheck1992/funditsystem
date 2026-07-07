@@ -66,7 +66,13 @@ class Individual_customers_model extends CI_Model
         $this->db->where($this->id, $id);
         return $this->db->get($this->table)->row();
     }
-    
+
+    function get_by_client_id($client_id)
+    {
+        $this->db->where('ClientId', $client_id);
+        return $this->db->get($this->table)->row();
+    }
+
     // get total rows
     function total_rows($q = NULL) {
 
@@ -153,7 +159,7 @@ class Individual_customers_model extends CI_Model
     {
         $this->db->order_by('individual_customers.id', $this->order);
 
-        $this->db->select('*,geo_countries.name as geoname,employees.Firstname as efname, employees.Lastname as elname,individual_customers.Firstname as cfname, individual_customers.Lastname as clname,individual_customers.Middlename as cmname, individual_customers.Gender as cgender,individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital  as cmarital')->from($this->table);
+        $this->db->select('individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, employees.Firstname as efname, employees.Lastname as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital as cmarital')->from($this->table);
 
 
         $this->db->join('employees','employees.id=individual_customers.added_by');
@@ -212,7 +218,7 @@ class Individual_customers_model extends CI_Model
 
         $this->db->order_by('individual_customers.id', $this->order);
 
-        $this->db->select('*,geo_countries.name as geoname,employees.Firstname as efname, employees.Lastname as elname,individual_customers.Firstname as cfname, individual_customers.Lastname as clname,individual_customers.Middlename as cmname, individual_customers.Gender as cgender,individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital  as cmarital')->from($this->table);
+        $this->db->select('individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, employees.Firstname as efname, employees.Lastname as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital as cmarital')->from($this->table);
 
 
         $this->db->join('employees','employees.id=individual_customers.added_by');
@@ -269,7 +275,7 @@ class Individual_customers_model extends CI_Model
     {
 
 
-        $this->db->select('*,geo_countries.name as geoname,employees.Firstname as efname, employees.Lastname as elname,individual_customers.Firstname as cfname, individual_customers.Lastname as clname,individual_customers.Middlename as cmname, individual_customers.Gender as cgender,individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail')->from($this->table);
+        $this->db->select('individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, employees.Firstname as efname, employees.Lastname as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail')->from($this->table);
 
 
         $this->db->join('employees','employees.id=individual_customers.added_by');

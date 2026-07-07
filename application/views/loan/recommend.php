@@ -11,6 +11,41 @@
     </div>
     <div class="card">
         <div class="card-body" style="border: thick #153505 solid;border-radius: 14px;">
+			
+			<!-- Loan Recommender Instructions -->
+			<div class="alert alert-info mb-4" style="background-color: #d1ecf1; border-color: #bee5eb; border-radius: 8px;">
+				<div class="d-flex align-items-center">
+					<i class="fas fa-user-check" style="font-size: 24px; color: #0c5460; margin-right: 15px;"></i>
+					<div>
+						<h5 class="alert-heading mb-2" style="color: #0c5460; font-weight: 600;">
+							<i class="fas fa-clipboard-check"></i> You are acting as: Loan Recommender
+						</h5>
+						<p class="mb-2" style="color: #0c5460;">
+							<strong>Your Role:</strong> Review and recommend loans that are ready for approval consideration.
+						</p>
+						<hr style="border-color: #bee5eb; margin: 10px 0;">
+						<div class="row">
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-check-circle text-success"></i> <strong>To Recommend:</strong> Click "View" → "Recommend"
+								</p>
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-times-circle text-danger"></i> <strong>To Reject:</strong> Click "View" → "Reject"
+								</p>
+							</div>
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-eye"></i> <strong>Review:</strong> Check customer details, loan terms, and documentation
+								</p>
+								<p class="mb-1" style="color: #0c5460; font-size: 14px;">
+									<i class="fas fa-arrow-right"></i> <strong>Next Step:</strong> Recommended loans move to First Approval queue
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			
             <div style="overflow-y: auto"">
             <form name="frmrecommend" method="post" action="">
                 <div class="double-scroll">
@@ -77,7 +112,7 @@
                         <td><?php echo $loan->loan_status ?></td>
                         <td><?php echo $loan->loan_added_date ?></td>
 
-                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id.'?action=recommend'?>" class="btn btn-sm btn-warning">View/Recommend</a></td>
+                        <td><a href="<?php echo base_url('loan/approve/').$loan->loan_id?>" class="btn btn-sm btn-warning">View/Recommend</a></td>
 
                     </tr>
                     <?php

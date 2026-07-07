@@ -167,7 +167,7 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
 	<div class="content">
 		<table  id="pattern-style-a" border="1">
 			<tr>
-				<td style="text-align: left;">(a) Total MWK value of loans disbursed during the period</td>
+				<td style="text-align: left;">(a) Total ZMW value of loans disbursed during the period</td>
 				<td style="text-align: left;"> ZMW <?php echo number_format($total_loan_principal->total,2) ?></td>
 			</tr>
 			<tr>

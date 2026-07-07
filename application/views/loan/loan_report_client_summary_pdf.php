@@ -206,18 +206,18 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
                         echo "($outputDate)";
 
                         ?></td>
-                    <td <?php echo $css; ?>>MK<?php  echo number_format($p->amount,2) ?></td>
-                    <td <?php echo $css; ?>>MK<?php if($arrear){ $arrears_total +=$p->amount; echo number_format($p->amount,2);}else{} ?></td>
+                    <td <?php echo $css; ?>>ZMW <?php  echo number_format($p->amount,2) ?></td>
+                    <td <?php echo $css; ?>>ZMW <?php if($arrear){ $arrears_total +=$p->amount; echo number_format($p->amount,2);}else{} ?></td>
                     <td <?php echo $css; ?>><?php if($arrear){     echo $days_diff ;}else{} ?> Days</td>
-                    <td <?php echo $css; ?>>MK<?php if($arrear){
+                    <td <?php echo $css; ?>>ZMW <?php if($arrear){
                             $penalty_total +=$late_fee_amount;
 
                             echo number_format($late_fee_amount,2);
 
                         }else{} ?></td>
-                    <td <?php echo $css; ?>>MK<?php if ($arrear){ echo number_format(($p->amount+$penalty)+($oustanding-$p->paid_amount),2); }else{}?></td>
-                    <td <?php echo $css; ?>>MK<?php $amount_paid_total += $p->paid_amount; echo number_format($p->paid_amount,2)?></td>
-                    <td <?php echo $css; ?>>MK<?php echo number_format($variance,2); ?></td>
+                    <td <?php echo $css; ?>>ZMW <?php if ($arrear){ echo number_format(($p->amount+$penalty)+($oustanding-$p->paid_amount),2); }else{}?></td>
+                    <td <?php echo $css; ?>>ZMW <?php $amount_paid_total += $p->paid_amount; echo number_format($p->paid_amount,2)?></td>
+                    <td <?php echo $css; ?>>ZMW <?php echo number_format($variance,2); ?></td>
 
                 </tr>
                 <?php
@@ -271,9 +271,9 @@ $imgg = 'data:image;base64,'.base64_encode(file_get_contents($linkk))
 
                 <th>OUTSTANDING BALANCE</th>
                 <th></th>
-                <th>AMOUNT IN MWK</th>
+                <th>AMOUNT IN ZMW</th>
                 <th></th>
-                <th>AMOUNT IN MWK</th>
+                <th>AMOUNT IN ZMW</th>
                 <th></th>
                 <th></th>
                 <th></th>

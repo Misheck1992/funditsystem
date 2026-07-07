@@ -150,7 +150,7 @@ class Currency extends CI_Controller
         }
     }
 
-    public function _rules() 
+    public function _rules()
     {
 	$this->form_validation->set_rules('name', 'name', 'trim|required');
 	$this->form_validation->set_rules('symbol', 'symbol', 'trim|required');
@@ -159,6 +159,49 @@ class Currency extends CI_Controller
 
 	$this->form_validation->set_rules('id', 'id', 'trim');
 	$this->form_validation->set_error_delimiters('<span class="text-danger">', '</span>');
+    }
+
+    // Exchange Rate Management
+    public function exchange_rates()
+    {
+        $data['currencies'] = $this->Currency_model->get_all_currencies();
+        $this->load->view('admin/header');
+        $this->load->view('currency/exchange_rates', $data);
+        $this->load->view('admin/footer');
+    }
+
+    public function update_exchange_rate()
+    {
+        $currency_id = $this->input->post('currency_id');
+        $zmk = $this->input->post('zmk');
+        $fx = $this->input->post('fx');
+
+        if(empty($currency_id) || empty($zmk) || empty($fx)){
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'All fields are required'
+            ]);
+            return;
+        }
+
+        $data = array(
+            'zmk' => $zmk,
+            'fx' => $fx
+        );
+
+        $result = $this->Currency_model->update_exchange_rate($currency_id, $data);
+
+        if($result){
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'Exchange rate updated successfully'
+            ]);
+        } else {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Failed to update exchange rate'
+            ]);
+        }
     }
 
 }

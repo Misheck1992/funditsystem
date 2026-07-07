@@ -93,6 +93,9 @@ class Corporate_customers extends CI_Controller
                 'website'=>$row->website,
                 'key_management_info' => $row->key_management_info,
                 'business_info' => $row->business_info,
+                'financial_year_end' => $row->financial_year_end,
+                'casual_employees' => $row->casual_employees,
+                'permanent_employees' => $row->permanent_employees,
 		'LastUpdatedOn' => $row->LastUpdatedOn,
 		'CreatedOn' => $row->CreatedOn,
 		'company_certificate' =>  $row->company_certificate,
@@ -100,6 +103,12 @@ class Corporate_customers extends CI_Controller
                 'proof_physical_address' =>  $row->proof_physical_address,
                 'financial_statement' =>  $row->financial_statement
 	    );
+
+            // Load linked individual customer if set
+            $data['linked_individual'] = null;
+            if (!empty($row->linked_individual_id)) {
+                $data['linked_individual'] = get_by_id('individual_customers', 'id', $row->linked_individual_id);
+            }
 
             $menu_toggle['toggles'] = 55;
             $this->load->view('admin/header',$menu_toggle);
@@ -143,6 +152,9 @@ class Corporate_customers extends CI_Controller
             'website'=>set_value('website'),
             'key_management_info' => set_value('key_management_info'),
             'business_info' => set_value('business_info'),
+            'financial_year_end' => set_value('financial_year_end'),
+            'casual_employees' => set_value('casual_employees'),
+            'permanent_employees' => set_value('permanent_employees'),
 	    //
             'title' => set_value('title'),
             'first_name' => set_value('first_name'),
@@ -586,6 +598,9 @@ class Corporate_customers extends CI_Controller
                 'financial_statement'=>set_value('financial_statement',  $row->financial_statement),
                 'key_management_info' => set_value('key_management_info', $row->key_management_info),
                 'business_info' => set_value('business_info', $row->business_info),
+                'financial_year_end' => set_value('financial_year_end', $row->financial_year_end),
+                'casual_employees' => set_value('casual_employees', $row->casual_employees),
+                'permanent_employees' => set_value('permanent_employees', $row->permanent_employees),
 
 	    );
             $menu_toggle['toggles'] = 55;
@@ -611,6 +626,12 @@ class Corporate_customers extends CI_Controller
         if (!is_dir($imagePath)) {
             mkdir($imagePath, 0777, true);
         }
+
+        // Combine phone country code with phone number
+        $phone_country_code = $this->input->post('phone_country_code', TRUE);
+        $phone_number_input = $this->input->post('phone_number_input', TRUE);
+        $full_phone_number = $phone_country_code . $phone_number_input;
+        $_POST['corporate_phone'] = $full_phone_number;
 
         $this->_rules();
 
@@ -729,13 +750,16 @@ class Corporate_customers extends CI_Controller
                 'industry_sector' => $this->input->post('industry_sector', TRUE),
                 'street' => $this->input->post('street', TRUE),
                 'category' => $this->input->post('category', TRUE),
-                'phone_number' => $this->input->post('corporate_phone', TRUE),
+                'phone_number' => $full_phone_number,
                 'city_town' => $this->input->post('city_town', TRUE),
                 'province' => $this->input->post('province', TRUE),
                 'contact_email' => $this->input->post('contact_email', TRUE),
                 'website' => $this->input->post('website', TRUE),
                 'key_management_info' => $this->input->post('key_management_info', TRUE),
                 'business_info' => $this->input->post('business_info', TRUE),
+                'financial_year_end' => $this->input->post('financial_year_end', TRUE),
+                'casual_employees' => $this->input->post('casual_employees', TRUE) ?: 0,
+                'permanent_employees' => $this->input->post('permanent_employees', TRUE) ?: 0,
                 'company_certificate' => $company_certificatefile,
                 'tax_id_doc' => $tax_id_docfile,
                 'proof_physical_address' => $proof_physical_addressfile,
@@ -1009,6 +1033,12 @@ class Corporate_customers extends CI_Controller
             mkdir($imagePath, 0777, true);
         }
 
+        // Combine phone country code with phone number
+        $phone_country_code = $this->input->post('phone_country_code', TRUE);
+        $phone_number_input = $this->input->post('phone_number_input', TRUE);
+        $full_phone_number = $phone_country_code . $phone_number_input;
+        $_POST['corporate_phone'] = $full_phone_number;
+
         $this->_rules();
 
         if ($this->form_validation->run() == FALSE) {
@@ -1082,16 +1112,20 @@ class Corporate_customers extends CI_Controller
                 'street' => $this->input->post('street',TRUE),
                 'province' => $this->input->post('province',TRUE),
                 'postal_code' => $this->input->post('postal_code',TRUE),
-                'phone_number' => $this->input->post('corporate_phone',TRUE),
+                'phone_number' => $full_phone_number,
                 'city_town' => $this->input->post('city_town',TRUE),
                 'contact_email' => $this->input->post('contact_email',TRUE),
                 'website' => $this->input->post('website',TRUE),
                 'key_management_info' => $this->input->post('key_management_info', TRUE),
                 'business_info' => $this->input->post('business_info', TRUE),
+                'financial_year_end' => $this->input->post('financial_year_end', TRUE),
+                'casual_employees' => $this->input->post('casual_employees', TRUE) ?: 0,
+                'permanent_employees' => $this->input->post('permanent_employees', TRUE) ?: 0,
                 'company_certificate' => $company_certificatefile,
                 'tax_id_doc' => $tax_id_docfile,
                 'proof_physical_address' => $proof_physical_addressfile,
                 'financial_statement' => $financial_statementfile,
+                'LastUpdatedOn' => date('Y-m-d H:i:s'),
             );
 
             // Update corporate customer
@@ -1274,8 +1308,122 @@ class Corporate_customers extends CI_Controller
         $this->form_validation->set_rules('TaxIdentificationNumber', 'taxidentificationnumber', 'trim|required');
         $this->form_validation->set_rules('Country', 'country', 'trim|required');
         $this->form_validation->set_rules('Branch', 'branch', 'trim|required');
+        $this->form_validation->set_rules('contact_email', 'contact email', 'trim|required|valid_email');
+        $this->form_validation->set_rules('corporate_phone', 'phone number', 'trim|required');
         $this->form_validation->set_rules('id', 'id', 'trim');
         $this->form_validation->set_error_delimiters('<span class="text-danger">', '</span>');
+    }
+
+    /**
+     * Search corporate customers for linking (AJAX)
+     */
+    public function search_corporate_ajax()
+    {
+        header('Content-Type: application/json');
+        $term = $this->input->get('term', TRUE);
+        if (empty($term)) {
+            echo json_encode(array('results' => array()));
+            return;
+        }
+
+        $results_raw = $this->Corporate_customers_model->search($term);
+        $results = array();
+        foreach ($results_raw as $c) {
+            $results[] = array(
+                'id' => $c->id,
+                'client_id' => $c->ClientId,
+                'name' => $c->EntityName,
+                'reg_number' => $c->RegistrationNumber,
+                'email' => $c->contact_email,
+                'phone' => $c->phone_number,
+                'already_linked' => !empty($c->linked_individual_id)
+            );
+        }
+
+        echo json_encode(array('results' => $results));
+    }
+
+    /**
+     * Link an individual customer to a corporate customer (AJAX)
+     */
+    public function link_individual()
+    {
+        header('Content-Type: application/json');
+        $corporate_id = $this->input->post('corporate_id', TRUE);
+        $individual_id = $this->input->post('individual_id', TRUE);
+
+        if (empty($corporate_id) || empty($individual_id)) {
+            echo json_encode(array('status' => 'error', 'message' => 'Missing required fields'));
+            return;
+        }
+
+        $corporate = $this->Corporate_customers_model->get_by_id($corporate_id);
+        if (!$corporate) {
+            echo json_encode(array('status' => 'error', 'message' => 'Corporate customer not found'));
+            return;
+        }
+
+        $individual = get_by_id('individual_customers', 'id', $individual_id);
+        if (!$individual) {
+            echo json_encode(array('status' => 'error', 'message' => 'Individual customer not found'));
+            return;
+        }
+
+        if (!empty($corporate->linked_individual_id) && $corporate->linked_individual_id != $individual_id) {
+            echo json_encode(array('status' => 'error', 'message' => 'This business is already linked to another individual'));
+            return;
+        }
+
+        $this->Corporate_customers_model->update($corporate_id, array('linked_individual_id' => $individual_id));
+
+        echo json_encode(array(
+            'status' => 'success',
+            'message' => 'Business linked successfully',
+            'corporate' => array(
+                'id' => $corporate->id,
+                'name' => $corporate->EntityName
+            )
+        ));
+    }
+
+    /**
+     * Unlink an individual customer from a corporate customer (AJAX)
+     */
+    public function unlink_individual()
+    {
+        header('Content-Type: application/json');
+        $corporate_id = $this->input->post('corporate_id', TRUE);
+
+        if (empty($corporate_id)) {
+            echo json_encode(array('status' => 'error', 'message' => 'Missing corporate ID'));
+            return;
+        }
+
+        $this->Corporate_customers_model->update($corporate_id, array('linked_individual_id' => NULL));
+        echo json_encode(array('status' => 'success', 'message' => 'Business unlinked successfully'));
+    }
+
+    /**
+     * Get corporate customers linked to an individual (AJAX)
+     */
+    public function get_linked_corporates($individual_id)
+    {
+        header('Content-Type: application/json');
+        $corporates = $this->Corporate_customers_model->get_by_linked_individual($individual_id);
+
+        $results = array();
+        foreach ($corporates as $c) {
+            $results[] = array(
+                'id' => $c->id,
+                'client_id' => $c->ClientId,
+                'name' => $c->EntityName,
+                'reg_number' => $c->RegistrationNumber,
+                'email' => $c->contact_email,
+                'phone' => $c->phone_number
+            );
+        }
+
+        echo json_encode(array('status' => 'success', 'linked' => !empty($results), 'corporates' => $results));
     }
 
 }

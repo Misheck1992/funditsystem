@@ -36,7 +36,7 @@ if(!function_exists('display_menu_admin')) {
 		if ($result) {
 
 			foreach ($result as $row) {
-            $make_count = $ci->db->query("SELECT COUNT(*) as tt FROM menuitems WHERE mid=$row->id  AND  id != 113 AND id IN (".implode(',',$mm).")")->row();
+            $make_count = $ci->db->query("SELECT COUNT(*) as tt FROM menuitems WHERE mid=$row->id  AND  id != 113 AND show_menu = 'Yes' AND id IN (".implode(',',$mm).")")->row();
 
 if($row->id == $toggle){
 	$is_active = 'open';
@@ -66,7 +66,7 @@ if($make_count->tt==0){
         
 							<ul class="dropdown-menu">
           ';
-				$result2 = $ci->db->query("Select * FROM menuitems WHERE mid=$row->id  AND  id != 113 order by `sortt` ASC ")->result();
+				$result2 = $ci->db->query("Select * FROM menuitems WHERE mid=$row->id  AND  id != 113 AND show_menu = 'Yes' order by `sortt` ASC ")->result();
 
 				$CI =& get_instance();
 
@@ -82,8 +82,61 @@ if($make_count->tt==0){
 
 					}
 					if ($flag) {
+						// Check for specific menu items and add badge counts
+						$badge_html = '';
+						if ($row2->method == 'Loan/recommend') {
+							// Count loans with INITIATED status for recommend menu
+							$loan_count_result = $ci->db->query("SELECT COUNT(*) as count FROM loan WHERE loan_status = 'INITIATED'")->row();
+							$loan_count = $loan_count_result->count;
+							if ($loan_count > 0) {
+								$badge_html = ' <span class="badge badge-danger ml-2" style="background-color: #dc3545; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">' . $loan_count . '</span>';
+							}
+						} elseif ($row2->method == 'loan/initiated') {
+							// Count loans with RECOMMENDED status for initiated menu
+							$loan_count_result = $ci->db->query("SELECT COUNT(*) as count FROM loan WHERE loan_status = 'RECOMMENDED'")->row();
+							$loan_count = $loan_count_result->count;
+							if ($loan_count > 0) {
+								$badge_html = ' <span class="badge badge-warning ml-2" style="background-color: #ffc107; color: #212529; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">' . $loan_count . '</span>';
+							}
+						} elseif ($row2->method == 'Loan/get_approved_first') {
+							// Count loans with APPROVED_FIRST status for get_approved_first menu
+							$loan_count_result = $ci->db->query("SELECT COUNT(*) as count FROM loan WHERE loan_status = 'APPROVED_FIRST'")->row();
+							$loan_count = $loan_count_result->count;
+							if ($loan_count > 0) {
+								$badge_html = ' <span class="badge badge-info ml-2" style="background-color: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">' . $loan_count . '</span>';
+							}
+						} elseif ($row2->method == 'Loan/get_approved_second') {
+							// Count loans with APPROVED_SECOND status for Loan/get_approved_second menu
+							$loan_count_result = $ci->db->query("SELECT COUNT(*) as count FROM loan WHERE loan_status = 'APPROVED_SECOND'")->row();
+							$loan_count = $loan_count_result->count;
+							if ($loan_count > 0) {
+								$badge_html = ' <span class="badge badge-success ml-2" style="background-color: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">' . $loan_count . '</span>';
+							}
+						} elseif ($row2->method == 'loan/approved') {
+							// Count loans with APPROVED status for loan/approved menu
+							$loan_count_result = $ci->db->query("SELECT COUNT(*) as count FROM loan WHERE loan_status = 'APPROVED'")->row();
+							$loan_count = $loan_count_result->count;
+							if ($loan_count > 0) {
+								$badge_html = ' <span class="badge badge-primary ml-2" style="background-color: #007bff; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">' . $loan_count . '</span>';
+							}
+						} elseif ($row2->method == 'loan/unified_approval' || $row2->method == 'Loan/unified_approval') {
+							// Count loans with RECOMMENDED status for unified approval menu
+							$loan_count_result = $ci->db->query("SELECT COUNT(*) as count FROM loan WHERE loan_status = 'RECOMMENDED'")->row();
+							$loan_count = $loan_count_result->count;
+							if ($loan_count > 0) {
+								$badge_html = ' <span class="badge badge-warning ml-2" style="background-color: #f59e0b; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">' . $loan_count . '</span>';
+							}
+						} elseif ($row2->method == 'Loan/created_loans') {
+							// Count loans with CREATED status for created loans menu
+							$loan_count_result = $ci->db->query("SELECT COUNT(*) as count FROM loan WHERE loan_status = 'CREATED'")->row();
+							$loan_count = $loan_count_result->count;
+							if ($loan_count > 0) {
+								$badge_html = ' <span class="badge badge-secondary ml-2" style="background-color: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px;">' . $loan_count . '</span>';
+							}
+						}
+						
 						$ret .= '
-               <li><a href="' . base_url() .$row2->method . '">' . $row2->label . '</a></li>
+               <li><a href="' . base_url() .$row2->method . '">' . $row2->label . $badge_html . '</a></li>
                
                ';
 					} else {

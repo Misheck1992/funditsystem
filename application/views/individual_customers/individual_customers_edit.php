@@ -2,6 +2,19 @@
 
 $b = $this->Branches_model->get_all();
 $countryd = $this->Geo_countries_model->get_all();
+
+$zambian_provinces = [
+    'Central' => 'Central Province',
+    'Copperbelt' => 'Copperbelt Province',
+    'Eastern' => 'Eastern Province',
+    'Luapula' => 'Luapula Province',
+    'Lusaka' => 'Lusaka Province',
+    'Muchinga' => 'Muchinga Province',
+    'Northern' => 'Northern Province',
+    'Northwestern' => 'North-Western Province',
+    'Southern' => 'Southern Province',
+    'Western' => 'Western Province'
+];
 ?>
 
 <div class="main-content">
@@ -64,7 +77,7 @@ $countryd = $this->Geo_countries_model->get_all();
         </div>
 	    <div class="form-group col-6">
             <label for="varchar">PhoneNumber <?php echo form_error('PhoneNumber') ?></label>
-            <input type="text" class="form-control" name="PhoneNumber" id="PhoneNumber" placeholder="PhoneNumber" value="<?php echo $PhoneNumber; ?>" />
+            <input type="text" class="form-control" name="PhoneNumber" id="PhoneNumber" placeholder="e.g. +260977123456" value="<?php echo $PhoneNumber; ?>" />
         </div>
 	    <div class="form-group col-4">
             <label for="varchar">Postal Address <?php echo form_error('AddressLine1') ?></label>
@@ -82,28 +95,42 @@ $countryd = $this->Geo_countries_model->get_all();
 
 	 </div>
 	    <div class="form-group col-4">
-            <label for="varchar">Township<?php echo form_error('Province') ?></label>
-            <input type="text" class="form-control" name="Province" id="Province" placeholder="Township" value="<?php echo $Province; ?>" />
-        </div>
-	    <div class="form-group col-4">
-            <label for=" ">District <?php echo form_error('City') ?></label>
-            <input type="text" class="form-control" name="City" id="City" placeholder="District" value="<?php echo $City; ?>" />
-        </div>
-	    <div class="form-group col-4">
             <label for="varchar">Country <?php echo form_error('Country') ?></label>
 			<select class="form-control" name="Country">
 				<option value="">--select--</option>
 				<?php
-
 				foreach ($countryd as $item){
 					?>
-					<option value="<?php echo $item->code; ?>" <?php if($item->code==$Country) ?>><?php echo $item->name?></option>
-
+					<option value="<?php echo $item->name; ?>" <?php if($item->name==$Country){ echo "selected"; } elseif($item->name == 'Zambia' && empty($Country)){ echo "selected"; } ?>><?php echo $item->name; ?></option>
 				<?php
 				}
 				?>
 			</select>
-
+        </div>
+	    <div class="form-group col-4">
+            <label for="varchar">Province <?php echo form_error('Province') ?></label>
+            <select class="form-control" name="Province" id="Province">
+                <option value="">-- Select Province --</option>
+                <?php foreach ($zambian_provinces as $code => $name): ?>
+                    <option value="<?php echo $code; ?>" <?php echo (isset($Province) && $Province == $code) ? 'selected' : ''; ?>><?php echo $name; ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+	    <div class="form-group col-4">
+            <label for="varchar">City/Town <?php echo form_error('City') ?></label>
+            <input type="text" class="form-control" name="City" id="City" placeholder="Enter city/town" value="<?php echo $City; ?>" />
+        </div>
+	    <div class="form-group col-4">
+            <label for="varchar">District <?php echo form_error('district') ?></label>
+            <input type="text" class="form-control" name="district" id="district" placeholder="Enter district" value="<?php echo isset($district) ? $district : ''; ?>" />
+        </div>
+	    <div class="form-group col-4">
+            <label for="varchar">Chief/TA <?php echo form_error('chiefta') ?></label>
+            <input type="text" class="form-control" name="chiefta" id="chiefta" placeholder="Enter Chief/TA" value="<?php echo isset($chiefta) ? $chiefta : ''; ?>" />
+        </div>
+	    <div class="form-group col-4">
+            <label for="varchar">Street <?php echo form_error('village') ?></label>
+            <input type="text" class="form-control" name="village" id="village" placeholder="Enter street" value="<?php echo isset($village) ? $village : ''; ?>" />
         </div>
 	    <div class="form-group col-6">
             <label for="enum">Residential Status <?php echo form_error('ResidentialStatus') ?></label>
@@ -112,7 +139,6 @@ $countryd = $this->Geo_countries_model->get_all();
                 <option value="Owned" <?php  if($ResidentialStatus=='Owned'){ echo "selected"; } ?>>Owned</option>
                 <option value="Rented" <?php  if($ResidentialStatus=='Rented'){ echo "selected"; } ?>>Rented</option>
             </select>
-            <input type="text" class="form-control" name="ResidentialStatus" id="ResidentialStatus" placeholder="ResidentialStatus" value="<?php echo $ResidentialStatus; ?>" />
         </div>
 	    <div class="form-group col-6">
             <label for="varchar">Profession <?php echo form_error('Profession') ?></label>

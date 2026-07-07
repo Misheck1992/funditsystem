@@ -45,50 +45,67 @@ class Loan_model extends CI_Model
 
     private function calculateStraightLine($amount, $months, $loan, $loan_date, $interest)
     {
-        // Straight Line logic implementation
-        $table = '<div id="calculator"><h3>Loan Info</h3>';
-        $table .= '<table border="1" class="table">';
-        $table .= '<tr><td>Loan Name:</td><td>' . $loan->product_name . '</td></tr>';
-        $table .= '<tr><td>Interest:</td><td>' . $interest . '%</td></tr>';
-        $table .= '<tr><td>Terms:</td><td>' . $months . '</td></tr>';
-        $table .= '<tr><td>Frequency:</td><td>Every ' . $loan->frequency . '</td></tr>';
-        $table .= '</table>';
+        // Straight Line / Flat Rate calculation
+        // Interest rate is PER PERIOD (monthly), not annual
+        // Total Interest = Principal × Rate × Months
 
-        // Interest per month (fixed)
-        $total_interest = ($amount * ($interest / 100));
+        $rate = $interest / 100;  // Convert percentage to decimal
+        $total_interest = $amount * $rate * $months;
         $total_payment = $amount + $total_interest;
-        $monthly_payment = $total_payment / $months;
+        $monthly_payment = round($total_payment / $months, 2);
 
-        $table .= '<h3>Computation</h3>';
-        $table .= '<table>';
-        $table .= '<tr><td>Loan Amount:</td><td>' . $this->config->item('currency_symbol') . number_format($amount, 2, '.', ',') . '</td></tr>';
-        $table .= '<tr><td>Total Interest:</td><td>' . $this->config->item('currency_symbol') . number_format($total_interest, 2, '.', ',') . '</td></tr>';
-        $table .= '<tr><td>Total Payment:</td><td>' . $this->config->item('currency_symbol') . number_format($total_payment, 2, '.', ',') . '</td></tr>';
-        $table .= '<tr><td>Monthly Payment:</td><td>' . $this->config->item('currency_symbol') . number_format($monthly_payment, 2, '.', ',') . '</td></tr>';
+        // Equal portions each month
+        $principal_per_month = round($amount / $months, 2);
+        $interest_per_month = round($total_interest / $months, 2);
+
+        $currency = $this->config->item('currency_symbol');
+
+        // Summary Section
+        $table = '<div id="calculator">';
+        $table .= '<div class="summary-highlight">';
+        $table .= '<table style="width:100%">';
+        $table .= '<tr><td>Loan Product:</td><td>' . $loan->product_name . '</td></tr>';
+        $table .= '<tr><td>Principal Amount:</td><td>' . $currency . ' ' . number_format($amount, 2) . '</td></tr>';
+        $table .= '<tr><td>Interest Rate:</td><td>' . $interest . '% per month (Flat)</td></tr>';
+        $table .= '<tr><td>Loan Term:</td><td>' . $months . ' months</td></tr>';
+        $table .= '<tr><td style="border-top:1px solid rgba(255,255,255,0.3); padding-top:8px;">Monthly Payment:</td><td style="border-top:1px solid rgba(255,255,255,0.3); padding-top:8px; font-size:1.2rem;">' . $currency . ' ' . number_format($monthly_payment, 2) . '</td></tr>';
+        $table .= '<tr><td>Total Interest:</td><td>' . $currency . ' ' . number_format($total_interest, 2) . '</td></tr>';
+        $table .= '<tr><td>Total Repayment:</td><td>' . $currency . ' ' . number_format($total_payment, 2) . '</td></tr>';
         $table .= '</table>';
+        $table .= '</div>';
 
-        // Generate payment schedule
+        $table .= '<h3>Repayment Schedule</h3>';
         $table .= '<table class="table">';
         $table .= '<tr>
-        <th>Pmt</th>
-        <th>Payment</th>
-        <th>Principal</th>
-        <th>Interest</th>
-        <th>Balance</th>
-    </tr>';
+            <th>#</th>
+            <th>Bal Before</th>
+            <th>Installment</th>
+            <th>Principal</th>
+            <th>Interest</th>
+            <th>Bal After</th>
+        </tr>';
 
         $current_balance = $amount;
         for ($i = 1; $i <= $months; $i++) {
-            $interest_payment = $total_interest / $months;
-            $principal_payment = $monthly_payment - $interest_payment;
-            $current_balance -= $principal_payment;
+            // Balance before payment
+            $balance_before = $current_balance;
+
+            // Last payment adjustment
+            if ($i == $months) {
+                $principal_per_month = $current_balance;
+                $monthly_payment = $principal_per_month + $interest_per_month;
+            }
+
+            $current_balance -= $principal_per_month;
+            if ($current_balance < 0) $current_balance = 0;
 
             $table .= '<tr>';
             $table .= '<td>' . $i . '</td>';
+            $table .= '<td>' . number_format($balance_before, 2, '.', ',') . '</td>';
             $table .= '<td>' . number_format($monthly_payment, 2, '.', ',') . '</td>';
-            $table .= '<td>' . number_format($principal_payment, 2, '.', ',') . '</td>';
-            $table .= '<td>' . number_format($interest_payment, 2, '.', ',') . '</td>';
-            $table .= '<td>' . number_format($current_balance > 0 ? $current_balance : 0, 2, '.', ',') . '</td>';
+            $table .= '<td>' . number_format($principal_per_month, 2, '.', ',') . '</td>';
+            $table .= '<td>' . number_format($interest_per_month, 2, '.', ',') . '</td>';
+            $table .= '<td>' . number_format($current_balance, 2, '.', ',') . '</td>';
             $table .= '</tr>';
         }
 
@@ -96,150 +113,112 @@ class Loan_model extends CI_Model
 
         return $table;
     }
-    function calculateReducingBalance($amount, $months, $loan_id, $loan_date,$interest)
-	{
-		//get loan parameters
-		$this->db->where('loan_product_id',$loan_id);
-		$loan = $this->db->get('loan_products')->row();
+    function calculateReducingBalance($amount, $months, $loan_id, $loan_date, $interest)
+    {
+        // Get loan parameters
+        $this->db->where('loan_product_id', $loan_id);
+        $loan = $this->db->get('loan_products')->row();
 
-		//divisor
-		switch ($loan->frequency) {
-			case 'Monthly':
-				$divisor = 1;
-				$days = 30;
-				break;
-			case '2 Weeks':
-				$divisor = 2;
-				$days = 15;
-				break;
-			case 'Weekly':
-				$divisor = 4;
-				$days = 7;
-				break;
-		}
+        // Interest rate is per period (monthly), NOT annual
+        // e.g., 10% means 10% per month
+        $rate = $interest / 100;  // Convert percentage to decimal
 
-		//interest
-		$amount_interest = $amount * ($interest/100)/$divisor;
+        // Calculate EMI using reducing balance formula
+        // EMI = P * r * (1+r)^n / ((1+r)^n - 1)
+        if ($rate > 0) {
+            $emi = $amount * $rate * pow((1 + $rate), $months) / (pow((1 + $rate), $months) - 1);
+        } else {
+            $emi = $amount / $months;
+        }
+        $emi = round($emi, 2);
 
-		//total payments applying interest
-		$amount_total = $amount + $amount_interest * $months * $divisor;
+        // Pre-calculate total interest
+        $temp_balance = $amount;
+        $total_interest_calc = 0;
+        $temp_emi = $emi;
 
-		//payment per term
-		$amount_term = number_format(round($amount / ($months * $divisor), 2) + $amount_interest, 2, '.', ',');
+        for ($i = 1; $i <= $months; $i++) {
+            $int_portion = round($temp_balance * $rate, 2);
+            $prin_portion = $temp_emi - $int_portion;
 
+            if ($i == $months) {
+                $prin_portion = $temp_balance;
+                $temp_emi = $prin_portion + $int_portion;
+            }
 
-		$date = $loan_date;
-		$i=($interest/100);
+            $total_interest_calc += $int_portion;
+            $temp_balance -= $prin_portion;
+        }
 
+        $currency = $this->config->item('currency_symbol');
 
-		$monthly_payment = $amount*($i/12)*pow((1+$i/12),$months)/(pow((1+$i/12),$months)-1);
-		$monthly_payment1 = $amount*($i/12)*pow((1+$i/12),$months)/(pow((1+$i/12),$months)-1);
-		$current_balance = $amount;
-		$current_balance1 = $amount;
-		$payment_counter = 1;
-		$total_interest = 0;
-		$total_interest1=0;
+        // Summary Section
+        $table = '<div id="calculator">';
+        $table .= '<div class="summary-highlight">';
+        $table .= '<table style="width:100%">';
+        $table .= '<tr><td>Loan Product:</td><td>' . $loan->product_name . '</td></tr>';
+        $table .= '<tr><td>Principal Amount:</td><td>' . $currency . ' ' . number_format($amount, 2) . '</td></tr>';
+        $table .= '<tr><td>Interest Rate:</td><td>' . $interest . '% per month</td></tr>';
+        $table .= '<tr><td>Loan Term:</td><td>' . $months . ' months</td></tr>';
+        $table .= '<tr><td style="border-top:1px solid rgba(255,255,255,0.3); padding-top:8px;">Monthly Payment:</td><td style="border-top:1px solid rgba(255,255,255,0.3); padding-top:8px; font-size:1.2rem;">' . $currency . ' ' . number_format($emi, 2) . '</td></tr>';
+        $table .= '<tr><td>Total Interest:</td><td>' . $currency . ' ' . number_format($total_interest_calc, 2) . '</td></tr>';
+        $table .= '<tr><td>Total Repayment:</td><td>' . $currency . ' ' . number_format($amount + $total_interest_calc, 2) . '</td></tr>';
+        $table .= '</table>';
+        $table .= '</div>';
 
+        $table .= '<h3>Repayment Schedule</h3>';
 
+        // Payment schedule table
+        $table .= '<table class="table">';
+        $table .= '<tr>
+            <th>#</th>
+            <th>Bal Before</th>
+            <th>Installment</th>
+            <th>Principal</th>
+            <th>Interest</th>
+            <th>Bal After</th>
+        </tr>';
 
+        // Generate schedule
+        $current_balance = $amount;
+        $cumulative_interest = 0;
+        $monthly_payment = $emi;
 
-		while($current_balance1 > 0) {
-			//create rows
+        for ($payment_num = 1; $payment_num <= $months; $payment_num++) {
+            // Balance before payment
+            $balance_before = $current_balance;
 
+            // Interest for this period
+            $interest_payment = round($current_balance * $rate, 2);
 
-			$towards_interest1 = ($i/12)*$current_balance1;  //this calculates the portion of your monthly payment that goes towards interest
+            // Principal for this period
+            $principal_payment = $monthly_payment - $interest_payment;
 
-			if ($monthly_payment1 > $current_balance1){
-				$monthly_payment1 = $current_balance1 + $towards_interest1;
-			}
+            // Last payment adjustment
+            if ($payment_num == $months) {
+                $principal_payment = $current_balance;
+                $monthly_payment = $principal_payment + $interest_payment;
+            }
 
+            $cumulative_interest += $interest_payment;
+            $current_balance = round($current_balance - $principal_payment, 2);
+            if ($current_balance < 0) $current_balance = 0;
 
-			$towards_balance1 = $monthly_payment1 - $towards_interest1;
-			$total_interest1 = $total_interest1 + $towards_interest1;
-			$current_balance1 = $current_balance1 - $towards_balance1;
+            // Display row
+            $table .= '<tr>';
+            $table .= '<td>' . $payment_num . '</td>';
+            $table .= '<td>' . number_format($balance_before, 2) . '</td>';
+            $table .= '<td>' . number_format($monthly_payment, 2) . '</td>';
+            $table .= '<td>' . number_format($principal_payment, 2) . '</td>';
+            $table .= '<td>' . number_format($interest_payment, 2) . '</td>';
+            $table .= '<td>' . number_format($current_balance, 2) . '</td>';
+            $table .= '</tr>';
+        }
 
-		}
+        $table .= '</table></div>';
 
-		//Loan info
-		$table = '<div id="calculator"><h3>Loan Info</h3>';
-		$table = $table . '<table border="1" class="table">';
-		$table = $table . '<tr><td>Loan Name:</td><td>'.$loan->product_name.'</td></tr>';
-		$table = $table . '<tr><td>Interest:</td><td>'.$interest.'%</td></tr>';
-		$table = $table . '<tr><td>Terms:</td><td>'.$months.'</td></tr>';
-		$table = $table . '<tr><td>Frequency:</td><td>Every '.$loan->frequency.' days</td></tr>';
-		$table = $table . '</table>';
-		$table = $table . '<h3>Computation</h3>';
-		$table = $table . '<table>';
-		$table = $table . '<tr><td>Loan Amount:</td><td> '.$this->config->item('currency_symbol') . number_format($amount, 2, '.', ',').'</td></tr>';
-//        $table = $table . '<tr><td>Interest per First Month:</td><td> '.$this->config->item('currency_symbol') . $amount*$i.'</td></tr>';
-		$table = $table . '<tr><td>Total interest:</td><td> '.$this->config->item('currency_symbol') .number_format(($total_interest1),2) .'</td></tr>';
-		$table = $table . '<tr><td>Amount Per Term:</td><td> '.$this->config->item('currency_symbol') . number_format($monthly_payment,2).'</td></tr>';
-		$table = $table . '<tr><td>Total Payment:</td><td> '.$this->config->item('currency_symbol') . number_format($total_interest1+$amount, 2, '.', ',').'</td></tr>';
-		$table = $table . '</table>';
-
-		//$monthly_payment = $amount*($i/12)*pow((1+$i/12),$months)/(pow((1+$i/12),$months)-1);
-
-
-		$table = $table . '<table class="table" >
-
-				<tr>
-					<th width="30" align="center"><b>Pmt</b></th>
-					<th width="60" align="center"><b>Payment</b></th>
-					<th width="60" align="center"><b>Principal</b></th>
-					<th width="60" align="center"><b>Interest</b></th>
-					<th width="85" align="center"><b>Interest Paid</b></th>
-					<th width="70" align="center"><b>Balance</b></th>
-				</tr>	
-			';
-
-
-
-		$table = $table ."<tr>";
-		$table = $table . "<td width='30'>0</td>";
-		$table = $table . "<td width='60'>&nbsp;</td>";
-		$table = $table . "<td width='60'>&nbsp;</td>";
-		$table = $table . "<td width='60'>&nbsp;</td>";
-		$table = $table . "<td width='85'>&nbsp;</td>";
-		$table = $table . "<td width='70'>".round($amount,2)."</td>";
-		$table = $table . "</tr>";
-
-		while($current_balance > 0) {
-			//create rows
-
-
-			$towards_interest = ($i/12)*$current_balance;  //this calculates the portion of your monthly payment that goes towards interest
-
-			if ($monthly_payment > $current_balance){
-				$monthly_payment = $current_balance + $towards_interest;
-			}
-
-
-			$towards_balance = $monthly_payment - $towards_interest;
-			$total_interest = $total_interest + $towards_interest;
-			$current_balance = $current_balance - $towards_balance;
-
-
-			// display row
-
-			$table = $table . "<tr class='table_info'>";
-			$table = $table . "<td>".$payment_counter."</td>";
-			$table = $table ."<td>".round($monthly_payment,2)."</td>";
-			$table = $table . "<td>".round($towards_balance,2)."</td>";
-			$table = $table . "<td>".round($towards_interest,2)."</td>";
-			$table = $table ."<td>".round($total_interest,2)."</td>";
-			$table = $table ."<td>".round($current_balance,2)."</td>";
-			$table = $table . "</tr>";
-
-
-			$payment_counter++;
-
-
-		}
-
-		$table = $table . '</table></div>';
-
-		return $table;
-	}
+        return $table;
+    }
 	function add_loan_backup($loan_number,$lamount, $lmonths,$interest, $product_id, $ldate,$loan_customer,$customer_type,$worthness_file,$narration,$added_by,$method, $fee_amount,$currency)
 	{
 		//set Time Zone
@@ -588,13 +567,23 @@ class Loan_model extends CI_Model
 
         // Prepare loan data for insertion
         // Dynamic calculation of loan parameters based on calculation type
+        // Interest rate is PER PERIOD (monthly), not annual
+        $rate = $interest / 100;  // Convert percentage to decimal
+
         if ($loan->calculation_type === 'Reducing Balance') {
-            $monthly_payment = $lamount * ($interest / 100 / 12) * pow((1 + $interest / 100 / 12), $lmonths) / (pow((1 + $interest / 100 / 12), $lmonths) - 1);
+            // EMI = P * r * (1+r)^n / ((1+r)^n - 1)
+            if ($rate > 0) {
+                $monthly_payment = $lamount * $rate * pow((1 + $rate), $lmonths) / (pow((1 + $rate), $lmonths) - 1);
+            } else {
+                $monthly_payment = $lamount / $lmonths;
+            }
             $total_payment = $monthly_payment * $lmonths;
             $total_interest = $total_payment - $lamount;
 
         } elseif ($loan->calculation_type === 'Straight Line') {
-            $total_interest = ($lamount * ($interest / 100)) * $lmonths / $lmonths;
+            // Straight Line / Flat Rate calculation
+            // Total Interest = Principal × Rate × Months
+            $total_interest = $lamount * $rate * $lmonths;
             $total_payment = $lamount + $total_interest;
             $monthly_payment = $total_payment / $lmonths;
 
@@ -652,7 +641,7 @@ class Loan_model extends CI_Model
         return $loan_id;
     }
 
-	function add_loan($loan_number, $lamount, $lmonths, $interest, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $method, $fee_amount, $currency, $offtaker, $processing_fee)
+	function add_loan($loan_number, $lamount, $lmonths, $interest, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by, $method, $fee_amount, $currency, $offtaker, $processing_fee, $appraisal_data = array())
 	{
 		// Retrieve loan product details
 		$loan = $this->db->select("*")->from('loan_products')->where('loan_product_id', $product_id)->get()->row();
@@ -689,16 +678,23 @@ class Loan_model extends CI_Model
 			error_log("Interest Calculation: $lamount × " . ($interest/100) . " × $lmonths = $total_interest");
 		}
 		else if ($loan->calculation_type === 'Reducing Balance') {
-			// Use standard reducing balance calculation
-			$annual_interest_rate = $interest / 100; // Convert to decimal
-			$monthly_interest_rate = $annual_interest_rate / 12;
-			$monthly_payment = $lamount * $monthly_interest_rate * pow((1 + $monthly_interest_rate), $lmonths) / (pow((1 + $monthly_interest_rate), $lmonths) - 1);
+			// Reducing Balance calculation
+			// Interest rate is PER PERIOD (monthly), not annual
+			$rate = $interest / 100; // Convert percentage to decimal
+			if ($rate > 0) {
+				$monthly_payment = $lamount * $rate * pow((1 + $rate), $lmonths) / (pow((1 + $rate), $lmonths) - 1);
+			} else {
+				$monthly_payment = $lamount / $lmonths;
+			}
 			$total_payment = $monthly_payment * $lmonths;
 			$total_interest = $total_payment - $lamount;
 		}
 		else if ($loan->calculation_type === 'Straight Line') {
-			// Use standard straight line calculation
-			$total_interest = ($lamount * ($interest / 100)) * $lmonths;
+			// Straight Line / Flat Rate calculation
+			// Interest rate is PER PERIOD (monthly), not annual
+			// Total Interest = Principal × Rate × Months
+			$rate = $interest / 100;
+			$total_interest = $lamount * $rate * $lmonths;
 			$total_payment = $lamount + $total_interest;
 			$monthly_payment = $total_payment / $lmonths;
 		}
@@ -730,7 +726,17 @@ class Loan_model extends CI_Model
 			'currency' => $currency,
 			'off_taker' => $offtaker,
 			'processing_fee' => $processing_fee,
-			'calculation_type' => $loan->calculation_type
+			'calculation_type' => $loan->calculation_type,
+			// Appraisal fields
+			'crb_search' => isset($appraisal_data['crb_search']) ? $appraisal_data['crb_search'] : null,
+			'pacra_search' => isset($appraisal_data['pacra_search']) ? $appraisal_data['pacra_search'] : null,
+			'previous_facilities' => isset($appraisal_data['previous_facilities']) ? $appraisal_data['previous_facilities'] : null,
+			'past_loans_comment' => isset($appraisal_data['past_loans_comment']) ? $appraisal_data['past_loans_comment'] : null,
+			'security_notes' => isset($appraisal_data['security_notes']) ? $appraisal_data['security_notes'] : null,
+			'bank_statement_notes' => isset($appraisal_data['bank_statement_notes']) ? $appraisal_data['bank_statement_notes'] : null,
+			'about_transaction' => isset($appraisal_data['about_transaction']) ? $appraisal_data['about_transaction'] : null,
+			'risk_analysis' => isset($appraisal_data['risk_analysis']) ? $appraisal_data['risk_analysis'] : null
+			// Note: Bank statement fields are now stored in separate bank_statements table
 		];
 
 		// Add maturity date for bullet loans
@@ -744,6 +750,15 @@ class Loan_model extends CI_Model
 
 		// Retrieve the inserted loan ID
 		$loan_id = $this->db->insert_id();
+
+		// Insert into loan_approval_trail to track loan initiation
+		$trail_data = array(
+			'user_id' => $added_by,
+			'action' => 'INITIATED',
+			'comment' => 'Loan application initiated',
+			'loan_id' => $loan_id
+		);
+		$this->db->insert('loan_approval_trail', $trail_data);
 
 		// Insert payment schedules based on calculation type
 		if ($loan->calculation_type === 'Bullet Payment') {
@@ -812,23 +827,37 @@ class Loan_model extends CI_Model
         $monthly_payment = 0;
 
         if ($calculation_type === 'Straight Line') {
-            // Calculate Straight Line details
-            $monthly_interest = ($amount * ($interest / 100)) / $months;
-            $monthly_payment = ($amount / $months) + $monthly_interest;
+            // Straight Line / Flat Rate calculation
+            // Interest rate is PER PERIOD (monthly), not annual
+            // Total Interest = Principal × Rate × Months
 
-            for ($i = 1; $i <= $months; $i++) {
-                $principal_payment = $amount / $months;
-                $interest_payment = $monthly_interest;
-                $current_balance -= $principal_payment;
+            $rate = $interest / 100;  // Convert percentage to decimal
+            $total_interest = $amount * $rate * $months;
+            $total_payment = $amount + $total_interest;
+            $emi = round($total_payment / $months, 2);
+
+            // Each installment has equal principal and interest portions
+            $principal_per_month = round($amount / $months, 2);
+            $interest_per_month = round($total_interest / $months, 2);
+
+            for ($payment_num = 1; $payment_num <= $months; $payment_num++) {
+                // For last payment, adjust to clear balance exactly
+                if ($payment_num == $months) {
+                    $principal_per_month = $current_balance;
+                    $emi = $principal_per_month + $interest_per_month;
+                }
+
+                $current_balance = round($current_balance - $principal_per_month, 2);
+                if ($current_balance < 0) $current_balance = 0;
 
                 $this->db->insert('payement_schedules', [
                     'customer' => $loan_customer,
                     'loan_id' => $loan_id,
                     'payment_schedule' => $date,
-                    'payment_number' => $i,
-                    'amount' => $monthly_payment,
-                    'principal' => $principal_payment,
-                    'interest' => $interest_payment,
+                    'payment_number' => $payment_num,
+                    'amount' => round($emi, 2),
+                    'principal' => round($principal_per_month, 2),
+                    'interest' => round($interest_per_month, 2),
                     'paid_amount' => 0.00,
                     'loan_balance' => $current_balance,
                     'loan_date' => $start_date
@@ -837,23 +866,49 @@ class Loan_model extends CI_Model
                 $date = date('Y-m-d', strtotime("+1 month", strtotime($date)));
             }
         } elseif ($calculation_type === 'Reducing Balance') {
-            // Calculate Reducing Balance details
-            $i = $interest / 100;
-            $monthly_payment = $amount * ($i / 12) * pow((1 + $i / 12), $months) / (pow((1 + $i / 12), $months) - 1);
+            // Calculate Reducing Balance (EMI - Equal Monthly Installments)
+            // Formula: EMI = P * r * (1+r)^n / ((1+r)^n - 1)
+            // Where: P = principal, r = periodic interest rate, n = number of periods
+            // Interest rate is per period (monthly), NOT annual
 
-            for ($i = 1; $i <= $months; $i++) {
-                $interest_payment = ($i / 12) * $current_balance;
-                $principal_payment = $monthly_payment - $interest_payment;
-                $current_balance -= $principal_payment;
+            $periodic_rate = $interest / 100;  // Convert percentage to decimal (e.g., 10% = 0.10)
+
+            // Calculate EMI (Equal Monthly Installment)
+            if ($periodic_rate > 0) {
+                $emi = $amount * $periodic_rate * pow((1 + $periodic_rate), $months) / (pow((1 + $periodic_rate), $months) - 1);
+            } else {
+                // If interest is 0, just divide principal by months
+                $emi = $amount / $months;
+            }
+
+            // Round EMI to 2 decimal places for consistent payments
+            $emi = round($emi, 2);
+
+            for ($payment_num = 1; $payment_num <= $months; $payment_num++) {
+                // Interest for this period = current balance * periodic rate
+                $interest_payment = round($current_balance * $periodic_rate, 2);
+
+                // Principal for this period = EMI - Interest
+                $principal_payment = $emi - $interest_payment;
+
+                // For last payment, adjust to clear the balance exactly
+                if ($payment_num == $months) {
+                    $principal_payment = $current_balance;
+                    $emi = $principal_payment + $interest_payment;
+                }
+
+                // Update balance
+                $current_balance = round($current_balance - $principal_payment, 2);
+                if ($current_balance < 0) $current_balance = 0;
 
                 $this->db->insert('payement_schedules', [
                     'customer' => $loan_customer,
                     'loan_id' => $loan_id,
                     'payment_schedule' => $date,
-                    'payment_number' => $i,
-                    'amount' => $monthly_payment,
-                    'principal' => $principal_payment,
-                    'interest' => $interest_payment,
+                    'payment_number' => $payment_num,
+                    'amount' => round($emi, 2),
+                    'principal' => round($principal_payment, 2),
+                    'interest' => round($interest_payment, 2),
                     'paid_amount' => 0.00,
                     'loan_balance' => $current_balance,
                     'loan_date' => $start_date
@@ -1013,7 +1068,6 @@ class Loan_model extends CI_Model
 
 
 		$data = array(
-			'loan_number'=>$loan_number,
 			'loan_product'=>$product_id,
 			'loan_customer'=>$loan_customer,
 			'customer_type'=>$customer_type,
@@ -1030,7 +1084,6 @@ class Loan_model extends CI_Model
 			'next_payment_id'=>1,
 			'loan_added_by'=>$added_by,
 			'disbursed_amount'=>0,
-			'counter'=>$fcounter
 		);
 
         $this->db->where('loan_id', $loan_id);
@@ -1857,91 +1910,175 @@ $this->db->insert('rescheduled_payments',$data);
 }
     function restructure($loan_id, $new_date)
     {
-
-
-        //borrower_loan_id
         $id = $loan_id;
-        $loan  = $this->db->select("*")->from($this->table)->where('loan_id',$loan_id)->get()->row();
-        $current_balance = intval($loan->loan_principal);
-        $i=($loan->loan_interest/100)*12;
-        $ii=1;
-        $date = $new_date;
-        $this->db->where('loan_id',$id);
-        $this->db->update($this->table,array('loan_date'=>$new_date));
-        //insert each payment records to lend_payments
-        $monthly_payment = intval($loan->loan_amount_term);
-        switch ($loan->period_type) {
+        $loan = $this->db->select("*")->from($this->table)->where('loan_id', $loan_id)->get()->row();
+        
+        if (!$loan) {
+            return false;
+        }
+        
+        // Update loan date
+        $this->db->where('loan_id', $id);
+        $this->db->update($this->table, array('loan_date' => $new_date));
+        
+        // Delete existing payment schedules
+        $this->db->where('loan_id', $id);
+        $this->db->delete('payement_schedules');
+        
+        // Get loan product details for calculation type
+        $loan_product = $this->db->select("*")->from('loan_products')->where('loan_product_id', $loan->loan_product)->get()->row();
+        
+        if (!$loan_product) {
+            return false;
+        }
+        
+        // Use the same payment schedule generation logic as add_loan
+        $calculation_type = $loan_product->calculation_type;
+        
+        if ($calculation_type === 'Bullet Payment') {
+            // For bullet payment, create a single payment record
+            $maturity_date = date('Y-m-d', strtotime("+{$loan->loan_period} months", strtotime($new_date)));
+            
+            $this->db->insert('payement_schedules', [
+                'customer' => $loan->loan_customer,
+                'loan_id' => $id,
+                'payment_schedule' => $maturity_date,
+                'payment_number' => 1,
+                'amount' => $loan->loan_amount_total, // Principal + Interest
+                'principal' => $loan->loan_principal,
+                'interest' => $loan->loan_interest_amount,
+                'paid_amount' => 0.00,
+                'loan_balance' => $loan->loan_principal,
+                'loan_date' => $new_date,
+                'is_bullet_payment' => 1 // Flag for bullet payment
+            ]);
+        } else {
+            // For regular loans, use the same logic as insert_payment_schedules
+            $this->restructure_payment_schedules($id, $loan, $loan_product, $new_date, $calculation_type);
+        }
+        
+        return true;
+    }
+    
+    private function restructure_payment_schedules($loan_id, $loan, $loan_product, $start_date, $calculation_type)
+    {
+        $date = $start_date;
+        $current_balance = floatval($loan->loan_principal);
+        $amount = $current_balance;
+        $months = intval($loan->loan_period);
+        $interest = floatval($loan->loan_interest);
+        $loan_customer = $loan->loan_customer;
+        
+        if ($calculation_type === 'Straight Line') {
+            // Straight Line / Flat Rate calculation
+            // Interest rate is PER PERIOD (monthly), not annual
+            // Total Interest = Principal × Rate × Months
+            $rate = $interest / 100;
+            $total_interest = $amount * $rate * $months;
+            $total_payment = $amount + $total_interest;
+            $emi = round($total_payment / $months, 2);
+
+            $principal_per_month = round($amount / $months, 2);
+            $interest_per_month = round($total_interest / $months, 2);
+
+            for ($payment_num = 1; $payment_num <= $months; $payment_num++) {
+                // Last payment adjustment
+                if ($payment_num == $months) {
+                    $principal_per_month = $current_balance;
+                    $emi = $principal_per_month + $interest_per_month;
+                }
+
+                $current_balance = round($current_balance - $principal_per_month, 2);
+                if ($current_balance < 0) $current_balance = 0;
+
+                // Calculate next payment date based on frequency
+                $next_date = $this->calculate_next_payment_date($date, $payment_num, $loan->period_type, $start_date);
+
+                $this->db->insert('payement_schedules', [
+                    'customer' => $loan_customer,
+                    'loan_id' => $loan_id,
+                    'payment_schedule' => $next_date,
+                    'payment_number' => $payment_num,
+                    'amount' => round($emi, 2),
+                    'principal' => round($principal_per_month, 2),
+                    'interest' => round($interest_per_month, 2),
+                    'paid_amount' => 0.00,
+                    'loan_balance' => $current_balance,
+                    'loan_date' => $start_date
+                ]);
+            }
+        } elseif ($calculation_type === 'Reducing Balance') {
+            // Reducing Balance (EMI) calculation
+            // Interest rate is PER PERIOD (monthly), not annual
+            $rate = $interest / 100;
+
+            // Calculate EMI
+            if ($rate > 0) {
+                $emi = $amount * $rate * pow((1 + $rate), $months) / (pow((1 + $rate), $months) - 1);
+            } else {
+                $emi = $amount / $months;
+            }
+            $emi = round($emi, 2);
+
+            for ($payment_num = 1; $payment_num <= $months; $payment_num++) {
+                $interest_payment = round($current_balance * $rate, 2);
+                $principal_payment = $emi - $interest_payment;
+
+                // Last payment adjustment
+                if ($payment_num == $months) {
+                    $principal_payment = $current_balance;
+                    $emi = $principal_payment + $interest_payment;
+                }
+
+                $current_balance = round($current_balance - $principal_payment, 2);
+                if ($current_balance < 0) $current_balance = 0;
+
+                // Calculate next payment date based on frequency
+                $next_date = $this->calculate_next_payment_date($date, $payment_num, $loan->period_type, $start_date);
+
+                $this->db->insert('payement_schedules', [
+                    'customer' => $loan_customer,
+                    'loan_id' => $loan_id,
+                    'payment_schedule' => $next_date,
+                    'payment_number' => $payment_num,
+                    'amount' => round($emi, 2),
+                    'principal' => round($principal_payment, 2),
+                    'interest' => round($interest_payment, 2),
+                    'paid_amount' => 0.00,
+                    'loan_balance' => $current_balance,
+                    'loan_date' => $start_date
+                ]);
+            }
+        }
+    }
+    
+    private function calculate_next_payment_date($base_date, $payment_number, $frequency, $start_date)
+    {
+        switch ($frequency) {
             case 'Monthly':
-                $divisor = 1;
-                $days = 30;
+                $next_date = date('Y-m-d', strtotime("+{$payment_number} month", strtotime($start_date)));
                 break;
             case '2 Weeks':
-                $divisor = 2;
-                $days = 15;
+                $weeks = $payment_number * 2;
+                $next_date = date('Y-m-d', strtotime("+{$weeks} weeks", strtotime($start_date)));
                 break;
             case 'Weekly':
-                $divisor = 4;
-                $days = 7;
+                $next_date = date('Y-m-d', strtotime("+{$payment_number} week", strtotime($start_date)));
                 break;
+            default:
+                $next_date = date('Y-m-d', strtotime("+{$payment_number} month", strtotime($start_date)));
         }
-        $this->db->where('loan_id',$id);
-        $this->db->delete('payement_schedules');
-
-            while ($current_balance > 0)
-            {
-
-                $towards_interest = ($i/12)*$current_balance;  //this calculates the portion of your monthly payment that goes towards interest
-
-                if ($monthly_payment > $current_balance){
-                    $monthly_payment = $current_balance + $towards_interest;
-                }
-
-
-                $towards_balance = $monthly_payment - $towards_interest;
-                $total_interest = $monthly_payment - $towards_balance;
-                $current_balance = $current_balance - $towards_balance;
-
-
-                $frequency = $days * $ii;
-                $newdate = strtotime ('+'.$frequency.' day', strtotime ($date)) ;
-
-                //check if payment date landed on weekend
-                //if Sunday, make it Monday. If Saturday, make it Friday
-                if(date ('D', $newdate) == 'Sun') {
-                    $newdate = strtotime('+1 day', $newdate) ;
-                } elseif(date('D', $newdate) == 'Sat') {
-                    $newdate = strtotime('-1 day', $newdate) ;
-                }
-
-                $newdate = date('Y-m-d', $newdate );
-
-                $this->db->insert(
-                    'payement_schedules', array(
-
-                        'customer' => $loan->loan_customer,
-                        'loan_id' => $id,
-                        'payment_schedule' => $newdate,
-                        'payment_number' => $ii,
-                        'amount' => $monthly_payment,
-                        'principal' => $towards_balance,
-                        'interest' => $total_interest,
-                        'paid_amount' => 0,
-                        'loan_balance' => $current_balance,
-                        'loan_date' => $new_date,
-
-                    )
-                );
-
-
-                $ii ++;
-            }
-
-
-
-        return $id;
+        
+        // Check if payment date landed on weekend and adjust
+        $timestamp = strtotime($next_date);
+        if (date('D', $timestamp) == 'Sun') {
+            $next_date = date('Y-m-d', strtotime('+1 day', $timestamp));
+        } elseif (date('D', $timestamp) == 'Sat') {
+            $next_date = date('Y-m-d', strtotime('-1 day', $timestamp));
+        }
+        
+        return $next_date;
     }
-
-
 
 	function add_loan_recent($amount, $months,$interest, $loan_id, $loan_date,$loan_customer)
 	{
@@ -2553,6 +2690,23 @@ function get_all_recomended_edit_loan()
 		$this->db->order_by('loan.loan_id', 'DESC');
 		return $this->db->get()->result();
 	}
+
+	/**
+	 * Get all loans for portfolio report (Active, Closed, Written Off)
+	 */
+	function get_loans_for_report()
+	{
+		$this->db->select("loan.*, loan_products.product_name, employees.Firstname as efname, employees.Lastname as elname")
+			->from($this->table)
+			->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'left')
+			->join('employees', 'employees.id = loan.loan_added_by', 'left');
+
+		// Get Active, Closed, and Written Off loans
+		$this->db->where_in('loan_status', array('ACTIVE', 'CLOSED', 'WRITTEN_OFF'));
+		$this->db->order_by('loan.loan_id', 'DESC');
+
+		return $this->db->get()->result();
+	}
 	
 
 	function report_client_summary($loan_number)
@@ -2645,7 +2799,7 @@ function get_all_recomended_edit_loan()
 			->from($this->table)
 			->join('loan_products','loan_products.loan_product_id =loan.loan_product')
 //			->join('individual_customers','individual_customers.id = loan.loan_customer');
-			->join('employees','employees.id = loan.loan_added_by');
+			->join('employees','employees.id = loan.loan_added_by', 'left');
 		$this->db->where($this->id, $id);
 		return $this->db->get()->row();
 	}
@@ -2789,47 +2943,46 @@ function get_all_recomended_edit_loan()
 
 		// Calculate maturity date
 		$maturity_date = date('Y-m-d', strtotime("+$months months", strtotime($loan_date)));
+		$maturity_date_formatted = date('d M Y', strtotime($maturity_date));
 
-		// Generate HTML for display
-		$table = '<div id="calculator"><h3>Bullet Loan Info</h3>';
-		$table .= '<table border="1" class="table">';
-		$table .= '<tr><td>Loan Name:</td><td>' . $loan->product_name . '</td></tr>';
-		$table .= '<tr><td>Interest:</td><td>' . $interest . '% per month</td></tr>';
-		$table .= '<tr><td>Terms:</td><td>' . $months . ' months</td></tr>';
-		$table .= '<tr><td>Payment Type:</td><td>Bullet Payment</td></tr>';
+		$currency = $this->config->item('currency_symbol');
+
+		// Summary Section with modern styling
+		$table = '<div id="calculator">';
+		$table .= '<div class="summary-highlight">';
+		$table .= '<table style="width:100%">';
+		$table .= '<tr><td>Loan Product:</td><td>' . $loan->product_name . '</td></tr>';
+		$table .= '<tr><td>Principal Amount:</td><td>' . $currency . ' ' . number_format($amount, 2) . '</td></tr>';
+		$table .= '<tr><td>Interest Rate:</td><td>' . $interest . '% per month</td></tr>';
+		$table .= '<tr><td>Loan Term:</td><td>' . $months . ' months</td></tr>';
+		$table .= '<tr><td>Maturity Date:</td><td>' . $maturity_date_formatted . '</td></tr>';
+		$table .= '<tr><td style="border-top:1px solid rgba(255,255,255,0.3); padding-top:8px;">Payment at Maturity:</td><td style="border-top:1px solid rgba(255,255,255,0.3); padding-top:8px; font-size:1.2rem;">' . $currency . ' ' . number_format($total_payment, 2) . '</td></tr>';
+		$table .= '<tr><td>Total Interest:</td><td>' . $currency . ' ' . number_format($total_interest, 2) . '</td></tr>';
 		$table .= '</table>';
+		$table .= '</div>';
 
-		$table .= '<h3>Computation</h3>';
-		$table .= '<table>';
-		$table .= '<tr><td>Loan Amount:</td><td>' . $this->config->item('currency_symbol') . number_format($amount, 2, '.', ',') . '</td></tr>';
-		$table .= '<tr><td>Monthly Interest Rate:</td><td>' . $interest . '%</td></tr>';
-		$table .= '<tr><td>Total Interest:</td><td>' . $this->config->item('currency_symbol') . number_format($total_interest, 2, '.', ',') . '</td></tr>';
-		$table .= '<tr><td>Total Payment at Maturity:</td><td>' . $this->config->item('currency_symbol') . number_format($total_payment, 2, '.', ',') . '</td></tr>';
-		$table .= '</table>';
-
-		// Display payment schedule (single payment at maturity)
+		// Payment schedule (single payment at maturity)
 		$table .= '<h3>Payment Schedule</h3>';
 		$table .= '<table class="table">';
 		$table .= '<tr>
-        <th>Payment</th>
-        <th>Due Date</th>
-        <th>Principal</th>
-        <th>Interest</th>
-        <th>Total</th>
-    </tr>';
+			<th>#</th>
+			<th>Due Date</th>
+			<th>Principal</th>
+			<th>Interest</th>
+			<th>Total</th>
+		</tr>';
 
 		$table .= '<tr>';
-		$table .= '<td>Bullet Payment</td>';
-		$table .= '<td>' . $maturity_date . '</td>';
-		$table .= '<td>' . number_format($amount, 2, '.', ',') . '</td>';
-		$table .= '<td>' . number_format($total_interest, 2, '.', ',') . '</td>';
-		$table .= '<td>' . number_format($total_payment, 2, '.', ',') . '</td>';
+		$table .= '<td>1</td>';
+		$table .= '<td>' . $maturity_date_formatted . '</td>';
+		$table .= '<td>' . number_format($amount, 2) . '</td>';
+		$table .= '<td>' . number_format($total_interest, 2) . '</td>';
+		$table .= '<td>' . number_format($total_payment, 2) . '</td>';
 		$table .= '</tr>';
 
 		$table .= '</table>';
 
-		$table .= '<p><b>Note:</b> For bullet loans, the entire principal plus interest is paid at maturity.</p>';
-		$table .= '<p>Interest calculation: Principal ($' . number_format($amount, 2) . ') × Monthly Rate (' . $interest . '%) × Term (' . $months . ' months) = $' . number_format($total_interest, 2) . '</p>';
+		$table .= '<p style="margin-top:1rem; color:#6b7280; font-size:0.9rem;"><i class="fa fa-info-circle"></i> For bullet loans, the entire principal plus interest is paid at maturity.</p>';
 
 		$table .= '</div>';
 
@@ -2912,19 +3065,70 @@ function get_all_recomended_edit_loan()
 			$payoff_interest = $full_term_interest;
 		}
 
-		// Total payoff amount
-		$total_payoff = $principal + $payoff_interest;
+		// Calculate penalty for overdue loans (past maturity)
+		$penalty = 0;
+		$days_overdue = 0;
+		$maturity_date = date('Y-m-d', strtotime("+{$loan->loan_period} months", strtotime($loan->loan_date)));
+
+		if ($payment_date > $maturity_date) {
+			// Calculate days overdue
+			$maturity_datetime = new DateTime($maturity_date);
+			$days_overdue = $payment_datetime->diff($maturity_datetime)->days;
+
+			// Get loan product to check penalty settings
+			$loan_product = $this->db->where('loan_product_id', $loan->loan_product)->get('loan_products')->row();
+
+			if ($loan_product && isset($loan_product->penalty) && $loan_product->penalty == 'yes') {
+				// Get penalty threshold (days before penalty applies)
+				$penalty_threshold = isset($loan_product->penalty_threshold) ? (int)$loan_product->penalty_threshold : 0;
+
+				if ($days_overdue > $penalty_threshold) {
+					$overdue_days_for_penalty = $days_overdue - $penalty_threshold;
+
+					// Determine which penalty structure to use based on threshold
+					if ($days_overdue <= $penalty_threshold) {
+						// Below threshold - use below penalty rates
+						$charge_type = isset($loan_product->penalty_charge_type_below) ? $loan_product->penalty_charge_type_below : 'fixed';
+						$fixed_charge = isset($loan_product->penalty_fixed_charge_below) ? (float)$loan_product->penalty_fixed_charge_below : 0;
+						$variable_charge = isset($loan_product->penalty_variable_charge_below) ? (float)$loan_product->penalty_variable_charge_below : 0;
+					} else {
+						// Above threshold - use above penalty rates
+						$charge_type = isset($loan_product->penalty_charge_type_above) ? $loan_product->penalty_charge_type_above : 'fixed';
+						$fixed_charge = isset($loan_product->penalty_fixed_charge_above) ? (float)$loan_product->penalty_fixed_charge_above : 0;
+						$variable_charge = isset($loan_product->penalty_variable_charge_above) ? (float)$loan_product->penalty_variable_charge_above : 0;
+					}
+
+					// Calculate penalty based on charge type
+					if ($charge_type == 'fixed') {
+						$penalty = $fixed_charge * $overdue_days_for_penalty;
+					} elseif ($charge_type == 'variable') {
+						// Variable charge is typically a percentage of outstanding amount per day
+						$outstanding = $principal + $payoff_interest;
+						$penalty = ($outstanding * ($variable_charge / 100)) * $overdue_days_for_penalty;
+					} elseif ($charge_type == 'both') {
+						$outstanding = $principal + $payoff_interest;
+						$penalty = ($fixed_charge + ($outstanding * ($variable_charge / 100))) * $overdue_days_for_penalty;
+					}
+				}
+			}
+		}
+
+		// Total payoff amount (principal + interest + penalty)
+		$total_payoff = $principal + $payoff_interest + $penalty;
 
 		return [
 			'principal' => $principal,
 			'interest' => $payoff_interest,
+			'penalty' => $penalty,
 			'total_payoff' => $total_payoff,
 			'months_elapsed' => $total_months_elapsed,
 			'total_months' => $loan->loan_period,
 			'interest_proportion' => $interest_proportion,
 			'payment_date' => $payment_date,
 			'monthly_interest_rate' => $monthly_interest_rate,
-			'full_term_interest' => $full_term_interest
+			'full_term_interest' => $full_term_interest,
+			'maturity_date' => $maturity_date,
+			'days_overdue' => $days_overdue
 		];
 	}
 
@@ -2963,6 +3167,172 @@ function get_all_recomended_edit_loan()
 			'loan_date' => $start_date,
 			'is_bullet_payment' => 1 // Flag for bullet payment
 		]);
+	}
+
+	/**
+	 * Get Obligor Listing Report Data
+	 * Returns all loans with customer details, outstanding balance, and maturity information
+	 *
+	 * @return array Query result
+	 */
+	/**
+	 * Get Obligor Listing Report Data with filters
+	 * Returns all loans with customer details, outstanding balance, and maturity information
+	 *
+	 * @param array $filters Array of filter parameters (loan_status, currency, customer_type, from_date, to_date)
+	 * @return array Query result
+	 */
+	function obligor_listing($filters = array())
+	{
+		$this->db->select("
+			loan.loan_id,
+			loan.loan_number,
+			loan.loan_principal,
+			loan.loan_interest,
+			loan.loan_status,
+			loan.customer_type,
+			loan.loan_customer,
+			loan.currency as loan_currency,
+			loan.loan_date,
+			loan.loan_product,
+			loan_products.product_name as facility_type,
+			individual_customers.id as ind_id,
+			individual_customers.Firstname as ind_firstname,
+			individual_customers.Lastname as ind_lastname,
+			individual_customers.Profession as ind_profession,
+			corporate_customers.id as corp_id,
+			corporate_customers.EntityName as corp_name,
+			corporate_customers.industry_sector as corp_industry,
+			corporate_customers.category as corp_category,
+			currencies.currency_name,
+			currencies.currency_code,
+			(SELECT SUM(ps.amount) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as total_scheduled,
+			(SELECT SUM(ps.paid_amount) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as total_paid,
+			(SELECT MAX(ps.payment_schedule) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as last_payment_date
+		");
+
+		$this->db->from('loan');
+		$this->db->join('individual_customers', 'individual_customers.id = loan.loan_customer AND loan.customer_type = "individual"', 'left');
+		$this->db->join('corporate_customers', 'corporate_customers.id = loan.loan_customer AND loan.customer_type = "institution"', 'left');
+		$this->db->join('currencies', 'currencies.currency_id = loan.currency', 'left');
+		$this->db->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'left');
+
+		// Default filter - show active, approved, and disbursed loans
+		if(empty($filters['loan_status']) || $filters['loan_status'] == 'All'){
+			$this->db->where_in('loan.loan_status', ['ACTIVE', 'APPROVED', 'DISBURSED']);
+		} else {
+			$this->db->where('loan.loan_status', $filters['loan_status']);
+		}
+
+		// Filter by currency
+		if(!empty($filters['currency']) && $filters['currency'] != 'All'){
+			$this->db->where('loan.currency', $filters['currency']);
+		}
+
+		// Filter by customer type
+		if(!empty($filters['customer_type']) && $filters['customer_type'] != 'All'){
+			$this->db->where('loan.customer_type', $filters['customer_type']);
+		}
+
+		// Filter by date range
+		if(!empty($filters['from_date']) && !empty($filters['to_date'])){
+			$this->db->where('loan.loan_date >=', $filters['from_date']);
+			$this->db->where('loan.loan_date <=', $filters['to_date']);
+		}
+
+		// Filter by loan product
+		if(!empty($filters['loan_product']) && $filters['loan_product'] != 'All'){
+			$this->db->where('loan.loan_product', $filters['loan_product']);
+		}
+
+		$this->db->order_by('loan.loan_id', 'DESC');
+
+		return $this->db->get()->result();
+	}
+
+	/**
+	 * Get Portfolio Listing Report Data with filters
+	 * Returns all loans with customer details, interest amounts, repayment details, and tenor
+	 *
+	 * @param array $filters Array of filter parameters (loan_status, currency, customer_type, from_date, to_date)
+	 * @return array Query result
+	 */
+	function portfolio_listing($filters = array())
+	{
+		$this->db->select("
+			loan.loan_id,
+			loan.loan_number,
+			loan.loan_principal,
+			loan.loan_interest,
+			loan.loan_interest_amount,
+			loan.loan_status,
+			loan.customer_type,
+			loan.loan_customer,
+			loan.currency as loan_currency,
+			loan.loan_date,
+			loan.loan_product,
+			loan.loan_period,
+			loan.period_type,
+			loan_products.product_name as facility_type,
+			loan_products.frequency as loan_frequency,
+			individual_customers.id as ind_id,
+			individual_customers.Firstname as ind_firstname,
+			individual_customers.Lastname as ind_lastname,
+			individual_customers.Profession as ind_profession,
+			corporate_customers.id as corp_id,
+			corporate_customers.EntityName as corp_name,
+			corporate_customers.industry_sector as corp_industry,
+			corporate_customers.category as corp_category,
+			currencies.currency_name,
+			currencies.currency_code,
+			(SELECT SUM(ps.amount) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as total_scheduled,
+			(SELECT SUM(ps.paid_amount) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as total_paid,
+			(SELECT SUM(
+				CASE
+					WHEN ps.paid_amount >= ps.interest THEN ps.interest
+					ELSE ps.paid_amount
+				END
+			) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as realized_interest,
+			(SELECT MAX(ps.payment_schedule) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as last_payment_date
+		");
+
+		$this->db->from('loan');
+		$this->db->join('individual_customers', 'individual_customers.id = loan.loan_customer AND loan.customer_type = "individual"', 'left');
+		$this->db->join('corporate_customers', 'corporate_customers.id = loan.loan_customer AND loan.customer_type = "institution"', 'left');
+		$this->db->join('currencies', 'currencies.currency_id = loan.currency', 'left');
+		$this->db->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'left');
+
+		// Default filter - show active, approved, and disbursed loans
+		if(empty($filters['loan_status']) || $filters['loan_status'] == 'All'){
+			$this->db->where_in('loan.loan_status', ['ACTIVE', 'APPROVED', 'DISBURSED']);
+		} else {
+			$this->db->where('loan.loan_status', $filters['loan_status']);
+		}
+
+		// Filter by currency
+		if(!empty($filters['currency']) && $filters['currency'] != 'All'){
+			$this->db->where('loan.currency', $filters['currency']);
+		}
+
+		// Filter by customer type
+		if(!empty($filters['customer_type']) && $filters['customer_type'] != 'All'){
+			$this->db->where('loan.customer_type', $filters['customer_type']);
+		}
+
+		// Filter by date range
+		if(!empty($filters['from_date']) && !empty($filters['to_date'])){
+			$this->db->where('loan.loan_date >=', $filters['from_date']);
+			$this->db->where('loan.loan_date <=', $filters['to_date']);
+		}
+
+		// Filter by loan product
+		if(!empty($filters['loan_product']) && $filters['loan_product'] != 'All'){
+			$this->db->where('loan.loan_product', $filters['loan_product']);
+		}
+
+		$this->db->order_by('loan.loan_id', 'DESC');
+
+		return $this->db->get()->result();
 	}
 }
 

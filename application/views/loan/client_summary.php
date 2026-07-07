@@ -198,7 +198,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
                             <th></th>
                             <th>AMOUNT IN ZMW</th>
                             <th></th>
-                            <th>AMOUNT IN MWK</th>
+                            <th>AMOUNT IN ZMW</th>
                             <th></th>
                             <th></th>
                             <th></th>

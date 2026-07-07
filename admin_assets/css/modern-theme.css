@@ -250,26 +250,57 @@ a:hover, a:focus {
 /* Color variants with gradients */
 .dashboard-stat.blue {
 	background: linear-gradient(135deg, var(--primary), var(--primary-light));
+	color: #fff;
 }
 
 .dashboard-stat.green {
 	background: linear-gradient(135deg, var(--success), var(--success-light));
+	color: #fff;
 }
 
 .dashboard-stat.red {
 	background: linear-gradient(135deg, var(--danger), var(--danger-light));
+	color: #fff;
 }
 
 .dashboard-stat.purple {
 	background: linear-gradient(135deg, #9c27b0, #ba68c8);
+	color: #fff;
 }
 
 .dashboard-stat.orange {
 	background: linear-gradient(135deg, #ff9800, #ffb74d);
+	color: #fff;
 }
 
 .dashboard-stat.hoki {
 	background: linear-gradient(135deg, #67809F, #899eb9);
+	color: #fff;
+}
+
+.dashboard-stat.yellow {
+	background: linear-gradient(135deg, #ffc107, #ffda4a) !important;
+	color: #fff !important;
+}
+
+.dashboard-stat.teal {
+	background: linear-gradient(135deg, #009688, #26a69a) !important;
+	color: #fff !important;
+}
+
+.dashboard-stat.navy {
+	background: linear-gradient(135deg, #2c3e50, #34495e) !important;
+	color: #fff !important;
+}
+
+.dashboard-stat.maroon {
+	background: linear-gradient(135deg, #8e24aa, #ab47bc) !important;
+	color: #fff !important;
+}
+
+.dashboard-stat.olive {
+	background: linear-gradient(135deg, #689f38, #8bc34a) !important;
+	color: #fff !important;
 }
 
 /* Cards */
@@ -500,6 +531,26 @@ a:hover, a:focus {
 
 /* ============= RESPONSIVE ADJUSTMENTS ============= */
 
+/* Fix for dashboard-stat labels between 750px and 992px */
+@media only screen and (min-width: 750px) and (max-width: 992px) {
+	.dashboard-stat .details .desc {
+		font-size: 12px !important;
+		display: block !important;
+		opacity: 0.9 !important;
+		line-height: 1.4 !important;
+		min-height: 35px;
+	}
+
+	.dashboard-stat .details .number {
+		font-size: 18px !important;
+		margin-bottom: 8px !important;
+	}
+
+	.dashboard-stat .details {
+		padding: 15px !important;
+	}
+}
+
 @media only screen and (max-width: 992px) {
 	.side-nav {
 		width: 260px;
@@ -524,6 +575,10 @@ a:hover, a:focus {
 
 	.page-container .main-content {
 		padding: 85px 15px 15px;
+	}
+
+	.fd-page {
+		padding: 85px 10px 10px;
 	}
 }
 
@@ -627,4 +682,602 @@ a:hover, a:focus {
 #addRow:hover {
 	background: var(--success-light);
 	transform: translateY(-2px);
+}
+
+/* ============================================
+   FIXED DEPOSITS - GOOGLE MATERIAL DESIGN
+   Clean, flat, no gradients
+   ============================================ */
+
+/* -- FD Layout Container -- */
+.fd-page {
+	max-width: none;
+	margin: 0;
+	padding: calc(70px + 15px) 10px 15px;  /* top clears fixed 70px header */
+}
+
+.fd-page .page-title {
+	font-size: 20px;
+	font-weight: 400;
+	color: #202124;
+	margin: 0 0 2px 0;
+	letter-spacing: -0.2px;
+}
+
+.fd-page .page-subtitle {
+	font-size: 14px;
+	color: #5f6368;
+	margin: 0;
+}
+
+.fd-page .breadcrumb {
+	background: none;
+	padding: 0;
+	margin: 0;
+	font-size: 13px;
+	display: flex;
+	flex-wrap: nowrap;
+	white-space: nowrap;
+}
+
+.fd-page .breadcrumb-item a {
+	color: #1a73e8;
+}
+
+.fd-page .breadcrumb-item.active {
+	color: #5f6368;
+}
+
+.fd-page .mb-4 {
+	margin-bottom: 12px !important;
+}
+
+/* -- FD Stat Cards (replaces info-box/small-box) -- */
+.fd-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.fd-stat {
+	background: #fff;
+	border: 1px solid #dadce0;
+	border-radius: 8px;
+	padding: 14px 16px;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	transition: box-shadow 0.2s;
+}
+
+.fd-stat:hover {
+	box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+}
+
+.fd-stat .fd-stat-icon {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 18px;
+	flex-shrink: 0;
+}
+
+.fd-stat .fd-stat-icon.blue { background: #e8f0fe; color: #1a73e8; }
+.fd-stat .fd-stat-icon.green { background: #e6f4ea; color: #1e8e3e; }
+.fd-stat .fd-stat-icon.red { background: #fce8e6; color: #d93025; }
+.fd-stat .fd-stat-icon.yellow { background: #fef7e0; color: #e37400; }
+.fd-stat .fd-stat-icon.purple { background: #f3e8fd; color: #8430ce; }
+.fd-stat .fd-stat-icon.teal { background: #e0f7fa; color: #00796b; }
+.fd-stat .fd-stat-icon.gray { background: #f1f3f4; color: #5f6368; }
+
+.fd-stat .fd-stat-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.fd-stat .fd-stat-label {
+	font-size: 12px;
+	color: #5f6368;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	margin-bottom: 4px;
+	font-weight: 500;
+}
+
+.fd-stat .fd-stat-value {
+	font-size: 20px;
+	font-weight: 500;
+	color: #202124;
+	line-height: 1.2;
+}
+
+.fd-stat .fd-stat-value.sm {
+	font-size: 16px;
+}
+
+/* -- FD Cards (clean Material style) -- */
+.fd-card {
+	background: #fff;
+	border: 1px solid #dadce0;
+	border-radius: 8px;
+	margin-bottom: 16px;
+	overflow: hidden;
+}
+
+.fd-card:hover {
+	box-shadow: none;
+}
+
+.fd-card .fd-card-header {
+	padding: 12px 16px;
+	border-bottom: 1px solid #dadce0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.fd-card .fd-card-header h3,
+.fd-card .fd-card-header .fd-card-title {
+	font-size: 15px;
+	font-weight: 500;
+	color: #202124;
+	margin: 0;
+}
+
+.fd-card .fd-card-header .fd-card-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.fd-card .fd-card-body {
+	padding: 16px;
+}
+
+.fd-card .fd-card-body.compact {
+	padding: 0;
+}
+
+.fd-card .fd-card-footer {
+	padding: 12px 16px;
+	border-top: 1px solid #dadce0;
+	background: #f8f9fa;
+}
+
+/* -- FD Tables -- */
+.fd-card .table {
+	margin-bottom: 0;
+}
+
+.fd-card .table thead th {
+	background: #f8f9fa;
+	color: #5f6368;
+	font-size: 11px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.8px;
+	padding: 10px 16px;
+	border-bottom: 1px solid #dadce0;
+	border-top: none;
+}
+
+.fd-card .table td {
+	padding: 10px 16px;
+	color: #202124;
+	font-size: 14px;
+	border-bottom: 1px solid #e8eaed;
+}
+
+.fd-card .table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.fd-card .table tbody tr:hover {
+	background: #f8f9fa;
+}
+
+/* -- FD Key-Value Table (for detail views) -- */
+.fd-kv-table td {
+	padding: 8px 16px !important;
+}
+
+.fd-kv-table td:first-child {
+	color: #5f6368;
+	font-size: 13px;
+	width: 45%;
+}
+
+.fd-kv-table td:last-child {
+	color: #202124;
+	font-weight: 500;
+}
+
+/* -- FD Alerts/Notices -- */
+.fd-notice {
+	border-radius: 8px;
+	padding: 12px 16px;
+	margin-bottom: 16px;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.fd-notice i {
+	font-size: 20px;
+	margin-top: 2px;
+	flex-shrink: 0;
+}
+
+.fd-notice.info {
+	background: #e8f0fe;
+	color: #174ea6;
+	border: 1px solid #d2e3fc;
+}
+
+.fd-notice.success {
+	background: #e6f4ea;
+	color: #137333;
+	border: 1px solid #ceead6;
+}
+
+.fd-notice.warning {
+	background: #fef7e0;
+	color: #7c4d12;
+	border: 1px solid #fde293;
+}
+
+.fd-notice.danger {
+	background: #fce8e6;
+	color: #a50e0e;
+	border: 1px solid #f5c6cb;
+}
+
+/* -- FD Buttons (flat, no gradient) -- */
+.fd-page .btn {
+	box-shadow: none;
+	border-radius: 4px;
+	font-weight: 500;
+	font-size: 14px;
+	letter-spacing: 0.25px;
+	padding: 8px 24px;
+	transition: background 0.2s, box-shadow 0.2s;
+}
+
+.fd-page .btn:hover {
+	transform: none;
+	box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
+}
+
+.fd-page .btn-primary {
+	background: #1a73e8;
+	border: none;
+}
+
+.fd-page .btn-primary:hover {
+	background: #1765cc;
+}
+
+.fd-page .btn-success {
+	background: #1e8e3e;
+	border: none;
+}
+
+.fd-page .btn-success:hover {
+	background: #1a7d37;
+}
+
+.fd-page .btn-warning {
+	background: #e37400;
+	color: #fff;
+	border: none;
+}
+
+.fd-page .btn-warning:hover {
+	background: #ca6800;
+}
+
+.fd-page .btn-danger {
+	background: #d93025;
+	border: none;
+}
+
+.fd-page .btn-danger:hover {
+	background: #c5221f;
+}
+
+.fd-page .btn-default,
+.fd-page .btn-outline-secondary {
+	background: #fff;
+	color: #1a73e8;
+	border: 1px solid #dadce0;
+	box-shadow: none;
+}
+
+.fd-page .btn-default:hover,
+.fd-page .btn-outline-secondary:hover {
+	background: #f8f9fa;
+	border-color: #dadce0;
+}
+
+.fd-page .btn-outline-primary {
+	background: #fff;
+	color: #1a73e8;
+	border: 1px solid #1a73e8;
+}
+
+.fd-page .btn-outline-primary:hover {
+	background: #e8f0fe;
+}
+
+.fd-page .btn-outline-danger {
+	background: #fff;
+	color: #d93025;
+	border: 1px solid #d93025;
+}
+
+.fd-page .btn-outline-danger:hover {
+	background: #fce8e6;
+}
+
+.fd-page .btn-outline-warning {
+	background: #fff;
+	color: #e37400;
+	border: 1px solid #e37400;
+}
+
+.fd-page .btn-outline-warning:hover {
+	background: #fef7e0;
+}
+
+.fd-page .btn-lg {
+	padding: 10px 28px;
+	font-size: 14px;
+}
+
+/* -- FD Badges (flat) -- */
+.fd-page .badge {
+	font-weight: 500;
+	padding: 4px 12px;
+	border-radius: 4px;
+	font-size: 12px;
+	letter-spacing: 0.3px;
+}
+
+.fd-badge-active { background: #e6f4ea; color: #1e8e3e; }
+.fd-badge-closed { background: #f1f3f4; color: #5f6368; }
+.fd-badge-matured { background: #e8f0fe; color: #1a73e8; }
+.fd-badge-pending { background: #fef7e0; color: #e37400; }
+.fd-badge-paid { background: #e6f4ea; color: #1e8e3e; }
+.fd-badge-overdue { background: #fce8e6; color: #d93025; }
+
+/* -- FD Summary Row (for breakdowns) -- */
+.fd-summary-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.fd-summary-table td {
+	padding: 10px 0;
+	font-size: 14px;
+	border-bottom: 1px solid #e8eaed;
+}
+
+.fd-summary-table td:last-child {
+	text-align: right;
+	font-weight: 500;
+}
+
+.fd-summary-table tr:last-child td {
+	border-bottom: none;
+}
+
+.fd-summary-table tr.total td {
+	padding-top: 14px;
+	font-size: 16px;
+	font-weight: 500;
+	color: #202124;
+	border-top: 2px solid #202124;
+	border-bottom: none;
+}
+
+.fd-summary-table tr.deduction td {
+	color: #d93025;
+}
+
+.fd-summary-table tr.highlight td {
+	background: #f8f9fa;
+	padding: 12px 16px;
+	border-radius: 4px;
+}
+
+/* -- FD Radio Cards (for withdrawal type selection) -- */
+.fd-radio-card {
+	border: 1px solid #dadce0;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: border-color 0.2s, box-shadow 0.2s;
+	overflow: hidden;
+	height: 100%;
+}
+
+.fd-radio-card:hover {
+	border-color: #1a73e8;
+}
+
+.fd-radio-card.selected {
+	border-color: #1a73e8;
+	box-shadow: 0 0 0 1px #1a73e8;
+}
+
+.fd-radio-card .fd-radio-header {
+	padding: 16px 20px;
+	border-bottom: 1px solid #e8eaed;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.fd-radio-card .fd-radio-body {
+	padding: 20px;
+}
+
+/* -- FD Action Links (for quick actions sidebar) -- */
+.fd-action-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.fd-action-list li {
+	border-bottom: 1px solid #e8eaed;
+}
+
+.fd-action-list li:last-child {
+	border-bottom: none;
+}
+
+.fd-action-list li a {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 16px;
+	color: #202124;
+	font-size: 14px;
+	transition: background 0.15s;
+	text-decoration: none;
+}
+
+.fd-action-list li a:hover {
+	background: #f8f9fa;
+}
+
+.fd-action-list li a i {
+	width: 20px;
+	text-align: center;
+	color: #5f6368;
+	font-size: 16px;
+}
+
+.fd-action-list li a .fd-action-value {
+	margin-left: auto;
+	color: #5f6368;
+	font-size: 13px;
+}
+
+/* -- FD Print Styles -- */
+@media print {
+	/* Hide app chrome */
+	.header,
+	.side-nav,
+	.footer,
+	.page-container > .main-content > *:not(.fd-page),
+	.no-print,
+	.breadcrumb,
+	.fd-page .btn,
+	nav,
+	aside {
+		display: none !important;
+	}
+
+	body, .app, .layout {
+		margin: 0 !important;
+		padding: 0 !important;
+		background: #fff !important;
+	}
+
+	.page-container {
+		padding-left: 0 !important;
+	}
+
+	.page-container .main-content {
+		padding: 0 !important;
+	}
+
+	.fd-page {
+		padding: 0 !important;
+		max-width: none !important;
+	}
+
+	.fd-card {
+		border: none !important;
+		box-shadow: none !important;
+		margin-bottom: 10px !important;
+		page-break-inside: avoid;
+	}
+
+	.fd-stat {
+		border: 1px solid #ccc !important;
+	}
+
+	.table {
+		font-size: 10pt !important;
+	}
+
+	/* Preserve background colors in print */
+	* {
+		-webkit-print-color-adjust: exact !important;
+		print-color-adjust: exact !important;
+	}
+}
+
+/* -- FD Form Specifics -- */
+.fd-page .form-control {
+	border: 1px solid #dadce0;
+	border-radius: 4px;
+	padding: 10px 12px;
+	font-size: 14px;
+	color: #202124;
+	transition: border-color 0.2s;
+}
+
+.fd-page .form-control:focus {
+	border-color: #1a73e8;
+	box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+}
+
+.fd-page .form-control-lg {
+	padding: 12px 16px;
+	font-size: 16px;
+}
+
+.fd-page label {
+	font-size: 13px;
+	font-weight: 500;
+	color: #5f6368;
+	margin-bottom: 6px;
+}
+
+.fd-page .input-group-text {
+	background: #f8f9fa;
+	border: 1px solid #dadce0;
+	border-radius: 4px;
+	color: #5f6368;
+	font-weight: 500;
+}
+
+.fd-page textarea.form-control {
+	border-radius: 4px;
+}
+
+/* -- FD Custom checkbox/radio in fd-page -- */
+.fd-page .custom-control-input:checked ~ .custom-control-label::before {
+	background-color: #1a73e8;
+	border-color: #1a73e8;
+}
+
+.fd-page .custom-radio .custom-control-input:checked ~ .custom-control-label::after {
+	background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%231a73e8'/%3e%3c/svg%3e");
+}
+
+/* -- FD Section Divider -- */
+.fd-divider {
+	border: none;
+	border-top: 1px solid #e8eaed;
+	margin: 16px 0;
 }

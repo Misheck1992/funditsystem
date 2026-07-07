@@ -11,6 +11,41 @@
 	</div>
 	<div class="card">
 		<div class="card-body" style="border: thick #153505 solid;border-radius: 14px;">
+			
+			<!-- First Approver Instructions -->
+			<div class="alert alert-warning mb-4" style="background-color: #fff3cd; border-color: #ffeaa7; border-radius: 8px;">
+				<div class="d-flex align-items-center">
+					<i class="fas fa-user-tie" style="font-size: 24px; color: #856404; margin-right: 15px;"></i>
+					<div>
+						<h5 class="alert-heading mb-2" style="color: #856404; font-weight: 600;">
+							<i class="fas fa-clipboard-list"></i> You are acting as: First Approver
+						</h5>
+						<p class="mb-2" style="color: #856404;">
+							<strong>Your Role:</strong> Review loans that have been recommended and provide first-level approval.
+						</p>
+						<hr style="border-color: #ffeaa7; margin: 10px 0;">
+						<div class="row">
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #856404; font-size: 14px;">
+									<i class="fas fa-thumbs-up text-success"></i> <strong>To Approve:</strong> Click "View" → "Approve"
+								</p>
+								<p class="mb-1" style="color: #856404; font-size: 14px;">
+									<i class="fas fa-thumbs-down text-danger"></i> <strong>To Reject:</strong> Click "View" → "Reject"
+								</p>
+							</div>
+							<div class="col-md-6">
+								<p class="mb-1" style="color: #856404; font-size: 14px;">
+									<i class="fas fa-search"></i> <strong>Review:</strong> Verify recommendation quality and loan feasibility
+								</p>
+								<p class="mb-1" style="color: #856404; font-size: 14px;">
+									<i class="fas fa-arrow-right"></i> <strong>Next Step:</strong> Approved loans move to Second Approval queue
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			
             <div style="overflow-y: auto"">
             <form name="frmUser" method="post" action="">
             <table  id="data-table1" class="tableCss">
@@ -77,7 +112,7 @@
                         <td><?php echo $loan->loan_added_date ?></td>
                     
 
-                        <td><a href="<?php echo base_url('loan/view/').$loan->loan_id.'?action=approve_first'?>" class="btn btn-sm btn-primary">View/Approve</a></td>
+                        <td><a href="<?php echo base_url('loan/approve/').$loan->loan_id?>" class="btn btn-sm btn-primary">View/Approve</a></td>
 
                     </tr>
                     <?php

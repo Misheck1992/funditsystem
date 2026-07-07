@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>System Capabilities &amp; Data Processing Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12pt;
+      line-height: 1.7;
+      color: #1a1a1a;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 40px 60px 40px;
+    }
+    h1 {
+      font-size: 16pt;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+    h2 {
+      font-size: 13pt;
+      text-transform: uppercase;
+      border-bottom: 2px solid #333;
+      padding-bottom: 4px;
+      margin-top: 36px;
+    }
+    h3 {
+      font-size: 12pt;
+      margin-bottom: 4px;
+    }
+    .center { text-align: center; }
+    .meta { text-align: center; font-size: 11pt; color: #444; margin-bottom: 30px; }
+    .divider { border: none; border-top: 1px solid #aaa; margin: 30px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px 0;
+      font-size: 11pt;
+    }
+    th {
+      background-color: #2c2c2c;
+      color: #fff;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #ddd;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background-color: #f7f7f7; }
+    ul { margin: 6px 0 12px 0; padding-left: 20px; }
+    li { margin-bottom: 4px; }
+    .note {
+      background: #f0f4ff;
+      border-left: 4px solid #3355cc;
+      padding: 10px 14px;
+      margin: 14px 0;
+      font-size: 11pt;
+    }
+    .footer {
+      margin-top: 60px;
+      font-size: 10pt;
+      color: #666;
+      border-top: 1px solid #ccc;
+      padding-top: 14px;
+      text-align: center;
+    }
+    .sig-block {
+      margin-top: 50px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .sig-line {
+      border-top: 1px solid #333;
+      width: 220px;
+      padding-top: 6px;
+      font-size: 11pt;
+    }
+    @media print {
+      body { margin: 20mm; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>System Capabilities &amp; Data Processing Report</h1>
+  <p class="meta">
+    Loan Management System (LMS) — Fundit<br>
+    Prepared for: Data Protection Commission of Zambia<br>
+    Date: April 2026<br>
+    Classification: Confidential
+  </p>
+
+  <hr class="divider">
+
+  <!-- SECTION 1 -->
+  <h2>1. Introduction &amp; Purpose of This Report</h2>
+  <p>
+    This report describes the capabilities, data processing activities, and operational scope of the
+    Loan Management System (LMS) deployed by our organisation. It has been prepared in response to
+    a request from the Data Protection Commission of Zambia (DPC) and is intended to assist the
+    Commission in understanding how personal data is collected, processed, stored, and protected
+    within this system.
+  </p>
+  <p>
+    The information herein is accurate as of the date of this report and reflects the current
+    deployed state of the system.
+  </p>
+
+  <!-- SECTION 2 -->
+  <h2>2. System Overview</h2>
+  <p>
+    The Fundit Loan Management System is a web-based application built to support the operations of
+    a microfinance/lending institution. It is hosted on the organisation's own infrastructure
+    (on-premises server) and is accessed by authorised staff only via a secured internal network or
+    VPN.
+  </p>
+  <p>The system supports the following primary business functions:</p>
+  <ul>
+    <li>Customer registration and Know Your Customer (KYC) onboarding</li>
+    <li>Loan application, appraisal, approval, and disbursement</li>
+    <li>Loan repayment scheduling and collections tracking</li>
+    <li>Fixed deposit account management</li>
+    <li>Collateral registration and monitoring</li>
+    <li>Staff and user account management</li>
+    <li>Financial and operational reporting</li>
+    <li>SMS and email communication to customers</li>
+    <li>System backup and data archiving</li>
+  </ul>
+  <p>
+    The system is multi-branch capable, meaning a single installation can service multiple
+    organisational branches with separate data access controls per branch.
+  </p>
+
+  <!-- SECTION 3 -->
+  <h2>3. Categories of Personal Data Processed</h2>
+  <p>
+    The following categories of personal data are collected and processed by the system. All data
+    is collected directly from the data subject (customer or employee) during the onboarding or
+    employment process.
+  </p>
+
+  <h3>3.1 Individual Customers</h3>
+  <table>
+    <tr><th>Data Category</th><th>Specific Fields</th><th>Purpose</th></tr>
+    <tr>
+      <td>Identity</td>
+      <td>Title, First Name, Middle Name, Last Name, Client ID</td>
+      <td>Customer identification and record uniqueness</td>
+    </tr>
+    <tr>
+      <td>Demographics</td>
+      <td>Gender, Date of Birth, Marital Status, Nationality</td>
+      <td>Credit risk profiling, regulatory reporting</td>
+    </tr>
+    <tr>
+      <td>Contact Details</td>
+      <td>Phone Number, WhatsApp Number, Email Address</td>
+      <td>Loan notifications, arrears alerts, communication</td>
+    </tr>
+    <tr>
+      <td>Residential Address</td>
+      <td>Physical Address, Postal Address, Province, City, District, Country</td>
+      <td>Address verification, credit assessment, collections</td>
+    </tr>
+    <tr>
+      <td>Financial Profile</td>
+      <td>Profession, Source of Income, Gross Monthly Income, Residential Status</td>
+      <td>Loan affordability and credit risk assessment</td>
+    </tr>
+    <tr>
+      <td>Bank Account Details</td>
+      <td>Bank Name, Branch, Account Name, Account Number</td>
+      <td>Loan disbursement and repayment processing</td>
+    </tr>
+    <tr>
+      <td>Identity Documents (KYC)</td>
+      <td>ID Type (National ID / Passport / Driving Licence), Document Number, Expiry Date</td>
+      <td>KYC compliance and identity verification</td>
+    </tr>
+    <tr>
+      <td>Next of Kin / Guarantors</td>
+      <td>Name, Relationship, Contact Details</td>
+      <td>Loan security and collections support</td>
+    </tr>
+  </table>
+
+  <h3>3.2 Corporate Customers</h3>
+  <table>
+    <tr><th>Data Category</th><th>Specific Fields</th><th>Purpose</th></tr>
+    <tr>
+      <td>Entity Information</td>
+      <td>Entity Name, Registration Number, Date of Incorporation, Entity Type</td>
+      <td>Business identity verification</td>
+    </tr>
+    <tr>
+      <td>Tax Information</td>
+      <td>Tax Identification Number (TPIN)</td>
+      <td>Regulatory and tax compliance</td>
+    </tr>
+    <tr>
+      <td>Contact Details</td>
+      <td>Phone Number, Email Address, Website</td>
+      <td>Business communications</td>
+    </tr>
+    <tr>
+      <td>Business Address</td>
+      <td>Street, City/Town, Province, Postal Code, Country</td>
+      <td>Address verification and credit assessment</td>
+    </tr>
+    <tr>
+      <td>Business Profile</td>
+      <td>Industry Sector, Nature of Business, Employee Count, Financial Year End</td>
+      <td>Credit risk assessment</td>
+    </tr>
+    <tr>
+      <td>Documents</td>
+      <td>Certificate of Incorporation, Tax Certificate, Proof of Address, Financial Statements</td>
+      <td>KYC and credit appraisal documentation</td>
+    </tr>
+    <tr>
+      <td>Shareholders</td>
+      <td>Name, Gender, Nationality, ID Type &amp; Number, Address, Contact Details</td>
+      <td>Beneficial ownership identification (AML/KYC)</td>
+    </tr>
+  </table>
+
+  <h3>3.3 Employees / System Users</h3>
+  <table>
+    <tr><th>Data Category</th><th>Specific Fields</th><th>Purpose</th></tr>
+    <tr>
+      <td>Identity</td>
+      <td>First Name, Middle Name, Last Name, Gender, Date of Birth</td>
+      <td>HR records and system user identification</td>
+    </tr>
+    <tr>
+      <td>Contact</td>
+      <td>Email Address, Phone Number, Home Address</td>
+      <td>HR communication and system access recovery</td>
+    </tr>
+    <tr>
+      <td>Employment</td>
+      <td>Role, Branch, Employment Status</td>
+      <td>Access control and operational assignment</td>
+    </tr>
+    <tr>
+      <td>System Credentials</td>
+      <td>Username, Hashed Password, Login Status</td>
+      <td>System authentication and session management</td>
+    </tr>
+  </table>
+
+  <h3>3.4 Loan &amp; Financial Records</h3>
+  <table>
+    <tr><th>Data Category</th><th>Specific Fields</th><th>Purpose</th></tr>
+    <tr>
+      <td>Loan Details</td>
+      <td>Loan Amount, Currency, Interest Rate, Loan Period, Product Type</td>
+      <td>Loan origination and contract management</td>
+    </tr>
+    <tr>
+      <td>Repayment Schedule</td>
+      <td>Due Dates, Instalment Amounts, Balance, Penalties</td>
+      <td>Collections and financial management</td>
+    </tr>
+    <tr>
+      <td>Collateral</td>
+      <td>Description, Valuation, Location, Force Sale Value</td>
+      <td>Security for loan facilities</td>
+    </tr>
+    <tr>
+      <td>Transaction History</td>
+      <td>Payment Dates, Amounts Paid, Transaction Type</td>
+      <td>Audit trail and portfolio management</td>
+    </tr>
+  </table>
+
+  <!-- SECTION 4 -->
+  <h2>4. Lawful Basis for Processing</h2>
+  <p>Personal data within this system is processed on the following lawful bases:</p>
+  <ul>
+    <li>
+      <strong>Contractual Necessity:</strong> Processing of customer financial and identity data
+      is necessary to assess loan applications, execute loan agreements, and manage repayments.
+    </li>
+    <li>
+      <strong>Legal Obligation:</strong> KYC data (identity documents, beneficial ownership) is
+      collected to comply with applicable Anti-Money Laundering (AML) and financial sector
+      regulations.
+    </li>
+    <li>
+      <strong>Legitimate Interest:</strong> Communication via SMS and email for loan
+      notifications, arrears reminders, and account updates.
+    </li>
+    <li>
+      <strong>Consent:</strong> Where applicable, customers consent to data collection and
+      communication at the point of onboarding.
+    </li>
+  </ul>
+
+  <!-- SECTION 5 -->
+  <h2>5. Data Flows &amp; Third-Party Integrations</h2>
+  <p>
+    The system integrates with the following external third-party services for operational
+    communication purposes. No customer financial or identity data is sold or shared with
+    third parties for commercial purposes.
+  </p>
+  <table>
+    <tr><th>Service Type</th><th>Provider</th><th>Data Shared</th><th>Purpose</th></tr>
+    <tr>
+      <td>SMS Gateway</td>
+      <td>Third-party SMS API providers</td>
+      <td>Phone number, message content (non-financial notification text only)</td>
+      <td>Customer notifications: loan approval, disbursement alerts, arrears reminders, birthday messages, OTP/password recovery</td>
+    </tr>
+    <tr>
+      <td>Email Service</td>
+      <td>Configured SMTP provider (PHPMailer)</td>
+      <td>Email address, customer name, notification content</td>
+      <td>Loan statements, system notifications, backup delivery to administrators</td>
+    </tr>
+  </table>
+  <div class="note">
+    <strong>Note:</strong> No data is shared with credit bureaus, marketing companies, data
+    brokers, or any governmental entity other than as required by applicable Zambian law.
+    All third-party API transmissions occur over HTTPS encrypted connections.
+  </div>
+
+  <!-- SECTION 6 -->
+  <h2>6. Access Controls &amp; User Roles</h2>
+  <p>
+    Access to the system is strictly role-based. Each system user (employee) is assigned a role
+    that determines which modules and data they can view or modify. No user has unrestricted
+    access to all system functions without explicit administrative assignment.
+  </p>
+  <table>
+    <tr><th>Role</th><th>Access Level</th></tr>
+    <tr>
+      <td>System Administrator</td>
+      <td>Full system access including configuration, user management, and reporting</td>
+    </tr>
+    <tr>
+      <td>Loan Officer</td>
+      <td>Customer registration, loan origination, KYC capture, collateral management</td>
+    </tr>
+    <tr>
+      <td>Cashier / Collections Officer</td>
+      <td>Payment processing, repayment recording, transaction management</td>
+    </tr>
+    <tr>
+      <td>Branch Manager / Approver</td>
+      <td>Loan approval, customer approval, reporting within assigned branch</td>
+    </tr>
+    <tr>
+      <td>Read-only / Reporting</td>
+      <td>View reports and dashboards only; no data modification</td>
+    </tr>
+  </table>
+  <p>Key access control features:</p>
+  <ul>
+    <li>Each user logs in with a unique username and password (passwords are stored in hashed form).</li>
+    <li>Sessions expire on logout; concurrent login tracking is maintained.</li>
+    <li>All user actions are recorded in an activity log with timestamp, user identity, and action description.</li>
+    <li>Approval workflows require authorised approvers for sensitive operations (loan disbursement, customer activation).</li>
+    <li>Multi-branch support ensures branch staff can only access records within their assigned branch.</li>
+  </ul>
+
+  <!-- SECTION 7 -->
+  <h2>7. Data Security Measures</h2>
+  <table>
+    <tr><th>Control Area</th><th>Measure in Place</th></tr>
+    <tr>
+      <td>Authentication</td>
+      <td>Username and password login with hashed password storage</td>
+    </tr>
+    <tr>
+      <td>Session Management</td>
+      <td>Server-side session management; automatic session termination on logout</td>
+    </tr>
+    <tr>
+      <td>Role-Based Access Control</td>
+      <td>Granular permissions per role; staff can only access data relevant to their function</td>
+    </tr>
+    <tr>
+      <td>Audit Logging</td>
+      <td>All system actions logged with user identity, action description, and timestamp</td>
+    </tr>
+    <tr>
+      <td>Data Backup</td>
+      <td>Regular database and file backups; backup files retained by system administrators</td>
+    </tr>
+    <tr>
+      <td>Document Storage</td>
+      <td>Uploaded KYC documents and loan files stored on the server within a secured directory</td>
+    </tr>
+    <tr>
+      <td>Network Access</td>
+      <td>System is deployed on-premises; access restricted to internal network users</td>
+    </tr>
+  </table>
+
+  <!-- SECTION 8 -->
+  <h2>8. Data Retention</h2>
+  <p>
+    Customer and loan records are retained for the duration of the business relationship and
+    thereafter in accordance with applicable financial sector regulations and the organisation's
+    internal retention policy. The system supports:
+  </p>
+  <ul>
+    <li>
+      <strong>Active Records:</strong> All current and historical loan records, repayments,
+      and customer profiles are retained in the live database.
+    </li>
+    <li>
+      <strong>Closed Loans:</strong> Loan records are marked as "Closed" upon full repayment
+      but remain in the system for audit and reporting purposes.
+    </li>
+    <li>
+      <strong>Deletion:</strong> Customer and employee records can be permanently deleted by
+      an authorised administrator where required (e.g., data subject deletion requests).
+    </li>
+    <li>
+      <strong>Backups:</strong> Database backups are retained by the system administrator.
+      Backup retention schedules are managed at the organisational level.
+    </li>
+  </ul>
+  <div class="note">
+    The organisation commits to defining and documenting a formal data retention schedule in
+    line with the Zambia Data Protection Act No. 3 of 2021 requirements.
+  </div>
+
+  <!-- SECTION 9 -->
+  <h2>9. Data Subject Rights</h2>
+  <p>
+    The system provides the following technical capabilities to support the exercise of data
+    subject rights under the Data Protection Act:
+  </p>
+  <table>
+    <tr><th>Right</th><th>System Capability</th></tr>
+    <tr>
+      <td>Right of Access</td>
+      <td>Authorised staff can retrieve and print a full customer profile including loan history and KYC data upon request</td>
+    </tr>
+    <tr>
+      <td>Right to Rectification</td>
+      <td>Customer records can be updated by authorised loan officers or administrators</td>
+    </tr>
+    <tr>
+      <td>Right to Erasure</td>
+      <td>Customer records can be permanently deleted by administrators where there is no legal obligation to retain</td>
+    </tr>
+    <tr>
+      <td>Right to Data Portability</td>
+      <td>Customer data can be exported via the reporting module in CSV/Excel format</td>
+    </tr>
+    <tr>
+      <td>Right to Restrict Processing</td>
+      <td>Account status flags can be used to suspend processing of a customer's data pending a dispute</td>
+    </tr>
+  </table>
+
+  <!-- SECTION 10 -->
+  <h2>10. Reporting &amp; Audit Capabilities</h2>
+  <p>The system generates the following operational reports, all restricted to authorised users:</p>
+  <ul>
+    <li><strong>Loan Portfolio Report:</strong> Active, approved, pending, rejected, and closed loans by date range, branch, or officer.</li>
+    <li><strong>Portfolio at Risk (PAR) Report:</strong> Loans in arrears summarised by loan officer.</li>
+    <li><strong>Customer Reports:</strong> Customer demographics, approval status, and registration statistics filtered by date, gender, country, or officer.</li>
+    <li><strong>Repayment / Collections Report:</strong> Payment history and outstanding balances.</li>
+    <li><strong>Fixed Deposit Reports:</strong> Deposit account details, interest accrual, and maturity schedules.</li>
+    <li><strong>Activity Audit Log:</strong> All system actions by user, timestamped.</li>
+  </ul>
+
+  <!-- SECTION 11 -->
+  <h2>11. Known Limitations &amp; Areas Under Improvement</h2>
+  <p>
+    In the interest of transparency, the organisation acknowledges the following areas where
+    data protection controls are being reviewed and strengthened:
+  </p>
+  <ul>
+    <li>
+      <strong>Encryption at Rest:</strong> The database does not currently employ field-level
+      encryption for stored personal data. This is under review.
+    </li>
+    <li>
+      <strong>HTTPS Enforcement:</strong> The system is currently deployed on an internal
+      network. HTTPS/TLS will be enforced prior to any external-facing deployment.
+    </li>
+    <li>
+      <strong>Formal Retention Policy:</strong> A documented data retention and deletion
+      schedule is being formalised.
+    </li>
+    <li>
+      <strong>Multi-Factor Authentication:</strong> MFA for system administrator accounts is
+      being evaluated for implementation.
+    </li>
+    <li>
+      <strong>Data Breach Response Procedure:</strong> A formal incident response procedure
+      for data breaches is being documented, including notification timelines to the DPC.
+    </li>
+  </ul>
+
+  <!-- SECTION 12 -->
+  <h2>12. Declaration</h2>
+  <p>
+    The organisation confirms that personal data processed through this system is collected for
+    specified, explicit, and legitimate purposes and is not further processed in a manner
+    incompatible with those purposes. The organisation is committed to full compliance with the
+    <strong>Data Protection Act No. 3 of 2021</strong> of Zambia and will cooperate fully with
+    the Data Protection Commission in all matters relating to data protection and privacy.
+  </p>
+  <p>
+    This report has been prepared in good faith and accurately represents the system as deployed
+    at the date of this report.
+  </p>
+
+  <div class="sig-block">
+    <div>
+      <div class="sig-line">Authorised Signatory</div>
+      <div style="font-size:11pt; margin-top:4px;">Name: ___________________________</div>
+      <div style="font-size:11pt;">Title: ____________________________</div>
+      <div style="font-size:11pt;">Date: ____________________________</div>
+    </div>
+    <div>
+      <div class="sig-line">Company Stamp / Seal</div>
+      <div style="height: 80px;"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Fundit Loan Management System &mdash; Systems Capabilities &amp; Data Processing Report &mdash; April 2026<br>
+    This document is confidential and intended solely for submission to the Data Protection Commission of Zambia.
+  </div>
+
+</body>
+</html>

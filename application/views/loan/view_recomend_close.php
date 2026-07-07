@@ -38,20 +38,20 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 						</tr>
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Loan Principal</td>
-							<td>MK<?php echo number_format($loan_principal,2)?></td>
+							<td>ZMW <?php echo number_format($loan_principal,2)?></td>
 						</tr>
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Total interest</td>
-							<td>MK<?php echo number_format($loan_interest_amount,2)?></td>
+							<td>ZMW <?php echo number_format($loan_interest_amount,2)?></td>
 						</tr>
 						
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Total loan amount</td>
-							<td>MK <?php echo number_format($loan_amount_total,2)?></td>
+							<td>ZMW<?php echo number_format($loan_amount_total,2)?></td>
 						</tr>
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Payments Made</td>
-							<td>MK
+							<td>ZMW
 								<?php
 								$total_p = 0;
 								foreach ($payments as $pp){
@@ -68,7 +68,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Remaining Balance
 							</td>
-							<td>MK
+							<td>ZMW
 
 								<?php
 								$total_b = 0;
@@ -99,15 +99,15 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 						</tr>
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Pay principal amt</td>
-							<td>MK <?php echo number_format($next_payment_details->principal,2)?></td>
+							<td>ZMW<?php echo number_format($next_payment_details->principal,2)?></td>
 						</tr>
 						<tr >
 							<td style="text-align: right;padding-right: 10px;">Pay interest amt</td>
-							<td><a href="#">MK <?php echo number_format($next_payment_details->interest,2)?></a></td>
+							<td><a href="#">ZMW <?php echo number_format($next_payment_details->interest,2)?></a></td>
 						</tr>
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Payment amt</td>
-							<td>MK <?php echo number_format($next_payment_details->amount,2)?></td>
+							<td>ZMW<?php echo number_format($next_payment_details->amount,2)?></td>
 						</tr>
 						<tr>
 							<td style="text-align: right;padding-right: 10px;">Due date</td>
@@ -194,12 +194,12 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 								<td <?php echo $css; ?>><?php  echo $p->payment_number?></td>
 								<td <?php echo $css; ?>><?php  echo $p->payment_schedule?></td>
 
-								<td <?php echo $css; ?>>MK<?php  echo number_format($p->principal,2) ?></td>
-								<td <?php echo $css; ?>>MK<?php  echo number_format($p->interest,2) ?></td>
+								<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->principal,2) ?></td>
+								<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->interest,2) ?></td>
 
-								<td <?php echo $css; ?>>MK<?php  echo number_format($p->amount,2) ?></td>
-								<td <?php echo $css; ?>>MK<?php  echo number_format($p->paid_amount,2)?></td>
-								<td <?php echo $css; ?>>MK<?php  echo number_format($p->loan_balance,2)?></td>
+								<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->amount,2) ?></td>
+								<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->paid_amount,2)?></td>
+								<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->loan_balance,2)?></td>
 								<td width="150" <?php echo $css; ?>><span style="color:<?php echo $p->status=='PAID' ? 'GREEN' : 'RED'?>"><?php echo $p->status.$xstatus; if($p->partial_paid=="YES"){echo "-<font color='green'>(Partial paid)</font>";}?></span></td>
 								<td <?php echo $css; ?> width="70"><?php if($xstatus !="") { ?> <a href="#" onclick="pay_due('<?php echo $p->loan_id; ?>','<?php echo $p->payment_number; ?>','<?php echo $p->amount; ?>','<?php echo $p->paid_amount; ?>')" class="btn-danger">Pay now</a><?php  } ?></td>
 							</tr>
@@ -211,9 +211,9 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 <!--						<tr style="border: 1px solid black;background-color: #D1EFD1;">-->
 <!--							<td>2</td>-->
 <!--							<td>2021-06-22</td>-->
-<!--							<td>MK 20,9393</td>-->
-<!--							<td>MK 20,9393</td>-->
-<!--							<td>MK 20,9393</td>-->
+<!--							<td>ZMW20,9393</td>-->
+<!--							<td>ZMW20,9393</td>-->
+<!--							<td>ZMW20,9393</td>-->
 <!--							<td>ACTIVE</td>-->
 <!--							<td><a href="" class="btn btn-sm btn-danger">Pay</a></td>-->
 <!--						</tr>-->
@@ -261,9 +261,9 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
                                 <td <?php echo $csss; ?>><?php  echo $rp->payment_number?></td>
                                 <td <?php echo $csss; ?>><?php  echo $rp->payment_date?></td>
 
-                                <td <?php echo $csss; ?>>MK<?php  echo number_format($rp->payment_amount,2) ?></td>
+                                <td <?php echo $csss; ?>>ZMW <?php  echo number_format($rp->payment_amount,2) ?></td>
 
-                                <td <?php echo $csss; ?>>MK<?php  echo number_format($rp->paid_amount,2)?></td>
+                                <td <?php echo $csss; ?>>ZMW <?php  echo number_format($rp->paid_amount,2)?></td>
 
                                 <td width="150" <?php echo $csss; ?>><span style="color:<?php echo $p->status=='PAID' ? 'GREEN' : 'RED'?>"><?php echo $rp->pay_status.$xstatuss; ?></span></td>
                                 <td <?php echo $csss; ?> width="70"></td>
@@ -364,7 +364,7 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 
 					<tr>
 						<td style="text-align: right;padding-right: 10px;">Payment amt</td>
-						<td>MK <?php echo number_format($next_payment_details->amount,2)?></td>
+						<td>ZMW<?php echo number_format($next_payment_details->amount,2)?></td>
 					</tr>
 
 
@@ -437,9 +437,9 @@ $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_
 						<tr style="font-weight: <?php echo !empty($xstatus)?'900':'200'; ?>;">
 							<td <?php echo $css; ?>><?php  echo $p->payment_number?></td>
 							<td <?php echo $css; ?>><?php  echo $p->payment_schedule?></td>
-							<td <?php echo $css; ?>>MK<?php  echo number_format($p->amount,2) ?></td>
-							<td <?php echo $css; ?>>MK<?php  echo number_format($p->paid_amount,2)?></td>
-							<td <?php echo $css; ?>>MK<?php  echo number_format($p->loan_balance,2)?></td>
+							<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->amount,2) ?></td>
+							<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->paid_amount,2)?></td>
+							<td <?php echo $css; ?>>ZMW <?php  echo number_format($p->loan_balance,2)?></td>
 							<td width="150" <?php echo $css; ?>><span style="color:<?php echo $p->status=='PAID' ? 'GREEN' : 'RED'?>"><?php echo $p->status.$xstatus; if($p->partial_paid=="YES"){echo "-<font color='green'>(Partial paid)</font>";}?></span></td>
 							<td <?php echo $css; ?> width="70"><?php if($p->status == 'NOT PAID') { ?>  <input type="checkbox" name="payment_number[]" value="<?php echo $p->payment_number  ?>" class="check-cls"><?php  } ?></td>
 						</tr>

@@ -162,7 +162,7 @@ $get_settings = get_by_id('settings','settings_id', '1');
                                     <hr>
                                     <h5>Registration fees section</h5>
                                     <div class="form-group col-12">
-                                        <label for="date">Total registration fee amount MK</label>
+                                        <label for="date">Total registration fee amount ZMW</label>
                                         <input type="text" class="form-control" name="fee_amount" id="fee_amount" readonly  />
                                     </div>
 
