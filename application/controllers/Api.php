@@ -807,6 +807,188 @@ class Api extends CI_Controller
         ));
     }
 
+    /**
+     * Auto-create enquiries table if it doesn't exist
+     */
+    private function _ensure_enquiries_table()
+    {
+        if (!$this->db->table_exists('enquiries')) {
+            $this->db->query("
+                CREATE TABLE IF NOT EXISTS `enquiries` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT,
+                    `name` varchar(150) NOT NULL,
+                    `email` varchar(150) NOT NULL,
+                    `phone` varchar(50) DEFAULT NULL,
+                    `subject` varchar(150) DEFAULT NULL,
+                    `message` text NOT NULL,
+                    `status` varchar(20) NOT NULL DEFAULT 'new',
+                    `ip_address` varchar(50) DEFAULT NULL,
+                    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    KEY `email` (`email`),
+                    KEY `status` (`status`),
+                    KEY `created_at` (`created_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+        }
+    }
+
+    /**
+     * Receive a public website contact / enquiry submission
+     * POST /api/enquiries
+     *
+     * Required fields: name, email, message
+     * Optional fields: phone, subject
+     *
+     * Stores the enquiry and emails the company inbox. Returns JSON.
+     */
+    public function enquiries()
+    {
+        // Only allow POST requests
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->_response(array(
+                'status' => 'error',
+                'message' => 'Method not allowed. Use POST request.'
+            ), 405);
+        }
+
+        $this->_ensure_enquiries_table();
+
+        // Get input data
+        $input = $this->_get_input();
+
+        // Required fields
+        $required_fields = array('name', 'email', 'message');
+        $missing = $this->_validate_required($input, $required_fields);
+
+        if (!empty($missing)) {
+            $this->_response(array(
+                'status' => 'error',
+                'message' => 'Missing required fields',
+                'missing_fields' => $missing
+            ), 400);
+        }
+
+        $name = trim($input['name']);
+        $email = trim($input['email']);
+        $phone = isset($input['phone']) ? trim($input['phone']) : null;
+        $subject = isset($input['subject']) ? trim($input['subject']) : 'General Enquiry';
+        $message = trim($input['message']);
+
+        // Validate email format
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->_response(array(
+                'status' => 'error',
+                'message' => 'Invalid email format'
+            ), 400);
+        }
+
+        // Basic rate limiting - max 5 enquiries per email in last 10 minutes
+        $ten_minutes_ago = date('Y-m-d H:i:s', strtotime('-10 minutes'));
+        $recent_count = $this->db->where('email', $email)
+            ->where('created_at >', $ten_minutes_ago)
+            ->count_all_results('enquiries');
+
+        if ($recent_count >= 5) {
+            $this->_response(array(
+                'status' => 'error',
+                'message' => 'Too many enquiries submitted. Please wait a few minutes before trying again.'
+            ), 429);
+        }
+
+        // Save enquiry
+        $enquiry_data = array(
+            'name' => $name,
+            'email' => $email,
+            'phone' => $phone,
+            'subject' => $subject,
+            'message' => $message,
+            'status' => 'new',
+            'ip_address' => $this->input->ip_address(),
+            'created_at' => date('Y-m-d H:i:s')
+        );
+        $this->db->insert('enquiries', $enquiry_data);
+        $enquiry_id = $this->db->insert_id();
+
+        if (!$enquiry_id) {
+            $this->_response(array(
+                'status' => 'error',
+                'message' => 'Failed to submit your enquiry. Please try again.'
+            ), 500);
+        }
+
+        // Determine recipient inbox from settings, falling back to the company address
+        $settings = $this->db->get_where('settings', array('settings_id' => 1))->row();
+        $company_name = ($settings && !empty($settings->company_name)) ? $settings->company_name : 'FundIt';
+        $recipient = 'info@fundit-zm.com';
+        if ($settings) {
+            if (!empty($settings->company_email) && filter_var($settings->company_email, FILTER_VALIDATE_EMAIL)) {
+                $recipient = $settings->company_email;
+            } elseif (!empty($settings->email) && filter_var($settings->email, FILTER_VALIDATE_EMAIL)) {
+                $recipient = $settings->email;
+            }
+        }
+
+        // Email the company inbox
+        $subject_line = 'New Website Enquiry: ' . $subject;
+        $email_body = '
+            <h2 style="color: #1e3a5f;">New Website Enquiry</h2>
+            <p>A new enquiry has been submitted through the website contact form.</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+                <tr style="background: #f8fafc;">
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Name</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;">' . htmlspecialchars($name) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Email</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;">' . htmlspecialchars($email) . '</td>
+                </tr>
+                <tr style="background: #f8fafc;">
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Phone</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;">' . htmlspecialchars($phone ?: 'N/A') . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Subject</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;">' . htmlspecialchars($subject) . '</td>
+                </tr>
+                <tr style="background: #f8fafc;">
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; vertical-align: top;">Message</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;">' . nl2br(htmlspecialchars($message)) . '</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Received</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;">' . $enquiry_data['created_at'] . '</td>
+                </tr>
+            </table>
+            <p style="color: #666;">You can reply directly to <strong>' . htmlspecialchars($email) . '</strong>.</p>
+        ';
+
+        $email_result = send_templated_email($recipient, $subject_line, $email_body);
+
+        if (!$email_result['success']) {
+            log_message('error', 'Failed to send enquiry email to ' . $recipient . ': ' . $email_result['message']);
+            // Enquiry is saved in DB — proceed with warning instead of failing the request
+        }
+
+        // Log the activity
+        $logger = array(
+            'user_id' => 72,
+            'activity' => 'API: Website enquiry received from ' . $name . ' <' . $email . '>',
+            'activity_cate' => 'website_enquiry'
+        );
+        $this->db->insert('activity_logger', $logger);
+
+        // Success response
+        $this->_response(array(
+            'status' => 'success',
+            'message' => 'Thank you for contacting us. We will respond within 24 hours.',
+            'data' => array(
+                'enquiry_id' => $enquiry_id,
+                'email_sent' => $email_result['success']
+            )
+        ), 201);
+    }
+
     // ==================== LOAN SYSTEM ENDPOINTS ====================
 
     /**

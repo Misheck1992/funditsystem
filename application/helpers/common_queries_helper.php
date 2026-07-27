@@ -1243,6 +1243,23 @@ function get_loan_stats_by_status($status) {
 }
 
 /**
+ * Get total disbursed loan stats (principal disbursed to date).
+ * Counts every loan that has been disbursed regardless of current status —
+ * i.e. active, closed, written-off and defaulted loans — so the figure
+ * reflects all principal ever released, not just the current book.
+ * @return array ['count' => int, 'total' => float]
+ */
+function get_total_disbursed_stats() {
+    $ci =& get_instance();
+    $ci->load->database();
+    $sql = "SELECT COUNT(*) as count, COALESCE(SUM(loan_principal),0) as total
+            FROM loan
+            WHERE UPPER(loan_status) IN ('ACTIVE','CLOSED','WRITTEN_OFF','DEFAULTED')";
+    $query = $ci->db->query($sql);
+    return $query->row_array();
+}
+
+/**
  * Get loan count by status for dashboard strip
  * @param string $status
  * @return int
@@ -1329,11 +1346,21 @@ function get_total_active_loans_principal() {
 function get_outstanding_balance_by_product($product_id) {
     $ci =& get_instance();
     $ci->load->database();
-    $sql = "SELECT 
-                COALESCE(SUM(ps.amount - ps.paid_amount), 0) as outstanding_balance
+    // Outstanding = remaining principal + interest that has already ACCRUED
+    // (installments due on or before today), net of what has been paid.
+    // principal_paid tracks the principal portion already settled (incl. surplus
+    // prepaid onto future schedules); interest not yet accrued is excluded so the
+    // figure doesn't overstate expected income.
+    $sql = "SELECT
+                COALESCE(SUM(
+                    GREATEST(ps.principal - ps.principal_paid, 0)
+                    + CASE WHEN DATE(ps.payment_schedule) <= CURDATE()
+                           THEN GREATEST(ps.interest - GREATEST(ps.paid_amount - ps.principal_paid, 0), 0)
+                           ELSE 0 END
+                ), 0) as outstanding_balance
             FROM payement_schedules ps
             INNER JOIN loan l ON l.loan_id = ps.loan_id
-            WHERE l.loan_status = 'active' 
+            WHERE l.loan_status = 'active'
             AND l.loan_product = ?
             AND ps.amount > ps.paid_amount";
     $query = $ci->db->query($sql, array($product_id));
@@ -1347,11 +1374,21 @@ function get_outstanding_balance_by_product($product_id) {
 function get_total_outstanding_balance() {
     $ci =& get_instance();
     $ci->load->database();
-    $sql = "SELECT 
-                COALESCE(SUM(ps.amount - ps.paid_amount), 0) as outstanding_balance
+    // Outstanding = remaining principal + interest that has already ACCRUED
+    // (installments due on or before today), net of what has been paid.
+    // principal_paid tracks the principal portion already settled (incl. surplus
+    // prepaid onto future schedules); interest not yet accrued is excluded so the
+    // figure doesn't overstate expected income.
+    $sql = "SELECT
+                COALESCE(SUM(
+                    GREATEST(ps.principal - ps.principal_paid, 0)
+                    + CASE WHEN DATE(ps.payment_schedule) <= CURDATE()
+                           THEN GREATEST(ps.interest - GREATEST(ps.paid_amount - ps.principal_paid, 0), 0)
+                           ELSE 0 END
+                ), 0) as outstanding_balance
             FROM payement_schedules ps
             INNER JOIN loan l ON l.loan_id = ps.loan_id
-            WHERE l.loan_status = 'active' 
+            WHERE l.loan_status = 'active'
             AND ps.amount > ps.paid_amount";
     $query = $ci->db->query($sql);
     return $query->row();

@@ -5,6 +5,11 @@ $settings = get_by_id('settings','settings_id','1');
 $initiated_stats = get_loan_stats_by_status('initiated');
 $active_stats = get_loan_stats_by_status('active');
 $closed_stats = get_loan_stats_by_status('closed');
+// Total principal disbursed to date (active + closed + written-off + defaulted)
+$disbursed_stats = get_total_disbursed_stats();
+// Total outstanding balance (principal + accrued interest only, excludes unaccrued interest)
+$dashboard_outstanding = get_total_outstanding_balance();
+$dashboard_outstanding_total = $dashboard_outstanding ? $dashboard_outstanding->outstanding_balance : 0;
 // Get all loan status counts for the strip
 $status_counts = get_all_loan_status_counts();
 ?>
@@ -222,9 +227,9 @@ $status_counts = get_all_loan_status_counts();
 					<i class="fa fa-bar-chart-o"></i>
 				</div>
 				<div class="quick-stat-content">
-					<div class="quick-stat-value"><?php echo $settings->currency?> <?php echo number_format($active_stats['total'],2); ?></div>
+					<div class="quick-stat-value"><?php echo $settings->currency?> <?php echo number_format($disbursed_stats['total'],2); ?></div>
 					<span class="quick-stat-label">Total Disbursed Loans</span>
-					<div class="quick-stat-count">Count: <?php echo $active_stats['count']; ?></div>
+					<div class="quick-stat-count">Count: <?php echo $disbursed_stats['count']; ?></div>
 				</div>
 			</a>
 			<a class="quick-stat-item" href="<?php echo base_url('loan/active'); ?>">
@@ -235,6 +240,16 @@ $status_counts = get_all_loan_status_counts();
 					<div class="quick-stat-value"><?php echo $settings->currency?> <?php echo number_format($active_stats['total'],2); ?></div>
 					<span class="quick-stat-label">Total Active Loans</span>
 					<div class="quick-stat-count">Count: <?php echo $active_stats['count']; ?></div>
+				</div>
+			</a>
+			<a class="quick-stat-item" href="<?php echo base_url('loan/active'); ?>">
+				<div class="quick-stat-icon orange">
+					<i class="fa fa-balance-scale"></i>
+				</div>
+				<div class="quick-stat-content">
+					<div class="quick-stat-value"><?php echo $settings->currency?> <?php echo number_format($dashboard_outstanding_total,2); ?></div>
+					<span class="quick-stat-label">Outstanding Balance</span>
+					<div class="quick-stat-count">Principal + accrued interest</div>
 				</div>
 			</a>
 			<a class="quick-stat-item" href="<?php echo base_url('loan/closed'); ?>">

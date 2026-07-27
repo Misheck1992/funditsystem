@@ -1854,6 +1854,13 @@ exit();
 		$comment = $this->input->post('comment');
 		$approval_level = $this->input->post('approval_level');
 
+		// Enforce role-based permission server-side (approve/reject require approval rights)
+		if(!has_access('loan/unified_approval')){
+			$this->toaster->error('You do not have permission to perform this action.');
+			redirect($_SERVER['HTTP_REFERER']);
+			return;
+		}
+
 		$current_user_id = $this->session->userdata('user_id');
 
 		// Get the loan
@@ -5086,6 +5093,16 @@ $row = $this->Loan_model->get_by_id_group($id);
         $id = $this->input->post('loan_id');
         $comment = $this->input->post('comment');
 
+        // Enforce role-based permission server-side.
+        // Recommend requires the recommend permission; all other decisions
+        // (reject / first / second / final approve) require approval rights.
+        $required_perm = ($action == 'RECOMMENDED') ? 'Loan/recommend' : 'loan/unified_approval';
+        if(!has_access($required_perm)){
+            $this->toaster->error('You do not have permission to perform this action.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
         // Check for adjacent approval actions by same user
         $current_user_id = $this->session->userdata('user_id');
 
@@ -5254,6 +5271,13 @@ $row = $this->Loan_model->get_by_id_group($id);
      * Send loan for disbursement after client has signed documents
      */
     function send_for_disburse($id) {
+        // Enforce role-based permission server-side (disbursement rights)
+        if(!has_access('loan/approved')){
+            $this->toaster->error('You do not have permission to perform this action.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
         $loan = $this->db->get_where('loan', array('loan_id' => $id))->row();
 
         if (!$loan) {
@@ -5365,6 +5389,13 @@ $row = $this->Loan_model->get_by_id_group($id);
         $current_date = $this->input->post('cdate');
         $comment= $this->input->post('comment');
 
+        // Enforce role-based permission server-side (disbursement rights)
+        if(!has_access('loan/approved')){
+            $this->toaster->error('You do not have permission to perform this action.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
+
         // Check if current user did the final approval
         $current_user_id = $this->session->userdata('user_id');
         $this->db->select('action, user_id');
@@ -5427,6 +5458,13 @@ $row = $this->Loan_model->get_by_id_group($id);
         $previous_date= $this->input->post('pdate');
         $current_date = $this->input->post('cdate');
         $comment= $this->input->post('comment');
+
+        // Enforce role-based permission server-side (disbursement rights)
+        if(!has_access('loan/approved')){
+            $this->toaster->error('You do not have permission to perform this action.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
 
         // Check if current user did the final approval
         $current_user_id = $this->session->userdata('user_id');
@@ -5998,6 +6036,13 @@ $row = $this->Loan_model->get_by_id_group($id);
         $loan_id = $this->input->post('loan_id');
         $comment = $this->input->post('comment');
         $current_user_id = $this->session->userdata('user_id');
+
+        // Enforce role-based permission server-side (return-for-edit is an approval decision)
+        if(!has_access('loan/unified_approval')){
+            $this->toaster->error('You do not have permission to perform this action.');
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
+        }
 
         if (!$loan_id || !$comment) {
             $this->toaster->error('Loan ID and comment are required');
@@ -7862,20 +7907,39 @@ public function get_loan_product_details() {
 			return max(0, floatval($s->principal) + $accrued - floatval($s->paid_amount));
 		};
 
+		// Returns the interest accrued for one schedule as of payoff_date (0 for a period
+		// that has not started — interest not yet earned). Used to attribute a payment
+		// between interest (charged per contract) and principal (reduced by surplus).
+		$get_period_accrued = function($s) use ($payoff_date_obj, $get_period_start) {
+			$period_start_obj = $get_period_start($s);
+			if ($payoff_date_obj <= $period_start_obj) {
+				return 0.0; // future period — interest not yet accrued
+			}
+			$due_date_obj    = new DateTime($s->payment_schedule);
+			$period_interest = floatval($s->interest);
+			if ($payoff_date_obj <= $due_date_obj) {
+				return $period_interest; // within period — flat scheduled interest
+			}
+			$days_overdue = $due_date_obj->diff($payoff_date_obj)->days;
+			return round($period_interest + ($period_interest / 30) * $days_overdue, 2);
+		};
+
 		foreach ($schedules as $s) {
 			if ($s->status === 'PAID') continue;
 
 			$period_due = $get_period_due($s);
 
 			if ($is_full_payoff) {
-				// Mark every unpaid schedule as PAID with its calculated due amount
+				// Mark every unpaid schedule as PAID with its calculated due amount.
+				// Full settlement => the whole principal portion is paid.
 				$this->db->where('loan_id', $loan_id)
 					->where('payment_number', $s->payment_number)
 					->update('payement_schedules', [
-						'status'       => 'PAID',
-						'partial_paid' => 'NO',
-						'paid_amount'  => floatval($s->paid_amount) + $period_due,
-						'paid_date'    => $paid_date,
+						'status'         => 'PAID',
+						'partial_paid'   => 'NO',
+						'paid_amount'    => floatval($s->paid_amount) + $period_due,
+						'principal_paid' => floatval($s->principal),
+						'paid_date'      => $paid_date,
 					]);
 				$allocations[$s->payment_number] = $period_due;
 				$last_pay_num = $s->payment_number;
@@ -7886,29 +7950,47 @@ public function get_loan_product_details() {
 			if ($remaining <= 0) break;
 
 			if ($remaining >= $period_due - $tolerance) {
-				// Fully covers this period
+				// Covers this period's due amount => the whole principal portion is paid.
+				// A schedule is only fully PAID when its contract interest is also covered.
+				// When surplus prepays a FUTURE schedule's principal (interest not yet
+				// accrued), the schedule stays PARTIAL PAID so its interest is still
+				// collected per contract when it later falls due.
+				$new_paid      = floatval($s->paid_amount) + $period_due;
+				$fully_settled = ($new_paid >= floatval($s->amount) - $tolerance);
 				$this->db->where('loan_id', $loan_id)
 					->where('payment_number', $s->payment_number)
 					->update('payement_schedules', [
-						'status'       => 'PAID',
-						'partial_paid' => 'NO',
-						'paid_amount'  => floatval($s->paid_amount) + $period_due,
-						'paid_date'    => $paid_date,
+						'status'         => $fully_settled ? 'PAID' : 'PARTIAL PAID',
+						'partial_paid'   => $fully_settled ? 'NO' : 'YES',
+						'paid_amount'    => $new_paid,
+						'principal_paid' => floatval($s->principal),
+						'paid_date'      => $paid_date,
 					]);
-				$this->db->where('loan_id', $loan_id)
-					->update('loan', ['next_payment_id' => intval($s->payment_number) + 1]);
+				if ($fully_settled) {
+					$this->db->where('loan_id', $loan_id)
+						->update('loan', ['next_payment_id' => intval($s->payment_number) + 1]);
+				}
 				$allocations[$s->payment_number] = $period_due;
 				$remaining   -= $period_due;
 				$last_pay_num = $s->payment_number;
 			} else {
-				// Partial payment on this period
+				// Partial payment on this period.
+				// Attribution rule: settle outstanding (accrued) interest first, the
+				// remainder reduces principal. For a future schedule the accrued
+				// interest is 0, so the whole surplus reduces principal.
+				$accrued              = $get_period_accrued($s);
+				$interest_outstanding = max(0, $accrued - (floatval($s->paid_amount) - floatval($s->principal_paid)));
+				$principal_portion    = max(0, $remaining - $interest_outstanding);
+				$new_principal_paid   = min(floatval($s->principal), floatval($s->principal_paid) + $principal_portion);
+
 				$this->db->where('loan_id', $loan_id)
 					->where('payment_number', $s->payment_number)
 					->update('payement_schedules', [
-						'status'       => 'PARTIAL PAID',
-						'partial_paid' => 'YES',
-						'paid_amount'  => floatval($s->paid_amount) + $remaining,
-						'paid_date'    => $paid_date,
+						'status'         => 'PARTIAL PAID',
+						'partial_paid'   => 'YES',
+						'paid_amount'    => floatval($s->paid_amount) + $remaining,
+						'principal_paid' => $new_principal_paid,
+						'paid_date'      => $paid_date,
 					]);
 				$allocations[$s->payment_number] = $remaining;
 				$last_pay_num = $s->payment_number;

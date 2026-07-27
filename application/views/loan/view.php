@@ -770,6 +770,13 @@ $currency = get_by_id('currencies','currency_id',$currency);
                 <!-- Actions Panel -->
                 <div class="actions-panel">
                     <h6><i class="fa fa-cog"></i> Actions</h6>
+                    <?php
+                    // Role-based gating for loan workflow actions (permissions stored in DB, checked via has_access)
+                    $can_approve_workflow = has_access('loan/unified_approval'); // approve / reject / return
+                    $can_recommend_loan   = has_access('Loan/recommend');        // recommend
+                    $can_disburse_loan    = has_access('loan/approved');          // send for / disburse
+                    $can_edit_loan        = has_access('loan/edit_loan');         // edit loan
+                    ?>
 
                     <?php if (isset($action) && !empty($action) && $loan_status != 'ACTIVE'): ?>
                         <?php if ($action == 'multi_approve'): ?>
@@ -816,18 +823,18 @@ $currency = get_by_id('currencies','currency_id',$currency);
                             </div>
 
                             <?php if(isset($can_approve) && $can_approve): ?>
-                                <button onclick="openMultiApprovalModal('MULTI_APPROVE', '<?php echo $loan_id; ?>', <?php echo $approval_count + 1; ?>)" class="btn-action btn-success" style="width: 100%; justify-content: center;">
+                                <?php if ($can_approve_workflow): ?><button onclick="openMultiApprovalModal('MULTI_APPROVE', '<?php echo $loan_id; ?>', <?php echo $approval_count + 1; ?>)" class="btn-action btn-success" style="width: 100%; justify-content: center;">
                                     <i class="fa fa-check"></i> Approve (#<?php echo $approval_count + 1; ?>)
-                                </button>
-                                <button onclick="openMultiApprovalModal('REJECT', '<?php echo $loan_id; ?>', 0)" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                                </button><?php endif; ?>
+                                <?php if ($can_approve_workflow): ?><button onclick="openMultiApprovalModal('REJECT', '<?php echo $loan_id; ?>', 0)" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                                     <i class="fa fa-times"></i> Reject
-                                </button>
-                                <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
+                                </button><?php endif; ?>
+                                <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
                                     <i class="fa fa-undo"></i> Return for Edit
-                                </button>
-                                <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                                </button><?php endif; ?>
+                                <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                                     <i class="fa fa-edit"></i> Edit Loan
-                                </a>
+                                </a><?php endif; ?>
                             <?php else: ?>
                                 <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem;">
                                     <div style="display: flex; align-items: center; gap: 0.5rem; color: #92400e; font-size: 0.85rem;">
@@ -835,78 +842,78 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                         <span><?php echo isset($approval_reason) ? $approval_reason : 'Cannot approve'; ?></span>
                                     </div>
                                 </div>
-                                <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
+                                <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
                                     <i class="fa fa-undo"></i> Return for Edit
-                                </button>
-                                <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                                </button><?php endif; ?>
+                                <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                                     <i class="fa fa-edit"></i> Edit Loan
-                                </a>
+                                </a><?php endif; ?>
                             <?php endif; ?>
                         <?php elseif ($action == 'approve_first'): ?>
-                            <button onclick="openApprovalModal('APPROVED_FIRST', '<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('APPROVED_FIRST', '<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-check"></i> Approve (1st Level)
-                            </button>
-                            <button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-times"></i> Reject
-                            </button>
-                            <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
                                 <i class="fa fa-undo"></i> Return for Edit
-                            </button>
-                            <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-edit"></i> Edit Loan
-                            </a>
+                            </a><?php endif; ?>
                         <?php elseif ($action == 'recommend'): ?>
-                            <button onclick="openApprovalModal('RECOMMENDED', '<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
+                            <?php if ($can_recommend_loan): ?><button onclick="openApprovalModal('RECOMMENDED', '<?php echo $loan_id; ?>')" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-thumbs-up"></i> Recommend
-                            </button>
-                            <button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-times"></i> Reject
-                            </button>
-                            <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
                                 <i class="fa fa-undo"></i> Return for Edit
-                            </button>
-                            <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-edit"></i> Edit Loan
-                            </a>
+                            </a><?php endif; ?>
                         <?php elseif ($action == 'approve_second'): ?>
-                            <button onclick="openApprovalModal('APPROVED_SECOND', '<?php echo $loan_id; ?>')" class="btn-action btn-success" style="width: 100%; justify-content: center;">
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('APPROVED_SECOND', '<?php echo $loan_id; ?>')" class="btn-action btn-success" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-check-double"></i> Second Approve
-                            </button>
-                            <button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-times"></i> Reject
-                            </button>
-                            <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
                                 <i class="fa fa-undo"></i> Return for Edit
-                            </button>
-                            <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-edit"></i> Edit Loan
-                            </a>
+                            </a><?php endif; ?>
                         <?php elseif ($action == 'approve_third'): ?>
-                            <button onclick="openApprovalModal('APPROVED', '<?php echo $loan_id; ?>')" class="btn-action btn-success" style="width: 100%; justify-content: center;">
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('APPROVED', '<?php echo $loan_id; ?>')" class="btn-action btn-success" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-check-circle"></i> Final Approve
-                            </button>
-                            <button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-times"></i> Reject
-                            </button>
-                            <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
                                 <i class="fa fa-undo"></i> Return for Edit
-                            </button>
-                            <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-edit"></i> Edit Loan
-                            </a>
+                            </a><?php endif; ?>
                         <?php elseif ($action == 'disburse'): ?>
-                            <button onclick="disburse_loan_charge_pre_paid('<?php echo $loan_id; ?>','<?php echo $loan_date ?>')" class="btn-action btn-success" style="width: 100%; justify-content: center;">
+                            <?php if ($can_disburse_loan): ?><button onclick="disburse_loan_charge_pre_paid('<?php echo $loan_id; ?>','<?php echo $loan_date ?>')" class="btn-action btn-success" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-money-bill"></i> Disburse Loan
-                            </button>
-                            <button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-times"></i> Reject
-                            </button>
-                            <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
+                            </button><?php endif; ?>
+                            <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
                                 <i class="fa fa-undo"></i> Return for Edit
-                            </button>
-                            <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                            </button><?php endif; ?>
+                            <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-edit"></i> Edit Loan
-                            </a>
+                            </a><?php endif; ?>
                         <?php elseif ($action == 'delete_recommend'): ?>
                             <a href="<?php echo base_url('Loan/delete_recommend/').$loan_id ?>" class="btn-action btn-warning" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-trash"></i> Recommend Delete
@@ -930,18 +937,18 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                 <p style="font-size: 0.75rem; color: #3b82f6; margin: 0;">Upload signed documents below, then send for disbursement</p>
                             </div>
                         </div>
-                        <a href="<?php echo base_url('loan/send_for_disburse/' . $loan_id); ?>" class="btn-action btn-success" style="width: 100%; justify-content: center;" onclick="return confirm('Are you sure you want to send this loan for disbursement? Please ensure all signed documents are uploaded.')">
+                        <?php if ($can_disburse_loan): ?><a href="<?php echo base_url('loan/send_for_disburse/' . $loan_id); ?>" class="btn-action btn-success" style="width: 100%; justify-content: center;" onclick="return confirm('Are you sure you want to send this loan for disbursement? Please ensure all signed documents are uploaded.')">
                             <i class="fa fa-paper-plane"></i> Send for Disburse
-                        </a>
-                        <button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                        </a><?php endif; ?>
+                        <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                             <i class="fa fa-times"></i> Reject
-                        </button>
-                        <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
+                        </button><?php endif; ?>
+                        <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
                             <i class="fa fa-undo"></i> Return for Edit
-                        </button>
-                        <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                        </button><?php endif; ?>
+                        <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                             <i class="fa fa-edit"></i> Edit Loan
-                        </a>
+                        </a><?php endif; ?>
                     <?php elseif ($loan_status == 'CLIENT_SIGNED'): ?>
                         <div class="loan-status-alert" style="padding: 0.75rem; margin-bottom: 0.5rem; background: #d1fae5; border: 1px solid #059669; border-radius: 8px;">
                             <i class="fa fa-clock" style="font-size: 1rem; color: #059669;"></i>
@@ -978,15 +985,15 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                 </div>
                             </div>
                         <?php endif; ?>
-                        <button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                        <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                             <i class="fa fa-times"></i> Reject
-                        </button>
-                        <button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
+                        </button><?php endif; ?>
+                        <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
                             <i class="fa fa-undo"></i> Return for Edit
-                        </button>
-                        <a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
+                        </button><?php endif; ?>
+                        <?php if ($can_edit_loan): ?><a href="<?php echo base_url('loan/edit_single_loan_request/').$loan_id; ?>" class="btn-action btn-primary" style="width: 100%; justify-content: center;">
                             <i class="fa fa-edit"></i> Edit Loan
-                        </a>
+                        </a><?php endif; ?>
                     <?php elseif ($loan_status == 'ACTIVE'): ?>
                         <div class="loan-status-alert active" style="padding: 0.75rem; margin-bottom: 0.5rem;">
                             <i class="fa fa-check-circle" style="font-size: 1rem;"></i>
@@ -1128,7 +1135,12 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                     <tr class="<?php echo $row_class; ?>">
                                         <td><?php echo $p->payment_number; ?></td>
                                         <td><?php echo date('d M Y', strtotime($p->payment_schedule)); ?></td>
-                                        <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->principal, 2); ?></td>
+                                        <td>
+                                            <?php echo $currency->currency_code; ?> <?php echo number_format($p->principal, 2); ?>
+                                            <?php $pp_principal_paid = isset($p->principal_paid) ? floatval($p->principal_paid) : 0; if ($pp_principal_paid > 0.009): ?>
+                                                <br><small style="color:#059669;" title="Principal reduced by payments/overpayment">&minus;<?php echo number_format($pp_principal_paid, 2); ?> paid</small>
+                                            <?php endif; ?>
+                                        </td>
                                         <?php if($calculation_type == 'Bullet Payment'): ?>
                                         <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->interest, 2); ?></td>
                                         <td><?php echo $currency->currency_code; ?> <?php echo ($p->status == 'PAID') ? number_format($total_paid_interest, 2) : (isset($acrued['accrued_interest']) ? number_format($acrued['accrued_interest'], 2) : number_format($p->interest, 2)); ?></td>
@@ -1139,7 +1151,16 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                         <?php else: ?>
                                         <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->interest, 2); ?></td>
                                         <td><strong><?php echo $currency->currency_code; ?> <?php echo number_format($p->amount, 2); ?></strong></td>
-                                        <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->paid_amount, 2); ?></td>
+                                        <td>
+                                            <?php echo $currency->currency_code; ?> <?php echo number_format($p->paid_amount, 2); ?>
+                                            <?php
+                                                $pp_pp = isset($p->principal_paid) ? floatval($p->principal_paid) : 0;
+                                                $pp_ip = floatval($p->paid_amount) - $pp_pp; // interest/charges portion
+                                                if ($p->paid_amount > 0.009):
+                                            ?>
+                                                <br><small style="color:#64748b;">P: <?php echo number_format($pp_pp, 2); ?> &middot; I: <?php echo number_format(max(0,$pp_ip), 2); ?></small>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->loan_balance, 2); ?></td>
                                         <?php endif; ?>
                                         <td><span class="status-badge <?php echo $status_badge_class; ?>"><?php echo $status_text; ?></span></td>
