@@ -182,56 +182,10 @@
                     else{
 
                    ?>
-                    <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
-
-
-                        <?php
+<?php foreach (array('Title','Lastname','Firstname','Middlename','','Gender','marital','','DateOfBirth','IDNumber','IDType','IDNumber','Country','village','Province','home_district','','PhoneNumber','AddressLine1','EmailAddress','AddressLine2','home_district','plot_number','Profession','','','','') as $field): ?>
+<td><?php echo $field === '' ? '' : html_escape($r->$field ?? ''); ?></td>
+<?php endforeach; ?>
+<?php
                                             }
 
                                             ?>

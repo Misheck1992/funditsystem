@@ -2873,26 +2873,57 @@ function get_all_recomended_edit_loan()
  FROM payement_schedules ps GROUP BY ps.loan_id) schedule_summary
 SQL;
 		$select = <<<'SQL'
-individual_customers.*, proofofidentity.*, loan.*, loan_products.product_name,
+individual_customers.*, proofofidentity.*, schedule_summary.*, loan.*, loan_products.product_name,
+corporate_customers.EntityName AS corp_name, corporate_customers.ClientId AS corp_client_id,
+corporate_customers.RegistrationNumber AS corp_registration_number,
+corporate_customers.phone_number AS corp_phone, corporate_customers.contact_email AS corp_email,
+corporate_customers.street AS corp_address, corporate_customers.city_town AS corp_city,
+corporate_customers.Country AS corp_country, corporate_customers.province AS corp_province,
+corporate_customers.industry_sector AS corp_industry,
+individual_customers.Firstname AS ind_firstname, individual_customers.Lastname AS ind_lastname,
+individual_customers.ClientID AS ind_client_id, loan_products.product_name AS facility_type,
 COALESCE(branch_by_id.BranchName, branch_by_code.BranchName, branch_by_branch_code.BranchName, 'Not assigned') AS branch_name,
 districts.district_name AS home_district, currencies.currency_code, currencies.currency_name,
-NULL AS group_name, NULL AS group_code, schedule_summary.*,
+crb_group.group_name, crb_group.group_code, crb_group.group_contact, crb_group.group_email, crb_group.group_address,
 (SELECT previous_loan.loan_number FROM loan previous_loan WHERE previous_loan.loan_customer=loan.loan_customer AND previous_loan.customer_type=loan.customer_type AND previous_loan.loan_id < loan.loan_id ORDER BY previous_loan.loan_id DESC LIMIT 1) AS old_loan_reference,
 (SELECT GROUP_CONCAT(DISTINCT c.collateral_status SEPARATOR ', ') FROM loan_collateral_links lcl INNER JOIN collaterals c ON c.id=lcl.collateral_id WHERE lcl.loan_id=loan.loan_id) AS collateral_status
 SQL;
-		$this->db->select($select, false)->from('individual_customers')
+		$this->db->select($select, false)->from('loan')
+			->join('individual_customers', "loan.loan_customer=individual_customers.id AND loan.customer_type='individual'", 'left', false)
+			->join('corporate_customers', "loan.loan_customer=corporate_customers.id AND loan.customer_type IN ('institution','corporate')", 'left', false)
+			->join('`groups` crb_group', "loan.loan_customer=crb_group.group_id AND loan.customer_type='group'", 'left', false)
 			->join('proofofidentity', 'proofofidentity.ClientID=individual_customers.ClientID', 'left')
-			->join('loan', 'loan.loan_customer=individual_customers.id AND loan.customer_type=\'individual\'', 'inner', false)
 			->join('loan_products', 'loan_products.loan_product_id=loan.loan_product', 'left')
 			->join('districts', 'districts.district_id=individual_customers.City', 'left')
 			->join('currencies', 'currencies.currency_id=loan.currency', 'left')
 			->join($scheduleSql, 'schedule_summary.loan_id=loan.loan_id', 'left', false)
-			->join('branches branch_by_id', 'branch_by_id.id=individual_customers.Branch', 'left')
-			->join('branches branch_by_code', 'branch_by_code.Code=individual_customers.Branch', 'left')
-			->join('branches branch_by_branch_code', 'branch_by_branch_code.BranchCode=individual_customers.Branch', 'left');
+			->join('branches branch_by_id', 'branch_by_id.id=COALESCE(individual_customers.Branch,corporate_customers.Branch,crb_group.branch)', 'left', false)
+			->join('branches branch_by_code', 'branch_by_code.Code=COALESCE(individual_customers.Branch,corporate_customers.Branch,crb_group.branch)', 'left', false)
+			->join('branches branch_by_branch_code', 'branch_by_branch_code.BranchCode=COALESCE(individual_customers.Branch,corporate_customers.Branch,crb_group.branch)', 'left', false);
 		if ($from !== '') $this->db->where('DATE(loan.disbursed_date) >=', date('Y-m-d', strtotime($from)));
 		if ($to !== '') $this->db->where('DATE(loan.disbursed_date) <=', date('Y-m-d', strtotime($to)));
-		return $this->db->order_by('loan.loan_id', 'DESC')->get()->result();
+		$records = $this->db->order_by('loan.loan_id', 'DESC')->get()->result();
+		foreach ($records as $record) {
+			if ($record->customer_type === 'individual') continue;
+			// Keep the CRB column layout while identifying non-individual borrowers.
+			$record->Lastname = $record->customer_type === 'group' ? ($record->group_name ?? '') : ($record->corp_name ?? '');
+			$record->Firstname = '';
+			$record->IDNumber = $record->corp_registration_number ?? '';
+			$record->IDType = $record->IDNumber !== '' ? 'Company Registration' : '';
+			$record->PhoneNumber = $record->corp_phone ?? '';
+			$record->EmailAddress = $record->corp_email ?? '';
+			$record->AddressLine1 = $record->corp_address ?? '';
+			$record->AddressLine2 = $record->corp_city ?? '';
+			$record->Country = $record->corp_country ?? '';
+			$record->Province = $record->corp_province ?? '';
+			$record->Profession = $record->corp_industry ?? '';
+			if ($record->customer_type === 'group') {
+				$record->PhoneNumber = $record->group_contact ?? '';
+				$record->EmailAddress = $record->group_email ?? '';
+				$record->AddressLine1 = $record->group_address ?? '';
+			}
+		}
+		return $records;
 	}
 	
 	function get_user_loan($id)
@@ -3483,4 +3514,3 @@ SQL;
 		return $this->db->get()->result();
 	}
 }
-

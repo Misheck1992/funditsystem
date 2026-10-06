@@ -1058,20 +1058,8 @@ function payments_month_by_id($id){
 
 function rbm_report(){
     $ci =& get_instance();
-    $ci->load->database();
-//	$ci->load->model('Dbc_users_model');
-
-    $sql="SELECT individual_customers.*, proofofidentity.*, loan.*, loan_products.product_name,
-        COALESCE(branch_by_id.BranchName, branch_by_code.BranchName, branch_by_branch_code.BranchName, 'Not assigned') AS branch_name
-        FROM individual_customers
-        INNER JOIN proofofidentity ON proofofidentity.ClientID = individual_customers.ClientID
-        INNER JOIN loan ON loan.loan_customer = individual_customers.id AND loan.customer_type = 'individual'
-        LEFT JOIN loan_products ON loan_products.loan_product_id = loan.loan_product
-        LEFT JOIN branches branch_by_id ON branch_by_id.id = individual_customers.Branch
-        LEFT JOIN branches branch_by_code ON branch_by_code.Code = individual_customers.Branch
-        LEFT JOIN branches branch_by_branch_code ON branch_by_branch_code.BranchCode = individual_customers.Branch
-        ORDER BY loan.loan_id DESC LIMIT 0,300";
-    return $query = $ci->db->query($sql)->result();
+    $ci->load->model('Loan_model');
+    return $ci->Loan_model->crb_report_data();
 }
 
 

@@ -788,7 +788,7 @@ class Reports extends CI_Controller
             'from_date' => (string) $this->input->get('from_date'),
             'to_date' => (string) $this->input->get('to_date')
         );
-        $loans = $this->Loan_model->portfolio_listing($filters);
+        $loans = $this->Loan_model->crb_report_data($filters['from_date'], $filters['to_date']);
         if ($status !== '' && strcasecmp($status, 'All') !== 0) {
             $loans = array_values(array_filter($loans, function ($loan) use ($status) {
                 return strcasecmp((string) ($loan->crb_search ?? ''), $status) === 0;

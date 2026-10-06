@@ -7,7 +7,7 @@
 <?php endif; ?>
 <h3>CRB Report</h3><p>Generated <?php echo date('d M Y H:i'); ?> | Records: <?php echo count($loan_data); ?></p>
 <table class="table table-bordered" style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>Customer</th><th>Loan Number</th><th>Product</th><th>Principal</th><th>CRB Status</th><th>Loan Status</th><th>Loan Date</th></tr></thead><tbody>
-<?php foreach ($loan_data as $i => $loan): $name = $loan->customer_type === 'individual' ? trim(($loan->ind_firstname ?? '').' '.($loan->ind_lastname ?? '')) : ($loan->corp_name ?? 'Unknown'); ?>
+<?php foreach ($loan_data as $i => $loan): $name = $loan->customer_type === 'individual' ? trim(($loan->ind_firstname ?? '').' '.($loan->ind_lastname ?? '')) : ($loan->customer_type === 'group' ? ($loan->group_name ?? 'Unknown') : ($loan->corp_name ?? 'Unknown')); ?>
 <tr><td><?php echo $i+1; ?></td><td><?php echo htmlspecialchars($name); ?></td><td><?php echo htmlspecialchars($loan->loan_number); ?></td><td><?php echo htmlspecialchars($loan->facility_type ?? ''); ?></td><td><?php echo number_format((float)$loan->loan_principal,2); ?></td><td><?php echo htmlspecialchars($loan->crb_search ?? 'Not Specified'); ?></td><td><?php echo htmlspecialchars($loan->loan_status); ?></td><td><?php echo htmlspecialchars($loan->loan_date); ?></td></tr>
 <?php endforeach; ?></tbody></table>
 <?php if (!$export): ?></div></div></div><?php endif; ?>
