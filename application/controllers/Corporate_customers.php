@@ -101,7 +101,11 @@ class Corporate_customers extends CI_Controller
 		'company_certificate' =>  $row->company_certificate,
 		'tax_id_doc' =>  $row->tax_id_doc,
                 'proof_physical_address' =>  $row->proof_physical_address,
-                'financial_statement' =>  $row->financial_statement
+		'financial_statement' =>  $row->financial_statement,
+                'director_nrc_copies' => $row->director_nrc_copies,
+                'articles_of_association' => $row->articles_of_association,
+                'business_profile' => $row->business_profile,
+                'pacra_printout' => $row->pacra_printout
 	    );
 
             // Load linked individual customer if set
@@ -120,6 +124,235 @@ class Corporate_customers extends CI_Controller
         }
     }
 
+    /**
+     * Download a corporate document while supporting both the old root upload
+     * layout and the newer per-company folder layout.
+     */
+    public function download_document($corporate_id, $document_type)
+    {
+        $allowed_fields = array(
+            'company_certificate',
+            'proof_physical_address',
+            'financial_statement',
+            'tax_id_doc',
+            'director_nrc_copies',
+            'articles_of_association',
+            'business_profile',
+            'pacra_printout'
+        );
+
+        if (!in_array($document_type, $allowed_fields, true)) {
+            show_404();
+            return;
+        }
+
+        $customer = $this->Corporate_customers_model->get_by_id((int) $corporate_id);
+        if (!$customer || empty($customer->{$document_type})) {
+            show_404();
+            return;
+        }
+
+        $file = $this->resolve_corporate_upload(
+            $customer->{$document_type},
+            $customer->EntityName,
+            false
+        );
+
+        if (!$file) {
+            log_message(
+                'error',
+                'Corporate document not found. Customer ID: ' . (int) $corporate_id .
+                ', type: ' . $document_type .
+                ', stored value: ' . $customer->{$document_type}
+            );
+            show_404();
+            return;
+        }
+
+        $this->load->helper('download');
+        force_download($file, null);
+    }
+
+    /**
+     * Download the actual KYC document belonging to a shareholder.
+     */
+    public function download_shareholder_kyc($corporate_id, $shareholder_id)
+    {
+        $customer = $this->Corporate_customers_model->get_by_id((int) $corporate_id);
+        $shareholder = $this->Shareholders_model->get_by_id((int) $shareholder_id);
+
+        if (!$customer || !$shareholder || empty($shareholder->idfile)) {
+            show_404();
+            return;
+        }
+
+        $is_linked = $this->db
+            ->where('corporate_id', (int) $corporate_id)
+            ->where('shareholder_id', (int) $shareholder_id)
+            ->get('corporate_shareholders')
+            ->row();
+
+        if (!$is_linked) {
+            show_404();
+            return;
+        }
+
+        $file = $this->resolve_corporate_upload(
+            $shareholder->idfile,
+            $customer->EntityName,
+            true
+        );
+
+        if (!$file) {
+            log_message(
+                'error',
+                'Shareholder KYC file not found. Corporate ID: ' . (int) $corporate_id .
+                ', shareholder ID: ' . (int) $shareholder_id .
+                ', stored value: ' . $shareholder->idfile
+            );
+            show_404();
+            return;
+        }
+
+        $this->load->helper('download');
+        force_download($file, null);
+    }
+
+    /**
+     * Resolve upload paths created by different versions of the application.
+     * Only files below FCPATH/uploads are eligible.
+     */
+    private function resolve_corporate_upload($stored_path, $entity_name, $include_shareholders)
+    {
+        $upload_root = realpath(FCPATH . 'uploads');
+        if (!$upload_root) {
+            return false;
+        }
+
+        $stored_path = str_replace('\\', '/', trim($stored_path));
+        $relative_path = preg_replace('#^uploads/#i', '', ltrim($stored_path, '/'));
+        $file_name = basename($relative_path);
+
+        $directories = array($upload_root);
+        $entity_directory = $this->find_case_insensitive_entry(
+            $upload_root,
+            basename(str_replace('\\', '/', $entity_name)),
+            true
+        );
+
+        if ($entity_directory) {
+            $directories[] = $entity_directory;
+            if ($include_shareholders) {
+                $shareholders_directory = $this->find_case_insensitive_entry(
+                    $entity_directory,
+                    'shareholders',
+                    true
+                );
+                if ($shareholders_directory) {
+                    $directories[] = $shareholders_directory;
+                }
+            }
+        }
+
+        // First try the path exactly as stored, provided it remains in uploads.
+        $exact_candidate = realpath($upload_root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative_path));
+        if ($this->is_safe_upload_file($exact_candidate, $upload_root)) {
+            return $exact_candidate;
+        }
+
+        foreach ($directories as $directory) {
+            $candidate = $this->find_case_insensitive_entry($directory, $file_name, false);
+            if ($this->is_safe_upload_file($candidate, $upload_root)) {
+                return $candidate;
+            }
+        }
+
+        // Some legacy versions saved files in additional or renamed nested
+        // folders. As a final fallback, search uploads by the stored filename.
+        // Serve it only when there is exactly one match to avoid returning a
+        // different customer's document when duplicate names exist.
+        $legacy_match = $this->find_unique_upload_by_filename(
+            $upload_root,
+            $file_name
+        );
+        if ($this->is_safe_upload_file($legacy_match, $upload_root)) {
+            return $legacy_match;
+        }
+
+        return false;
+    }
+
+    private function find_unique_upload_by_filename($upload_root, $file_name)
+    {
+        $matches = array();
+
+        try {
+            $directory = new RecursiveDirectoryIterator(
+                $upload_root,
+                FilesystemIterator::SKIP_DOTS
+            );
+            $iterator = new RecursiveIteratorIterator(
+                $directory,
+                RecursiveIteratorIterator::LEAVES_ONLY
+            );
+
+            foreach ($iterator as $item) {
+                if (!$item->isFile() || strcasecmp($item->getFilename(), $file_name) !== 0) {
+                    continue;
+                }
+
+                $matches[] = $item->getPathname();
+                if (count($matches) > 1) {
+                    log_message(
+                        'error',
+                        'Ambiguous legacy upload filename: ' . $file_name
+                    );
+                    return false;
+                }
+            }
+        } catch (UnexpectedValueException $e) {
+            log_message(
+                'error',
+                'Unable to search legacy upload folders: ' . $e->getMessage()
+            );
+            return false;
+        }
+
+        return count($matches) === 1 ? $matches[0] : false;
+    }
+
+    private function find_case_insensitive_entry($directory, $name, $directory_only)
+    {
+        if (!is_dir($directory)) {
+            return false;
+        }
+
+        $entries = scandir($directory);
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..' || strcasecmp($entry, $name) !== 0) {
+                continue;
+            }
+
+            $path = $directory . DIRECTORY_SEPARATOR . $entry;
+            if (($directory_only && is_dir($path)) || (!$directory_only && is_file($path))) {
+                return $path;
+            }
+        }
+
+        return false;
+    }
+
+    private function is_safe_upload_file($path, $upload_root)
+    {
+        if (!$path || !is_file($path)) {
+            return false;
+        }
+
+        $resolved = realpath($path);
+        return $resolved !== false &&
+            strpos($resolved, $upload_root . DIRECTORY_SEPARATOR) === 0;
+    }
+
     public function create()
     {
         $data = array(
@@ -134,6 +367,10 @@ class Corporate_customers extends CI_Controller
             'tax_id_doc'=>set_value('tax_id_doc'),
             'proof_physical_address'=>set_value('proof_physical_address'),
             'financial_statement'=>set_value('financial_statement'),
+            'director_nrc_copies' => set_value('director_nrc_copies'),
+            'articles_of_association' => set_value('articles_of_association'),
+            'business_profile' => set_value('business_profile'),
+            'pacra_printout' => set_value('pacra_printout'),
 
 	    'ClientId' => set_value('ClientId'),
 	    'TaxIdentificationNumber' => set_value('TaxIdentificationNumber'),
@@ -588,7 +825,11 @@ class Corporate_customers extends CI_Controller
                 'industry_sector' => set_value('industry_sector',$row->industry_sector),
                 'street' => set_value('street',$row->street),
                 'postal_code' => set_value('postal_code',$row->postal_code),
-                'phone_number' => set_value('phone_number',$row->phone_number),
+                // phone_number[] belongs to shareholders, so set_value('phone_number')
+                // can return an array after validation. Use the corporate input instead.
+                'phone_number' => $this->input->post('phone_number_input', TRUE) !== NULL
+                    ? $this->input->post('phone_number_input', TRUE)
+                    : $row->phone_number,
                 'city_town' => set_value('city_town',$row->city_town),
                 'contact_email' =>set_value('contact_email', $row->contact_email),
                 'website' => set_value('website',$row->website),
@@ -596,6 +837,10 @@ class Corporate_customers extends CI_Controller
                 'tax_id_doc'=>set_value('tax_id_doc', $row->tax_id_doc),
                 'proof_physical_address'=>set_value('proof_physical_address',  $row->proof_physical_address),
                 'financial_statement'=>set_value('financial_statement',  $row->financial_statement),
+                'director_nrc_copies' => set_value('director_nrc_copies', $row->director_nrc_copies),
+                'articles_of_association' => set_value('articles_of_association', $row->articles_of_association),
+                'business_profile' => set_value('business_profile', $row->business_profile),
+                'pacra_printout' => set_value('pacra_printout', $row->pacra_printout),
                 'key_management_info' => set_value('key_management_info', $row->key_management_info),
                 'business_info' => set_value('business_info', $row->business_info),
                 'financial_year_end' => set_value('financial_year_end', $row->financial_year_end),
@@ -613,6 +858,42 @@ class Corporate_customers extends CI_Controller
         }
     }
 
+
+    private function upload_additional_corporate_documents($imagePath, $existing = array(), $store_full_path = false)
+    {
+        $labels = array(
+            'director_nrc_copies' => 'Copies of NRCs for the Directors',
+            'articles_of_association' => 'Articles of Association',
+            'business_profile' => 'Business Profile',
+            'pacra_printout' => 'PACRA Printout',
+        );
+        $files = array_merge(array_fill_keys(array_keys($labels), null), $existing);
+        $errors = array();
+
+        foreach ($labels as $field => $label) {
+            if (empty($_FILES[$field]['name'])) {
+                continue;
+            }
+            $this->upload->initialize(array(
+                'upload_path' => $imagePath,
+                'allowed_types' => 'pdf|doc|docx|jpg|jpeg|png',
+                'max_size' => 10240,
+                'remove_spaces' => TRUE,
+                'overwrite' => FALSE,
+                'file_name' => $field . '_' . time(),
+            ));
+            if (!$this->upload->do_upload($field)) {
+                $errors[] = $label . ': ' . $this->upload->display_errors('', '');
+                continue;
+            }
+            $uploaded = $this->upload->data();
+            $files[$field] = $store_full_path
+                ? 'uploads/' . $this->input->post('EntityName', TRUE) . '/' . $uploaded['file_name']
+                : $uploaded['file_name'];
+        }
+
+        return array('files' => $files, 'errors' => $errors);
+    }
 
     public  function create_act()
     {
@@ -737,6 +1018,13 @@ class Corporate_customers extends CI_Controller
                 }
             }
 
+            $additional_documents = $this->upload_additional_corporate_documents($imagePath);
+            if (!empty($additional_documents['errors'])) {
+                $this->toaster->error(implode(' ', $additional_documents['errors']));
+                $this->create();
+                return;
+            }
+
             $data = array(
                 'EntityName' => $this->input->post('EntityName', TRUE),
                 'DateOfIncorporation' => $this->input->post('DateOfIncorporation', TRUE),
@@ -764,6 +1052,10 @@ class Corporate_customers extends CI_Controller
                 'tax_id_doc' => $tax_id_docfile,
                 'proof_physical_address' => $proof_physical_addressfile,
                 'financial_statement' => $financial_statementfile,
+                'director_nrc_copies' => $additional_documents['files']['director_nrc_copies'],
+                'articles_of_association' => $additional_documents['files']['articles_of_association'],
+                'business_profile' => $additional_documents['files']['business_profile'],
+                'pacra_printout' => $additional_documents['files']['pacra_printout'],
                 'added_by' => $this->session->userdata('user_id')
             );
 
@@ -1049,12 +1341,27 @@ class Corporate_customers extends CI_Controller
             $proof_physical_addressfile = $existing_customer->proof_physical_address;
             $financial_statementfile = $existing_customer->financial_statement;
             $tax_id_docfile = $existing_customer->tax_id_doc;
+            $existing_additional_documents = array(
+                'director_nrc_copies' => $existing_customer->director_nrc_copies,
+                'articles_of_association' => $existing_customer->articles_of_association,
+                'business_profile' => $existing_customer->business_profile,
+                'pacra_printout' => $existing_customer->pacra_printout,
+            );
+
+            // Every KYC field must receive a complete upload configuration. Previously
+            // these settings were only populated when company_certificate was selected,
+            // so uploading any of the other fields by itself failed silently.
+            $base_upload_config = array(
+                'upload_path' => $imagePath,
+                'allowed_types' => 'pdf|doc|docx|jpg|jpeg|png',
+                'max_size' => 10240,
+                'remove_spaces' => TRUE,
+            );
+            $upload_errors = array();
 
             // Company Certificate Upload
             if (!empty($_FILES['company_certificate']['name'])) {
-                $config['upload_path'] = $imagePath;
-                $config['allowed_types'] = 'pdf|doc|docx|jpg|jpeg|png';
-                $config['max_size'] = 10240; // 10MB
+                $config = $base_upload_config;
                 $config['file_name'] = 'company_certificate_' . time();
 
                 $this->upload->initialize($config);
@@ -1062,40 +1369,64 @@ class Corporate_customers extends CI_Controller
                 if ($this->upload->do_upload('company_certificate')) {
                     $upload_data = $this->upload->data();
                     $company_certificatefile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                } else {
+                    $upload_errors[] = 'Company certificate: '.$this->upload->display_errors('', '');
                 }
             }
 
             // Proof of Physical Address Upload
             if (!empty($_FILES['proof_physical_address']['name'])) {
+                $config = $base_upload_config;
                 $config['file_name'] = 'proof_physical_address_' . time();
                 $this->upload->initialize($config);
 
                 if ($this->upload->do_upload('proof_physical_address')) {
                     $upload_data = $this->upload->data();
                     $proof_physical_addressfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                } else {
+                    $upload_errors[] = 'Proof of physical address: '.$this->upload->display_errors('', '');
                 }
             }
 
             // Financial Statement Upload
             if (!empty($_FILES['financial_statement']['name'])) {
+                $config = $base_upload_config;
                 $config['file_name'] = 'financial_statement_' . time();
                 $this->upload->initialize($config);
 
                 if ($this->upload->do_upload('financial_statement')) {
                     $upload_data = $this->upload->data();
                     $financial_statementfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                } else {
+                    $upload_errors[] = 'Financial statement: '.$this->upload->display_errors('', '');
                 }
             }
 
             // Tax ID Document Upload
             if (!empty($_FILES['tax_id_doc']['name'])) {
+                $config = $base_upload_config;
                 $config['file_name'] = 'tax_id_doc_' . time();
                 $this->upload->initialize($config);
 
                 if ($this->upload->do_upload('tax_id_doc')) {
                     $upload_data = $this->upload->data();
                     $tax_id_docfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/'.$upload_data['file_name'];
+                } else {
+                    $upload_errors[] = 'Tax clearance certificate: '.$this->upload->display_errors('', '');
                 }
+            }
+
+            $additional_documents = $this->upload_additional_corporate_documents(
+                $imagePath,
+                $existing_additional_documents,
+                true
+            );
+            $upload_errors = array_merge($upload_errors, $additional_documents['errors']);
+
+            if (!empty($upload_errors)) {
+                $this->toaster->error(implode(' ', $upload_errors));
+                redirect(site_url('corporate_customers/update/'.$corporate_id));
+                return;
             }
 
             $data = array(
@@ -1125,6 +1456,10 @@ class Corporate_customers extends CI_Controller
                 'tax_id_doc' => $tax_id_docfile,
                 'proof_physical_address' => $proof_physical_addressfile,
                 'financial_statement' => $financial_statementfile,
+                'director_nrc_copies' => $additional_documents['files']['director_nrc_copies'],
+                'articles_of_association' => $additional_documents['files']['articles_of_association'],
+                'business_profile' => $additional_documents['files']['business_profile'],
+                'pacra_printout' => $additional_documents['files']['pacra_printout'],
                 'LastUpdatedOn' => date('Y-m-d H:i:s'),
             );
 
@@ -1132,7 +1467,12 @@ class Corporate_customers extends CI_Controller
             $this->Corporate_customers_model->update($corporate_id, $data);
 
             // Handle shareholders update
-            $this->update_shareholders($corporate_id);
+            $shareholder_upload_errors = $this->update_shareholders($corporate_id);
+            if (!empty($shareholder_upload_errors)) {
+                $this->toaster->error(implode(' ', $shareholder_upload_errors));
+                redirect(site_url('corporate_customers/update/'.$corporate_id));
+                return;
+            }
 
             // Log the activity
             $logger = array(
@@ -1149,6 +1489,7 @@ class Corporate_customers extends CI_Controller
 
     private function update_shareholders($corporate_id)
     {
+        $upload_errors = array();
         // Get shareholder data from form
         $titles = $this->input->post('title');
         $first_names = $this->input->post('first_name');
@@ -1162,7 +1503,10 @@ class Corporate_customers extends CI_Controller
         $idnumbers = $this->input->post('idnumber');
         $percentage_values = $this->input->post('percentage_value');
         $shareholder_ids = $this->input->post('shareholder_id');
-        $idfiles = $_FILES['idfile'];
+        $idfiles = isset($_FILES['idfile']) ? $_FILES['idfile'] : array(
+            'name' => array(), 'type' => array(), 'tmp_name' => array(),
+            'error' => array(), 'size' => array()
+        );
 
         if (!empty($titles)) {
             // First, remove all existing corporate_shareholders relationships
@@ -1170,17 +1514,24 @@ class Corporate_customers extends CI_Controller
 
             $imagePath = APPPATH . '../uploads/'.$this->input->post('EntityName', TRUE).'/shareholders/';
             if (!is_dir($imagePath)) {
-                mkdir($imagePath, 0777, true);
+                if (!mkdir($imagePath, 0777, true) && !is_dir($imagePath)) {
+                    return array('Unable to create the shareholder KYC upload directory.');
+                }
             }
 
             for ($i = 0; $i < count($titles); $i++) {
                 // Handle file upload for each shareholder
                 $idfile = null;
                 if (!empty($idfiles['name'][$i])) {
+                    $php_upload_error = isset($idfiles['error'][$i]) ? (int) $idfiles['error'][$i] : UPLOAD_ERR_NO_FILE;
+                    if ($php_upload_error !== UPLOAD_ERR_OK) {
+                        $upload_errors[] = 'Shareholder #'.($i + 1).' ID file: '.$this->php_upload_error_message($php_upload_error);
+                    } else {
                     $config['upload_path'] = $imagePath;
                     $config['allowed_types'] = 'pdf|doc|docx|jpg|jpeg|png';
-                    $config['max_size'] = 5120; // 5MB
+                    $config['max_size'] = 10240; // 10MB, consistent with corporate KYC files
                     $config['file_name'] = 'shareholder_id_' . $i . '_' . time();
+                    $config['remove_spaces'] = TRUE;
 
                     $this->upload->initialize($config);
 
@@ -1194,6 +1545,9 @@ class Corporate_customers extends CI_Controller
                     if ($this->upload->do_upload('temp_file')) {
                         $upload_data = $this->upload->data();
                         $idfile = 'uploads/'.$this->input->post('EntityName', TRUE).'/shareholders/'.$upload_data['file_name'];
+                    } else {
+                        $upload_errors[] = 'Shareholder #'.($i + 1).' ID file: '.$this->upload->display_errors('', '');
+                    }
                     }
                 }
 
@@ -1251,6 +1605,23 @@ class Corporate_customers extends CI_Controller
                 $this->Corporate_shareholders_model->insert($corporate_shareholder);
             }
         }
+
+        return $upload_errors;
+    }
+
+    private function php_upload_error_message($error_code)
+    {
+        $messages = array(
+            UPLOAD_ERR_INI_SIZE => 'The file exceeds the server upload-size limit.',
+            UPLOAD_ERR_FORM_SIZE => 'The file exceeds the form upload-size limit.',
+            UPLOAD_ERR_PARTIAL => 'The file was only partially uploaded.',
+            UPLOAD_ERR_NO_FILE => 'No file was received.',
+            UPLOAD_ERR_NO_TMP_DIR => 'The server temporary folder is missing.',
+            UPLOAD_ERR_CANT_WRITE => 'The server could not write the file to disk.',
+            UPLOAD_ERR_EXTENSION => 'A PHP extension stopped the upload.',
+        );
+
+        return isset($messages[$error_code]) ? $messages[$error_code] : 'Upload failed with error code '.$error_code.'.';
     }
 
     public function delete($id)

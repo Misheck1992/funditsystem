@@ -2,6 +2,18 @@
 $fover = false;
 $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_id,$loan_id);
 $currency = get_by_id('currencies','currency_id',$currency);
+$branch_reference = NULL;
+if ($customer_type === 'individual') {
+    $branch_customer = $this->Individual_customers_model->get_by_id($customer_id);
+    $branch_reference = $branch_customer ? $branch_customer->Branch : NULL;
+} elseif ($customer_type === 'institution') {
+    $branch_customer = $this->Corporate_customers_model->get_by_id($customer_id);
+    $branch_reference = $branch_customer ? $branch_customer->Branch : NULL;
+} elseif ($customer_type === 'group') {
+    $branch_customer = $this->Groups_model->get_by_id($customer_id);
+    $branch_reference = ($branch_customer && isset($branch_customer->branch)) ? $branch_customer->branch : NULL;
+}
+$branch_name = $this->Branches_model->get_name_by_reference($branch_reference);
 ?>
 
 <style>
@@ -462,7 +474,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
             if ($pp->status == 'NOT PAID' && $pp->partial_paid != 'YES') {
                 $remaining_principal_balance += $pp->principal;
             } elseif ($pp->partial_paid == 'YES') {
-                $row_outstanding = $pp->amount - $pp->paid_amount;
+                $row_outstanding = max(0, (float)$pp->amount - (float)$pp->paid_amount);
                 $remaining_principal_balance += min($pp->principal, $row_outstanding);
             }
         }
@@ -538,6 +550,10 @@ $currency = get_by_id('currencies','currency_id',$currency);
                         <div class="info-item">
                             <div class="label">Customer</div>
                             <div class="value"><a href="<?php echo base_url($preview_url).$customer_id?>"><?php echo $loan_customer; ?></a></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="label">Branch Name</div>
+                            <div class="value"><?php echo html_escape($branch_name); ?></div>
                         </div>
                         <div class="info-item">
                             <div class="label">Status</div>
@@ -1030,7 +1046,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                         <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->interest, 2); ?></td>
                                         <td><strong><?php echo $currency->currency_code; ?> <?php echo number_format($p->amount, 2); ?></strong></td>
                                         <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->paid_amount, 2); ?></td>
-                                        <td><?php echo $currency->currency_code; ?> <?php echo number_format($p->amount - $p->paid_amount, 2); ?></td>
+                                        <td><?php echo $currency->currency_code; ?> <?php echo number_format(max(0, (float)$p->amount - (float)$p->paid_amount), 2); ?></td>
                                         <td><span class="status-badge <?php echo $status_badge_class; ?>"><?php echo $status_text; ?></span></td>
                                         <td>
                                             <?php if($show_pay_btn): ?>

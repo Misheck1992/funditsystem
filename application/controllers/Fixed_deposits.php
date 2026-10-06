@@ -164,6 +164,7 @@ class Fixed_deposits extends CI_Controller
                     `expected_interest` decimal(18,2) DEFAULT 0,
                     `paid_interest` decimal(18,2) DEFAULT 0,
                     `penalty_amount` decimal(18,2) DEFAULT 0,
+                    `wht_amount` decimal(18,2) DEFAULT 0,
                     `status` enum('PENDING','PAID','PARTIAL','SKIPPED') DEFAULT 'PENDING',
                     `payment_date` date,
                     `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -185,6 +186,7 @@ class Fixed_deposits extends CI_Controller
                     `interest_before` decimal(18,2),
                     `interest_after` decimal(18,2),
                     `penalty_amount` decimal(18,2) DEFAULT 0,
+                    `wht_amount` decimal(18,2) DEFAULT 0,
                     `quarter` tinyint,
                     `year` int,
                     `notes` text,
@@ -746,15 +748,37 @@ class Fixed_deposits extends CI_Controller
             redirect('Fixed_deposits/deposits');
         }
 
-        $from_date = $this->input->get('from_date', TRUE);
-        $to_date = $this->input->get('to_date', TRUE);
+        $today = date('Y-m-d');
+        $from_date = $this->input->get('from_date', TRUE) ?: $deposit->start_date;
+        $to_date = $this->input->get('to_date', TRUE) ?: $today;
+        if ($to_date > $today) {
+            $to_date = $today;
+        }
+        if ($from_date > $to_date) {
+            $this->session->set_flashdata('error', 'From date cannot be after the as-at date');
+            redirect('Fixed_deposits/deposit_statement/' . $id);
+        }
+
+        $transactions = $this->Fd_transactions_model->get_for_statement($id, $from_date, $to_date);
+        $opening_balance = $this->Fd_transactions_model->get_balance_before($id, $from_date);
+        $closing_balance = !empty($transactions) ? (float) end($transactions)->principal_after : $opening_balance;
+        if (empty($transactions) && $from_date <= $deposit->start_date && $to_date >= $deposit->start_date) {
+            $closing_balance = (float) $deposit->current_principal;
+        }
+        $statement_deposit = clone $deposit;
+        $statement_deposit->current_principal = $closing_balance;
 
         $data['deposit'] = $deposit;
-        $data['transactions'] = $this->Fd_transactions_model->get_for_statement($id, $from_date, $to_date);
+        $data['transactions'] = $transactions;
+        $data['opening_balance'] = $opening_balance;
+        $data['closing_balance'] = $closing_balance;
+        $data['statement_accrued_interest'] = calculate_accrued_interest($statement_deposit, $to_date);
         $data['from_date'] = $from_date;
         $data['to_date'] = $to_date;
         $data['page_title'] = 'Statement: ' . $deposit->deposit_number;
-
+        if ($this->input->get('search') === 'excel') {
+            $this->export_database_view_excel('Deposit_Statement_' . $deposit->deposit_number, 'fixed_deposits/deposit_statement', $data, 'printArea');
+        }
         $this->load->view('admin/header');
         $this->load->view('fixed_deposits/deposit_statement', $data);
         $this->load->view('admin/footer');
@@ -1565,6 +1589,10 @@ class Fixed_deposits extends CI_Controller
             }
         }
 
+        if ($this->input->get('search') === 'excel') {
+            $this->export_database_view_excel('Fixed_Deposits_Report', 'fixed_deposits/report', $data, 'reportTable');
+        }
+
         $this->load->view('admin/header');
         $this->load->view('fixed_deposits/report', $data);
         $this->load->view('admin/footer');
@@ -1960,4 +1988,70 @@ class Fixed_deposits extends CI_Controller
             echo json_encode(array('status' => 'success', 'linked' => false));
         }
     }
+    /** Stream the freshly queried deposit records; never render or parse a view. */
+    private function export_database_view_excel($filename, $view, array $data, $element_id)
+    {
+        $records = array();
+        foreach (array('transactions', 'deposits', 'loan_data', 'report_data') as $key) {
+            if (isset($data[$key]) && is_array($data[$key])) { $records = $data[$key]; break; }
+        }
+        $get = function ($record, $key, $default = '') {
+            if (is_object($record) && isset($record->$key)) return $record->$key;
+            if (is_array($record) && array_key_exists($key, $record)) return $record[$key];
+            return $default;
+        };
+        if (strpos($filename, 'Deposit_Statement_') === 0) {
+            $mapped = array();
+            foreach ($records as $record) {
+                $type = $get($record, 'transaction_type');
+                $is_debit = in_array($type, array('PRINCIPAL_WITHDRAWAL','INTEREST_PAYMENT','CLOSURE','PENALTY','MERGE_OUT'), true);
+                $mapped[] = array('Date'=>$get($record,'created_at'),'Reference'=>$get($record,'transaction_ref'),'Description'=>str_replace('_',' ',$type),'Notes'=>trim(strip_tags((string)$get($record,'notes'))),'Debit'=>$is_debit?(float)$get($record,'amount',0):'','Credit'=>$is_debit?'':(float)$get($record,'amount',0),'Balance'=>(float)$get($record,'principal_after',0));
+            }
+            $records = $mapped;
+        } elseif ($filename === 'Fixed_Deposits_Report') {
+            $mapped = array();
+            foreach ($records as $record) $mapped[] = array('Deposit Number'=>$get($record,'deposit_number'),'Customer'=>trim($get($record,'first_name').' '.$get($record,'last_name')),'Phone'=>$get($record,'phone_number'),'Principal'=>(float)$get($record,'current_principal',0),'Interest Rate'=>(float)$get($record,'interest_rate',0),'Accrued Interest'=>$get($record,'status')==='ACTIVE'?(float)calculate_accrued_interest($record):0,'Start Date'=>$get($record,'start_date'),'Maturity Date'=>$get($record,'maturity_date'),'Status'=>$get($record,'status'));
+            $records = $mapped;
+        }
+        $headers = array();
+        $rows = array();
+        foreach ($records as $record) {
+            if (is_object($record)) $record = get_object_vars($record);
+            if (!is_array($record)) $record = array('value' => $record);
+            $flat = array();
+            foreach ($record as $key => $value) {
+                if (is_object($value)) $value = get_object_vars($value);
+                if (is_array($value)) $value = json_encode($value);
+                $flat[(string)$key] = $value;
+                if (!in_array((string)$key, $headers, true)) $headers[] = (string)$key;
+            }
+            $rows[] = $flat;
+        }
+        $safe = trim(preg_replace('/[^A-Za-z0-9_-]+/', '_', $filename), '_') . '_' . date('Y-m-d') . '.xls';
+        header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $safe . '"');
+        header('Cache-Control: max-age=0');
+        echo '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>';
+        echo '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#D9EAF7" ss:Pattern="Solid"/></Style><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style></Styles><Worksheet ss:Name="Report"><Table>';
+        $write = function (array $values, $header = false) {
+            echo '<Row>';
+            foreach ($values as $value) {
+                if ($value === null) $value = '';
+                if (is_bool($value)) $value = $value ? 'Yes' : 'No';
+                $type = (is_int($value) || is_float($value)) ? 'Number' : 'String';
+                $clean = strip_tags(html_entity_decode((string)$value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $clean = preg_replace('/\x{00C2}\x{00A0}|\x{00A0}/u', ' ', $clean);
+                $clean = preg_replace('/[^\x09\x0A\x0D\x20-\x{D7FF}\x{E000}-\x{FFFD}]/u', '', $clean);
+                $clean = trim(preg_replace('/[\t\r\n ]+/u', ' ', $clean));
+                echo '<Cell' . ($header ? ' ss:StyleID="Header"' : '') . '><Data ss:Type="' . $type . '">' . htmlspecialchars($clean, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</Data></Cell>';
+            }
+            echo '</Row>';
+        };
+        if ($headers) $write(array_map(function ($h) { return ucwords(str_replace(array('_', '-'), ' ', $h)); }, $headers), true);
+        foreach ($rows as $record) {
+            $row = array(); foreach ($headers as $header) $row[] = array_key_exists($header, $record) ? $record[$header] : '';
+            $write($row);
+        }
+        echo '</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane></WorksheetOptions></Worksheet></Workbook>';
+        exit;    }
 }

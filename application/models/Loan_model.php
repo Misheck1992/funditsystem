@@ -921,8 +921,80 @@ class Loan_model extends CI_Model
         }
     }
 
-    function add_loan_edit($loan_id,$loan_number,$lamount, $lmonths,$interest, $product_id, $ldate,$loan_customer,$customer_type,$worthness_file,$narration,$added_by)
+	private function rebuild_edited_loan_with_current_formula($loan_id, $lamount, $lmonths, $interest, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by)
 	{
+		$product = $this->db->where('loan_product_id', $product_id)->get('loan_products')->row();
+		if (!$product) throw new Exception('Invalid loan product selected.');
+		if ((float)$lamount <= 0 || (int)$lmonths <= 0) throw new Exception('Loan amount and period must be greater than zero.');
+
+		$rate = (float)$interest / 100;
+		if ($product->calculation_type === 'Reducing Balance') {
+			$term_payment = $rate > 0
+				? (float)$lamount * $rate * pow(1 + $rate, (int)$lmonths) / (pow(1 + $rate, (int)$lmonths) - 1)
+				: (float)$lamount / (int)$lmonths;
+		} elseif ($product->calculation_type === 'Straight Line') {
+			$term_payment = ((float)$lamount + ((float)$lamount * $rate * (int)$lmonths)) / (int)$lmonths;
+		} elseif ($product->calculation_type === 'Bullet Payment') {
+			$term_payment = (float)$lamount + ((float)$lamount * $rate * (int)$lmonths);
+		} else {
+			throw new Exception('Invalid loan calculation type.');
+		}
+
+		$this->db->where('loan_id', $loan_id)->update($this->table, array(
+			'loan_product'     => $product_id,
+			'loan_customer'    => $loan_customer,
+			'customer_type'    => $customer_type,
+			'loan_date'        => $ldate,
+			'loan_principal'   => $lamount,
+			'loan_period'      => $lmonths,
+			'worthness_file'   => $worthness_file,
+			'narration'        => $narration,
+			'period_type'      => $product->frequency,
+			'loan_amount_term' => round($term_payment, 2),
+			'loan_interest'    => $interest,
+			'calculation_type' => $product->calculation_type,
+			'next_payment_id'  => 1,
+			'loan_added_by'    => $added_by,
+		));
+
+		$this->db->where('loan_id', $loan_id)->delete('payement_schedules');
+		// A recreated contract replaces any old reschedule plan; leaving it active
+		// would make the repayment page show two competing schedules.
+		$this->db->where('loan_id', $loan_id)->delete('rescheduled_payments');
+
+		if ($product->calculation_type === 'Bullet Payment') {
+			$total_interest = round((float)$lamount * $rate * (int)$lmonths, 2);
+			$total_amount = round((float)$lamount + $total_interest, 2);
+			$this->db->insert('payement_schedules', array(
+				'customer' => $loan_customer, 'loan_id' => $loan_id,
+				'payment_schedule' => date('Y-m-d', strtotime('+' . (int)$lmonths . ' months', strtotime($ldate))),
+				'payment_number' => 1, 'amount' => $total_amount,
+				'principal' => round((float)$lamount, 2), 'interest' => $total_interest,
+				'paid_amount' => 0, 'loan_balance' => round((float)$lamount, 2),
+				'loan_date' => $ldate, 'is_bullet_payment' => 1,
+			));
+		} else {
+			$first_due_date = $this->adjust_date_to_25th($ldate);
+			$this->insert_payment_schedules($loan_id, $product, (float)$lamount, (int)$lmonths, (float)$interest, $first_due_date, $product->calculation_type, $loan_customer);
+		}
+
+		$totals = $this->db
+			->select('COALESCE(SUM(interest),0) AS total_interest, COALESCE(SUM(amount),0) AS total_amount, MIN(amount) AS first_payment', false)
+			->where('loan_id', $loan_id)
+			->get('payement_schedules')->row();
+		$this->db->where('loan_id', $loan_id)->update($this->table, array(
+			'loan_interest_amount' => round((float)$totals->total_interest, 2),
+			'loan_amount_total'    => round((float)$totals->total_amount, 2),
+			'loan_amount_term'     => round((float)$totals->first_payment, 2),
+		));
+
+		return $loan_id;
+	}
+
+	function add_loan_edit($loan_id,$loan_number,$lamount, $lmonths,$interest, $product_id, $ldate,$loan_customer,$customer_type,$worthness_file,$narration,$added_by)
+	{
+		return $this->rebuild_edited_loan_with_current_formula($loan_id, $lamount, $lmonths, $interest, $product_id, $ldate, $loan_customer, $customer_type, $worthness_file, $narration, $added_by);
+
 		//set Time Zone
 		//date_default_timezone_set('Africa/Blantyre');
         $loan = $this->db->select("*")->from('loan_products')->where('loan_product_id',$product_id)->get()->row();
@@ -2591,16 +2663,7 @@ function get_all_recomended_edit_loan()
     // get all
     function get_all_disbursed()
     {
-
-        $this->db->select("*")
-            ->from($this->table)
-            ->join('loan_products','loan_products.loan_product_id =loan.loan_product');
-//			->join('individual_customers','individual_customers.id = loan.loan_customer');
-
-        $this->db->where('disbursed','yes');
-
-        $this->db->order_by('loan.loan_id', 'DESC');
-        return $this->db->get()->result();
+        return $this->get_disbursed_filter('All', 'All', '', '');
     }
 
     function get_summaryu($user, $product, $ln)
@@ -2691,6 +2754,34 @@ function get_all_recomended_edit_loan()
 		return $this->db->get()->result();
 	}
 
+	function get_disbursed_filter($user, $product, $from, $to)
+	{
+		$this->db->select("loan.*, loan_products.product_name, employees.Firstname as efname, employees.Lastname as elname, COALESCE(branch_by_id.BranchName, branch_by_code.BranchName, branch_by_branch_code.BranchName, 'Not assigned') AS branch_name", false)
+			->from($this->table)
+			->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'left')
+			->join('employees', 'employees.id = loan.loan_added_by', 'left')
+			->join('individual_customers report_individual', "loan.customer_type = 'individual' AND report_individual.id = loan.loan_customer", 'left', false)
+			->join('corporate_customers report_corporate', "loan.customer_type IN ('institution','corporate') AND report_corporate.id = loan.loan_customer", 'left', false)
+			->join('groups report_group', "loan.customer_type = 'group' AND report_group.group_id = loan.loan_customer", 'left', false)
+			->join('branches branch_by_id', 'branch_by_id.id = COALESCE(report_individual.Branch, report_corporate.Branch, report_group.branch)', 'left', false)
+			->join('branches branch_by_code', 'branch_by_code.Code = COALESCE(report_individual.Branch, report_corporate.Branch, report_group.branch)', 'left', false)
+			->join('branches branch_by_branch_code', 'branch_by_branch_code.BranchCode = COALESCE(report_individual.Branch, report_corporate.Branch, report_group.branch)', 'left', false)
+			->where('LOWER(loan.disbursed)', 'yes');
+		if ($user !== '' && $user !== null && $user !== 'All') {
+			$this->db->where('loan.loan_added_by', $user);
+		}
+		if ($product !== '' && $product !== null && $product !== 'All') {
+			$this->db->where('loan.loan_product', $product);
+		}
+		if ($from !== '' && $from !== null) {
+			$this->db->where('DATE(loan.disbursed_date) >=', date('Y-m-d', strtotime($from)));
+		}
+		if ($to !== '' && $to !== null) {
+			$this->db->where('DATE(loan.disbursed_date) <=', date('Y-m-d', strtotime($to)));
+		}
+		$this->db->order_by('loan.loan_id', 'DESC');
+		return $this->db->get()->result();
+	}
 	/**
 	 * Get all loans for portfolio report (Active, Closed, Written Off)
 	 */
@@ -2744,19 +2835,64 @@ function get_all_recomended_edit_loan()
 	
 		function rbm_reportFilter($from,$to)
 	{
+		return $this->crb_report_data($from, $to);
 	   
 
-		$this->db->select("*")
+		$this->db->select("individual_customers.*, proofofidentity.*, loan.*, loan_products.product_name, COALESCE(branch_by_id.BranchName, branch_by_code.BranchName, branch_by_branch_code.BranchName, 'Not assigned') AS branch_name", false)
 			->from('individual_customers')
 			->join('proofofidentity','proofofidentity.ClientID=individual_customers.ClientID')
-
-			->join('loan','loan.loan_customer=individual_customers.id');
+			->join('loan', "loan.loan_customer = individual_customers.id AND loan.customer_type = 'individual'", 'inner', false)
+			->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'left')
+			->join('branches branch_by_id', 'branch_by_id.id = individual_customers.Branch', 'left')
+			->join('branches branch_by_code', 'branch_by_code.Code = individual_customers.Branch', 'left')
+			->join('branches branch_by_branch_code', 'branch_by_branch_code.BranchCode = individual_customers.Branch', 'left');
 		if($from !="" && $to !=""){
 			$this->db->where('loan_added_date BETWEEN "'. date('Y-m-d', strtotime($from)). '" and "'. date('Y-m-d', strtotime($to)).'"');
 
 		}
 		$this->db->order_by('loan.loan_id', 'DESC');
 		return $this->db->get()->result();
+	}
+
+	/** Complete CRB dataset, queried independently of the HTML table. */
+	function crb_report_data($from = '', $to = '')
+	{
+		$scheduleSql = <<<'SQL'
+(SELECT ps.loan_id,
+ MIN(ps.payment_schedule) AS first_payment_date,
+ MAX(ps.payment_schedule) AS maturity_date,
+ MAX(CASE WHEN ps.paid_amount > 0 THEN ps.paid_date END) AS last_payment_date,
+ CAST(SUBSTRING_INDEX(GROUP_CONCAT(CASE WHEN ps.paid_amount > 0 THEN ps.paid_amount END ORDER BY ps.paid_date DESC SEPARATOR ','), ',', 1) AS DECIMAL(18,2)) AS last_payment_amount,
+ CAST(SUBSTRING_INDEX(GROUP_CONCAT(ps.amount ORDER BY ps.payment_schedule DESC SEPARATOR ','), ',', 1) AS DECIMAL(18,2)) AS last_scheduled_amount,
+ SUM(COALESCE(ps.paid_amount,0)) AS total_paid,
+ SUM(GREATEST(COALESCE(ps.amount,0)-COALESCE(ps.paid_amount,0),0)) AS current_balance,
+ SUM(CASE WHEN ps.payment_schedule < CURDATE() THEN GREATEST(COALESCE(ps.amount,0)-COALESCE(ps.paid_amount,0),0) ELSE 0 END) AS amount_in_arrears,
+ SUM(CASE WHEN ps.payment_schedule < CURDATE() AND COALESCE(ps.paid_amount,0) < COALESCE(ps.amount,0) THEN 1 ELSE 0 END) AS installments_in_arrears,
+ DATEDIFF(CURDATE(), MIN(CASE WHEN ps.payment_schedule < CURDATE() AND COALESCE(ps.paid_amount,0) < COALESCE(ps.amount,0) THEN ps.payment_schedule END)) AS days_in_arrears,
+ MIN(CASE WHEN ps.payment_schedule < CURDATE() AND COALESCE(ps.paid_amount,0) < COALESCE(ps.amount,0) THEN ps.payment_schedule END) AS default_date
+ FROM payement_schedules ps GROUP BY ps.loan_id) schedule_summary
+SQL;
+		$select = <<<'SQL'
+individual_customers.*, proofofidentity.*, loan.*, loan_products.product_name,
+COALESCE(branch_by_id.BranchName, branch_by_code.BranchName, branch_by_branch_code.BranchName, 'Not assigned') AS branch_name,
+districts.district_name AS home_district, currencies.currency_code, currencies.currency_name,
+NULL AS group_name, NULL AS group_code, schedule_summary.*,
+(SELECT previous_loan.loan_number FROM loan previous_loan WHERE previous_loan.loan_customer=loan.loan_customer AND previous_loan.customer_type=loan.customer_type AND previous_loan.loan_id < loan.loan_id ORDER BY previous_loan.loan_id DESC LIMIT 1) AS old_loan_reference,
+(SELECT GROUP_CONCAT(DISTINCT c.collateral_status SEPARATOR ', ') FROM loan_collateral_links lcl INNER JOIN collaterals c ON c.id=lcl.collateral_id WHERE lcl.loan_id=loan.loan_id) AS collateral_status
+SQL;
+		$this->db->select($select, false)->from('individual_customers')
+			->join('proofofidentity', 'proofofidentity.ClientID=individual_customers.ClientID', 'left')
+			->join('loan', 'loan.loan_customer=individual_customers.id AND loan.customer_type=\'individual\'', 'inner', false)
+			->join('loan_products', 'loan_products.loan_product_id=loan.loan_product', 'left')
+			->join('districts', 'districts.district_id=individual_customers.City', 'left')
+			->join('currencies', 'currencies.currency_id=loan.currency', 'left')
+			->join($scheduleSql, 'schedule_summary.loan_id=loan.loan_id', 'left', false)
+			->join('branches branch_by_id', 'branch_by_id.id=individual_customers.Branch', 'left')
+			->join('branches branch_by_code', 'branch_by_code.Code=individual_customers.Branch', 'left')
+			->join('branches branch_by_branch_code', 'branch_by_branch_code.BranchCode=individual_customers.Branch', 'left');
+		if ($from !== '') $this->db->where('DATE(loan.disbursed_date) >=', date('Y-m-d', strtotime($from)));
+		if ($to !== '') $this->db->where('DATE(loan.disbursed_date) <=', date('Y-m-d', strtotime($to)));
+		return $this->db->order_by('loan.loan_id', 'DESC')->get()->result();
 	}
 	
 	function get_user_loan($id)
@@ -3188,6 +3324,8 @@ function get_all_recomended_edit_loan()
 			loan.loan_id,
 			loan.loan_number,
 			loan.loan_principal,
+			loan.disbursed_amount,
+			loan.disbursed_date,
 			loan.loan_interest,
 			loan.loan_status,
 			loan.customer_type,
@@ -3273,6 +3411,8 @@ function get_all_recomended_edit_loan()
 			loan.loan_product,
 			loan.loan_period,
 			loan.period_type,
+			loan.loan_added_by,
+			loan.off_taker,
 			loan_products.product_name as facility_type,
 			loan_products.frequency as loan_frequency,
 			individual_customers.id as ind_id,
@@ -3283,22 +3423,26 @@ function get_all_recomended_edit_loan()
 			corporate_customers.EntityName as corp_name,
 			corporate_customers.industry_sector as corp_industry,
 			corporate_customers.category as corp_category,
+			groups.group_name,
+			groups.group_category,
+			CONCAT_WS(' ', employees.Firstname, employees.Lastname) as loan_officer,
+			off_taker_customer.EntityName as off_taker_name,
+			off_taker_customer.industry_sector as off_taker_sector,
 			currencies.currency_name,
 			currencies.currency_code,
 			(SELECT SUM(ps.amount) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as total_scheduled,
 			(SELECT SUM(ps.paid_amount) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as total_paid,
-			(SELECT SUM(
-				CASE
-					WHEN ps.paid_amount >= ps.interest THEN ps.interest
-					ELSE ps.paid_amount
-				END
-			) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as realized_interest,
-			(SELECT MAX(ps.payment_schedule) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as last_payment_date
+			(SELECT SUM(ps.interest) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as total_scheduled_interest,
+			(SELECT MAX(ps.paid_date) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id AND ps.paid_amount > 0) as last_payment_date,
+			(SELECT MAX(ps.payment_schedule) FROM payement_schedules ps WHERE ps.loan_id = loan.loan_id) as maturity_date
 		");
 
 		$this->db->from('loan');
 		$this->db->join('individual_customers', 'individual_customers.id = loan.loan_customer AND loan.customer_type = "individual"', 'left');
-		$this->db->join('corporate_customers', 'corporate_customers.id = loan.loan_customer AND loan.customer_type = "institution"', 'left');
+		$this->db->join('corporate_customers', 'corporate_customers.id = loan.loan_customer AND loan.customer_type IN ("institution", "corporate")', 'left');
+		$this->db->join('groups', 'groups.group_id = loan.loan_customer AND loan.customer_type = \'group\'', 'left');
+		$this->db->join('employees', 'employees.id = loan.loan_added_by', 'left');
+		$this->db->join('corporate_customers off_taker_customer', 'off_taker_customer.id = loan.off_taker', 'left');
 		$this->db->join('currencies', 'currencies.currency_id = loan.currency', 'left');
 		$this->db->join('loan_products', 'loan_products.loan_product_id = loan.loan_product', 'left');
 
@@ -3328,6 +3472,10 @@ function get_all_recomended_edit_loan()
 		// Filter by loan product
 		if(!empty($filters['loan_product']) && $filters['loan_product'] != 'All'){
 			$this->db->where('loan.loan_product', $filters['loan_product']);
+		}
+
+		if(!empty($filters['loan_officer']) && $filters['loan_officer'] != 'All'){
+			$this->db->where('loan.loan_added_by', $filters['loan_officer']);
 		}
 
 		$this->db->order_by('loan.loan_id', 'DESC');

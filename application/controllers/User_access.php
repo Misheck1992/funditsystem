@@ -213,12 +213,53 @@ public function expired_password(){
         return substr(str_shuffle(str_repeat($x='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', ceil($length/strlen($x)) )),1,$length);
     }
 public function reset_pass ($id){
-       $new_pass =  $this->generateRandomString();
-
+    try {
+        $this->load->helper('mithenga');
         $get_user = get_by_id('employees','id',$id);
-        $this->User_access_model->update_auth($id,array('Password'=>sha1($new_pass)));
+        if (!$get_user) {
+            $this->session->set_flashdata('error', 'User not found.');
+            redirect(site_url('user_access'));
+            return;
+        }
 
-        $this->notify_email($get_user->EmailAddress,'Email Reset', 'This is your new password:'.$new_pass, $get_user->Lastname.' '.$get_user->Firstname);
+        if (empty($get_user->PhoneNumber)) {
+            $this->session->set_flashdata('error', 'The user has no phone number configured.');
+            redirect(site_url('user_access'));
+            return;
+        }
+        // Keep this compatible with the older PHP versions used by some
+        // FundIt virtual hosts. This value is also protected by the signed,
+        // expiring reset URL.
+        $reset_code = mt_rand(100000, 999999);
+        $expires = time() + 1800;
+        $this->User_access_model->update_auth($id, array('reset_code' => $reset_code));
+        $signature = mithenga_reset_signature($id, $reset_code, $expires);
+        $this->config->load('mithenga', TRUE);
+        $mithenga_settings = $this->config->item('mithenga');
+        $public_url = !empty($mithenga_settings['fundit_public_url']) ? $mithenga_settings['fundit_public_url'] : rtrim(base_url(), '/');
+        $reset_url = $public_url . '/Auth/password_reset_link?' . http_build_query(array('employee' => $id, 'code' => $reset_code, 'expires' => $expires, 'signature' => $signature));
+        $recipient_name = trim($get_user->Firstname . ' ' . $get_user->Lastname);
+        $message = '*FundIt Password Reset*' . PHP_EOL . PHP_EOL
+            . 'Hello ' . $recipient_name . ',' . PHP_EOL . PHP_EOL
+            . 'An administrator requested a password reset for your account.' . PHP_EOL . PHP_EOL
+            . 'Use the secure link below to choose a new password:' . PHP_EOL
+            . $reset_url . PHP_EOL . PHP_EOL
+            . 'This link expires in 30 minutes and can only be used once.' . PHP_EOL . PHP_EOL
+            . 'If you did not expect this message, contact your administrator.';
+        $whatsapp = send_mithenga_whatsapp($get_user->PhoneNumber, $message);
+        if ($whatsapp['success']) {
+            $this->session->set_flashdata('success', 'A one-time password reset link was sent to the user on WhatsApp.');
+        } else {
+            $this->User_access_model->update_auth($id, array('reset_code' => NULL));
+            log_message('error', 'Mithenga reset-link delivery failed for employee ' . $id . ': ' . $whatsapp['error']);
+            $this->session->set_flashdata('error', 'The password was not changed and WhatsApp delivery failed: ' . $whatsapp['error']);
+        }
+        redirect(site_url('user_access'));
+    } catch (Exception $exception) {
+        log_message('error', 'Password reset notification crashed for employee ' . $id . ': ' . $exception->getMessage());
+        $this->session->set_flashdata('error', 'Password reset notification failed because of a server configuration error. Check the application log.');
+        redirect(site_url('user_access'));
+    }
 }
     public function update_action() 
     {

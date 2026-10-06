@@ -61,6 +61,7 @@ $settings = get_by_id('settings','settings_id','1');
 							<button type="submit" name="search" value="pdf" class="btn btn-danger">
 								<i class="fa fa-file-pdf"></i> Export PDF
 							</button>
+                            <button type="submit" name="search" value="excel" class="btn btn-success"><i class="fa fa-file-excel"></i> Export Excel</button>
 						</div>
 					</div>
 				</fieldset>

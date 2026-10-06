@@ -1,6 +1,18 @@
 <?php
 $next_payment_details = $this->Payement_schedules_model->get_next($next_payment_id,$loan_id);
 $currency = get_by_id('currencies','currency_id',$currency);
+$branch_reference = NULL;
+if ($customer_type === 'individual') {
+    $branch_customer = $this->Individual_customers_model->get_by_id($customer_id);
+    $branch_reference = $branch_customer ? $branch_customer->Branch : NULL;
+} elseif ($customer_type === 'institution') {
+    $branch_customer = $this->Corporate_customers_model->get_by_id($customer_id);
+    $branch_reference = $branch_customer ? $branch_customer->Branch : NULL;
+} elseif ($customer_type === 'group') {
+    $branch_customer = $this->Groups_model->get_by_id($customer_id);
+    $branch_reference = ($branch_customer && isset($branch_customer->branch)) ? $branch_customer->branch : NULL;
+}
+$branch_name = $this->Branches_model->get_name_by_reference($branch_reference);
 ?>
 
 <style>
@@ -596,7 +608,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
             $display_interest = $total_paid_interest;
             $display_total    = $loan_principal + $total_paid_interest;
         } elseif ($calculation_type == 'Bullet Payment' && !empty($acrued['accrued_interest'])) {
-            // Active bullet loan – show live accrued figure
+            // Active bullet loan â€“ show live accrued figure
             $display_interest = $acrued['accrued_interest'];
             $display_total    = $loan_principal + $acrued['accrued_interest'];
         } else {
@@ -700,6 +712,10 @@ $currency = get_by_id('currencies','currency_id',$currency);
                             <div class="value"><a href="<?php echo base_url($preview_url).$customer_id?>"><?php echo $loan_customer; ?></a></div>
                         </div>
                         <div class="info-item" style="margin-bottom: 0.75rem;">
+                            <div class="label">Branch Name</div>
+                            <div class="value"><?php echo html_escape($branch_name); ?></div>
+                        </div>
+                        <div class="info-item" style="margin-bottom: 0.75rem;">
                             <div class="label">Status</div>
                             <div class="value">
                                 <?php
@@ -774,7 +790,8 @@ $currency = get_by_id('currencies','currency_id',$currency);
                     // Role-based gating for loan workflow actions (permissions stored in DB, checked via has_access)
                     $can_approve_workflow = has_access('loan/unified_approval'); // approve / reject / return
                     $can_recommend_loan   = has_access('Loan/recommend');        // recommend
-                    $can_disburse_loan    = has_access('loan/approved');          // send for / disburse
+                    $can_send_for_disburse = has_access('loan/loan_application'); // upload signed copy / hand off
+                    $can_disburse_loan     = has_access('loan/approved');          // perform disbursement
                     $can_edit_loan        = has_access('loan/edit_loan');         // edit loan
                     ?>
 
@@ -905,7 +922,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
                             <?php if ($can_disburse_loan): ?><button onclick="disburse_loan_charge_pre_paid('<?php echo $loan_id; ?>','<?php echo $loan_date ?>')" class="btn-action btn-success" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-money-bill"></i> Disburse Loan
                             </button><?php endif; ?>
-                            <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                            <?php if ($can_approve_workflow || $can_disburse_loan): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                                 <i class="fa fa-times"></i> Reject
                             </button><?php endif; ?>
                             <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
@@ -937,10 +954,10 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                 <p style="font-size: 0.75rem; color: #3b82f6; margin: 0;">Upload signed documents below, then send for disbursement</p>
                             </div>
                         </div>
-                        <?php if ($can_disburse_loan): ?><a href="<?php echo base_url('loan/send_for_disburse/' . $loan_id); ?>" class="btn-action btn-success" style="width: 100%; justify-content: center;" onclick="return confirm('Are you sure you want to send this loan for disbursement? Please ensure all signed documents are uploaded.')">
+                        <?php if ($can_send_for_disburse): ?><a href="<?php echo base_url('loan/send_for_disburse/' . $loan_id); ?>" class="btn-action btn-success" style="width: 100%; justify-content: center;" onclick="return confirm('Are you sure you want to send this loan for disbursement? Please ensure all signed documents are uploaded.')">
                             <i class="fa fa-paper-plane"></i> Send for Disburse
                         </a><?php endif; ?>
-                        <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                        <?php if ($can_approve_workflow || $can_disburse_loan): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                             <i class="fa fa-times"></i> Reject
                         </button><?php endif; ?>
                         <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
@@ -985,7 +1002,7 @@ $currency = get_by_id('currencies','currency_id',$currency);
                                 </div>
                             </div>
                         <?php endif; ?>
-                        <?php if ($can_approve_workflow): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
+                        <?php if ($can_approve_workflow || $can_disburse_loan): ?><button onclick="openApprovalModal('REJECT', '<?php echo $loan_id; ?>')" class="btn-action btn-danger" style="width: 100%; justify-content: center;">
                             <i class="fa fa-times"></i> Reject
                         </button><?php endif; ?>
                         <?php if ($can_approve_workflow): ?><button onclick="openSendBackModal('<?php echo $loan_id; ?>')" class="btn-action btn-secondary" style="width: 100%; justify-content: center; background: #6b7280;">
@@ -3593,7 +3610,7 @@ function calculateBulletPayoff(paymentDate) {
                     amountDisplay.style.color = '#dc2626';
                     amountDisplay.style.fontWeight = '700';
 
-                    var breakdownHtml = '<div style="margin-bottom: 0.5rem;"><strong>⚠️ Loan is ' + response.days_past_maturity + ' days past maturity</strong></div>';
+                    var breakdownHtml = '<div style="margin-bottom: 0.5rem;"><strong>âš ï¸ Loan is ' + response.days_past_maturity + ' days past maturity</strong></div>';
                     breakdownHtml += '<table style="width: 100%; font-size: 0.85rem;">';
                     breakdownHtml += '<tr><td>Original Principal:</td><td style="text-align: right;">' + currencyCode + ' ' + numberFormat(response.principal) + '</td></tr>';
                     breakdownHtml += '<tr><td>Amount at Maturity:</td><td style="text-align: right;">' + currencyCode + ' ' + numberFormat(response.maturity_total) + '</td></tr>';

@@ -69,7 +69,7 @@
         <div class="fd-card-header no-print">
             <span class="fd-card-title">Deposits Report</span>
             <div style="display: flex; gap: 8px;">
-                <button onclick="exportTableToExcel('reportTable', 'fd_report')" class="btn btn-default btn-sm">
+                <button type="button" onclick="funditRequestReportExport('excel')" class="btn btn-default btn-sm">
                     <i class="fas fa-file-excel mr-1"></i> Excel
                 </button>
                 <button onclick="window.print()" class="btn btn-default btn-sm">
@@ -150,28 +150,3 @@
         </div>
     </div>
 </div>
-
-<script>
-function exportTableToExcel(tableID, filename) {
-    var downloadLink;
-    var dataType = 'application/vnd.ms-excel';
-    var tableSelect = document.getElementById(tableID);
-    var tableHTML = tableSelect.outerHTML.replace(/ /g, '%20');
-
-    filename = filename ? filename + '.xls' : 'excel_data.xls';
-
-    downloadLink = document.createElement("a");
-    document.body.appendChild(downloadLink);
-
-    if (navigator.msSaveOrOpenBlob) {
-        var blob = new Blob(['\ufeff', tableHTML], {
-            type: dataType
-        });
-        navigator.msSaveOrOpenBlob(blob, filename);
-    } else {
-        downloadLink.href = 'data:' + dataType + ', ' + tableHTML;
-        downloadLink.download = filename;
-        downloadLink.click();
-    }
-}
-</script>

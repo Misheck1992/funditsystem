@@ -54,10 +54,12 @@ class Individual_customers_model extends CI_Model
 
     function get_status($id)
     {
-        
+        $this->db->select("individual_customers.*, CASE WHEN individual_customers.added_by = 0 THEN 'Customer Portal' ELSE employees.Firstname END AS efname, CASE WHEN individual_customers.added_by = 0 THEN '' ELSE employees.Lastname END AS elname", FALSE);
+        $this->db->from($this->table);
+        $this->db->join('employees', 'employees.id=individual_customers.added_by', 'left');
         $this->db->where('approval_status',$id);
-        $this->db->order_by($this->id, $this->order);
-        return $this->db->get($this->table)->result();
+        $this->db->order_by('individual_customers.' . $this->id, $this->order);
+        return $this->db->get()->result();
     }
 
     // get data by id
@@ -75,6 +77,7 @@ class Individual_customers_model extends CI_Model
 
     // get total rows
     function total_rows($q = NULL) {
+        $q = (string) ($q ?? '');
 
         $this->db->like('id', $q);
 
@@ -123,6 +126,7 @@ class Individual_customers_model extends CI_Model
 
     // get data with limit and search
     function get_limit_data($limit, $start = 0, $q = NULL) {
+        $q = (string) ($q ?? '');
         $this->db->order_by($this->id, $this->order);
         $this->db->select("*");
         $this->db->like('id', $q);
@@ -159,10 +163,10 @@ class Individual_customers_model extends CI_Model
     {
         $this->db->order_by('individual_customers.id', $this->order);
 
-        $this->db->select('individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, employees.Firstname as efname, employees.Lastname as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital as cmarital')->from($this->table);
+        $this->db->select("individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, CASE WHEN individual_customers.added_by = 0 THEN 'Customer Portal' ELSE employees.Firstname END as efname, CASE WHEN individual_customers.added_by = 0 THEN '' ELSE employees.Lastname END as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital as cmarital")->from($this->table);
 
 
-        $this->db->join('employees','employees.id=individual_customers.added_by');
+        $this->db->join('employees','employees.id=individual_customers.added_by', 'left');
         $this->db->join('geo_countries','geo_countries.code=individual_customers.Country','left');
         if($gender !=""){
             $this->db->where('individual_customers.Gender',$gender);
@@ -218,10 +222,10 @@ class Individual_customers_model extends CI_Model
 
         $this->db->order_by('individual_customers.id', $this->order);
 
-        $this->db->select('individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, employees.Firstname as efname, employees.Lastname as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital as cmarital')->from($this->table);
+        $this->db->select("individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, CASE WHEN individual_customers.added_by = 0 THEN 'Customer Portal' ELSE employees.Firstname END as efname, CASE WHEN individual_customers.added_by = 0 THEN '' ELSE employees.Lastname END as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail, individual_customers.PhoneNumber as cphonee, individual_customers.marital as cmarital")->from($this->table);
 
 
-        $this->db->join('employees','employees.id=individual_customers.added_by');
+        $this->db->join('employees','employees.id=individual_customers.added_by', 'left');
         $this->db->join('geo_countries','geo_countries.code=individual_customers.Country','left');
         if($gender !=""){
             $this->db->where('individual_customers.Gender',$gender);
@@ -275,10 +279,10 @@ class Individual_customers_model extends CI_Model
     {
 
 
-        $this->db->select('individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, employees.Firstname as efname, employees.Lastname as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail')->from($this->table);
+        $this->db->select("individual_customers.id as id, individual_customers.*, geo_countries.name as geoname, CASE WHEN individual_customers.added_by = 0 THEN 'Customer Portal' ELSE employees.Firstname END as efname, CASE WHEN individual_customers.added_by = 0 THEN '' ELSE employees.Lastname END as elname, individual_customers.Firstname as cfname, individual_customers.Lastname as clname, individual_customers.Middlename as cmname, individual_customers.Gender as cgender, individual_customers.DateOfBirth as cdob, individual_customers.EmailAddress as cemail")->from($this->table);
 
 
-        $this->db->join('employees','employees.id=individual_customers.added_by');
+        $this->db->join('employees','employees.id=individual_customers.added_by', 'left');
         $this->db->join('geo_countries','geo_countries.code=individual_customers.Country','left');
 
 

@@ -272,6 +272,7 @@
                                     <th>Gender</th>
                                     <th>Date of Birth</th>
                                     <th>Status</th>
+                                    <th>Created By</th>
                                     <th>Registered</th>
                                     <th style="text-align: center;">Actions</th>
                                 </tr>
@@ -291,6 +292,14 @@
                                     <td>
                                         <span class="status-badge status-pending"><?php echo $individual_customers->approval_status; ?></span>
                                     </td>
+                                    <td><?php
+                                        if ((int) ($individual_customers->added_by ?? 0) === 0) {
+                                            echo 'Customer Portal';
+                                        } else {
+                                            $creator_name = trim(($individual_customers->efname ?? '') . ' ' . ($individual_customers->elname ?? ''));
+                                            echo $creator_name !== '' ? $creator_name : 'System';
+                                        }
+                                    ?></td>
                                     <td><?php echo date('d M Y', strtotime($individual_customers->CreatedOn)); ?></td>
                                     <td style="text-align: center;">
                                         <a href="<?php echo base_url('individual_customers/view/'.$individual_customers->id)?>" class="btn-action" style="background: #3b82f6; color: #fff;">

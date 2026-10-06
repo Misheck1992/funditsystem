@@ -275,6 +275,11 @@ $zambian_provinces = [
                                 <input type="file" name="tax_id_doc" style="display: block" placeholder="Attachment" class="form-control">
                             </div>
 
+                            <div class='form-group col-4'><br><label>Copies of NRCs for the Directors <span class='text-muted'>(Optional)</span></label><input type='file' name='director_nrc_copies' accept='.pdf,.doc,.docx,.jpg,.jpeg,.png' class='form-control'></div>
+                            <div class='form-group col-4'><br><label>Articles of Association <span class='text-muted'>(Optional)</span></label><input type='file' name='articles_of_association' accept='.pdf,.doc,.docx,.jpg,.jpeg,.png' class='form-control'></div>
+                            <div class='form-group col-4'><br><label>Business Profile <span class='text-muted'>(Optional)</span></label><input type='file' name='business_profile' accept='.pdf,.doc,.docx,.jpg,.jpeg,.png' class='form-control'></div>
+                            <div class='form-group col-4'><br><label>PACRA Printout <span class='text-muted'>(Optional)</span></label><input type='file' name='pacra_printout' accept='.pdf,.doc,.docx,.jpg,.jpeg,.png' class='form-control'></div>
+
                         </div>
                     </div>
                     <div class="col-lg-6">

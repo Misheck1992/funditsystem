@@ -958,7 +958,7 @@ function get_ta($id){
 
         // Prepare email content
         $subject = 'New Customer Pending Approval - ' . $firstname . ' ' . $lastname;
-        $approval_url = base_url('individual_customers/approve');
+        $approval_url = base_url('individual_customers/view/' . (int) $customer_id);
 
         $message = '
         <h3>New Customer Registration</h3>
@@ -1586,4 +1586,3 @@ function get_ta($id){
         exit();
     }
 }
-

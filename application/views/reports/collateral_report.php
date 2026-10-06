@@ -269,6 +269,7 @@ $currency_code = isset($currency) && $currency && $currency->currency_code ? $cu
                             <div class="filter-buttons">
                                 <button type="submit" name="search" value="filter" class="btn btn-primary btn-sm"><i class="fa fa-filter"></i> Filter</button>
                                 <button type="submit" name="search" value="pdf" class="btn btn-danger btn-sm"><i class="fa fa-file-pdf"></i> PDF</button>
+                                <button type="submit" name="search" value="excel" class="btn btn-success btn-sm"><i class="fa fa-file-excel"></i> Excel</button>
                                 <a href="<?php echo base_url('reports/collateral_report'); ?>" class="btn btn-secondary btn-sm"><i class="fa fa-refresh"></i></a>
                             </div>
                         </div>

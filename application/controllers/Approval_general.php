@@ -11,6 +11,15 @@ class Approval_general extends CI_Controller
         $this->load->model('Menu_model');
 
     }
+	private function valid_current_loan_edit_request($id, $required_state)
+	{
+		$row = get_by_id('approval_edits', 'approval_edits_id', $id);
+		if (!$row || strcasecmp((string)$row->type, 'Loan edit') !== 0 || strcasecmp((string)$row->state, $required_state) !== 0) {
+			return false;
+		}
+		$payload = json_decode($row->new_info);
+		return $payload && ($payload->edit_workflow ?? '') === 'rebuild_replay_v2';
+	}
     public  function auth_data(){
         $id = $this->uri->segment(3);
         $recommend = $this->uri->segment(4);
@@ -42,15 +51,21 @@ class Approval_general extends CI_Controller
 
     public function edit_recommend()
     {
+		$approval_id = $this->input->post('id');
+		if (!$this->valid_current_loan_edit_request($approval_id, 'Initiated')) {
+			$this->toaster->error('Only a valid initiated loan edit can be recommended.');
+			redirect('loan/edit_recommend');
+			return;
+		}
         if($this->input->post('Approval')=="Reject"){
-            $this->db->where('approval_edits_id', $this->input->post('id'))
+			$this->db->where('approval_edits_id', $approval_id)
                 ->update('approval_edits',
                     array('state' => 'Rejected', 'recommed_reject_by' => $this->session->userdata('user_id'), 'recommed_reject_date' => date('Y-m-d'), 'recommed_reject_comment' => $this->input->post('comment')
                     )
                 );
             $this->toaster->success('Recommendation was rejected successfully');
         }else {
-            $this->db->where('approval_edits_id', $this->input->post('id'))
+			$this->db->where('approval_edits_id', $approval_id)
                 ->update('approval_edits',
                     array('state' => 'recommended', 'recommended_by' => $this->session->userdata('user_id'), 'recommended_date' => date('Y-m-d'), 'recommend_comment' => $this->input->post('comment')
                     )
@@ -61,8 +76,14 @@ class Approval_general extends CI_Controller
     }
     public function edit_approve()
     {
+		$approval_id = $this->input->post('id');
+		if (!$this->valid_current_loan_edit_request($approval_id, 'recommended')) {
+			$this->toaster->error('Only a recommended loan edit can be approved.');
+			redirect('loan/edit_approve');
+			return;
+		}
         if($this->input->post('Approval')=="Reject"){
-            $this->db->where('approval_edits_id', $this->input->post('id'))
+			$this->db->where('approval_edits_id', $approval_id)
                 ->update('approval_edits',
                     array('state' => 'Rejected', 'approval_reject_by' => $this->session->userdata('user_id'), 'approval_reject_date' => date('Y-m-d'), 'approval_reject_comment' => $this->input->post('comment')
                     )
@@ -70,12 +91,12 @@ class Approval_general extends CI_Controller
             $this->toaster->success('Approval was rejected successfully');
             redirect('loan/edit_approve');
         }else {
-            $this->db->where('approval_edits_id', $this->input->post('id'))
+			$this->db->where('approval_edits_id', $approval_id)
                 ->update('approval_edits',
                     array('state' => 'Approved', 'approved_by' => $this->session->userdata('user_id'), 'approved_date' => date('Y-m-d'), 'approval_comment' => $this->input->post('comment')
                     )
                 );
-            $this->session->set_userdata('loan_data',$this->input->post('id'));
+			$this->session->set_userdata('loan_data',$approval_id);
             redirect('loan/create_act_edit');
         }
 

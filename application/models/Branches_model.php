@@ -28,6 +28,35 @@ class Branches_model extends CI_Model
         $this->db->where($this->id, $id);
         return $this->db->get($this->table)->row();
     }
+
+    // Resolve legacy branch references stored as row ID, internal Code,
+    // BranchCode, or BranchName.
+    function get_by_reference($reference)
+    {
+        if ($reference === NULL || trim((string) $reference) === '') {
+            return NULL;
+        }
+
+        $reference = trim((string) $reference);
+        $this->db->group_start();
+        if (ctype_digit($reference)) {
+            $this->db->where('id', (int) $reference);
+            $this->db->or_where('Code', $reference);
+            $this->db->or_where('BranchCode', (int) $reference);
+        } else {
+            $this->db->where('LOWER(BranchName)', strtolower($reference));
+            $this->db->or_where('LOWER(City)', strtolower($reference));
+        }
+        $this->db->group_end();
+
+        return $this->db->get($this->table)->row();
+    }
+
+    function get_name_by_reference($reference)
+    {
+        $branch = $this->get_by_reference($reference);
+        return $branch ? $branch->BranchName : ($reference ?: 'Not assigned');
+    }
     
     // get total rows
     function total_rows($q = NULL) {
@@ -59,14 +88,14 @@ class Branches_model extends CI_Model
     // insert data
     function insert($data)
     {
-        $this->db->insert($this->table, $data);
+        return $this->db->insert($this->table, $data);
     }
 
     // update data
     function update($id, $data)
     {
         $this->db->where($this->id, $id);
-        $this->db->update($this->table, $data);
+        return $this->db->update($this->table, $data);
     }
 
     // delete data

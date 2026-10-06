@@ -27,10 +27,11 @@
                     </div>
                     <div class="d-flex align-items-center" style="gap: 8px;">
                         <label class="mb-0" style="white-space: nowrap;">To</label>
-                        <input type="date" name="to_date" class="form-control" value="<?php echo $to_date; ?>" style="width: auto;">
+                        <input type="date" name="to_date" class="form-control" max="<?php echo date('Y-m-d'); ?>" value="<?php echo $to_date; ?>" style="width: auto;">
                     </div>
                     <button type="submit" class="btn btn-primary">Filter</button>
                 </form>
+                <button type="button" onclick="funditRequestReportExport('excel')" class="btn btn-success"><i class="fas fa-file-excel mr-1"></i> Excel</button>
                 <button onclick="window.print()" class="btn btn-default">
                     <i class="fas fa-print mr-1"></i> Print Statement
                 </button>
@@ -53,7 +54,7 @@
                 <div class="col-md-6 text-right">
                     <h4 style="font-weight: 500; color: #202124; letter-spacing: 1px; margin-bottom: 8px;">FIXED DEPOSIT STATEMENT</h4>
                     <p style="color: #5f6368; font-size: 13px; margin: 0;">
-                        <strong>Statement Date:</strong> <?php echo date('d M Y'); ?>
+                        <strong>Statement Date:</strong> <?php echo date('d M Y', strtotime($to_date)); ?>
                         <?php if ($from_date || $to_date): ?><br>
                             <strong>Period:</strong>
                             <?php echo $from_date ? date('d M Y', strtotime($from_date)) : 'Start'; ?> -
@@ -91,6 +92,21 @@
             </div>
 
             <hr class="fd-divider">
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="fd-card" style="margin-bottom: 0;"><div class="fd-card-body" style="padding: 16px;">
+                        <small style="color: #5f6368;">Opening Balance</small>
+                        <div style="font-size: 20px; font-weight: 600;">K <?php echo number_format($opening_balance, 2); ?></div>
+                    </div></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="fd-card" style="margin-bottom: 0;"><div class="fd-card-body" style="padding: 16px;">
+                        <small style="color: #5f6368;">Closing Balance as at <?php echo date('d M Y', strtotime($to_date)); ?></small>
+                        <div style="font-size: 20px; font-weight: 600;">K <?php echo number_format($closing_balance, 2); ?></div>
+                    </div></div>
+                </div>
+            </div>
 
             <!-- Transaction History -->
             <h6 style="font-weight: 500; color: #5f6368; text-transform: uppercase; font-size: 11px; letter-spacing: 0.8px; margin-bottom: 12px;">Transaction History</h6>
@@ -145,7 +161,7 @@
             $total_expected_interest = ($annual_interest / 12) * $deposit->duration_months;
             $wht_on_expected = $total_expected_interest * ($wht_rate / 100);
             $net_expected_interest = $total_expected_interest - $wht_on_expected;
-            $accrued_interest = $deposit->accrued_interest;
+            $accrued_interest = $statement_accrued_interest;
             $wht_on_accrued = $accrued_interest * ($wht_rate / 100);
             $net_accrued_interest = $accrued_interest - $wht_on_accrued;
             $paid_interest = $deposit->paid_interest;
@@ -165,12 +181,12 @@
                 <div class="col-md-6">
                     <h6 style="font-weight: 500; color: #5f6368; text-transform: uppercase; font-size: 11px; letter-spacing: 0.8px; margin-bottom: 12px;">Current Position</h6>
                     <table class="fd-summary-table">
-                        <tr><td>Current Principal</td><td><strong><?php echo $currency_symbol; ?> <?php echo number_format($deposit->current_principal, 2); ?></strong></td></tr>
+                        <tr><td>Current Principal</td><td><strong><?php echo $currency_symbol; ?> <?php echo number_format($closing_balance, 2); ?></strong></td></tr>
                         <tr><td>Accrued Interest (Gross)</td><td><?php echo $currency_symbol; ?> <?php echo number_format($accrued_interest, 2); ?></td></tr>
                         <tr class="deduction"><td>Less: WHT @ <?php echo $wht_rate; ?>%</td><td>(<?php echo $currency_symbol; ?> <?php echo number_format($wht_on_accrued, 2); ?>)</td></tr>
                         <tr><td>Net Accrued Interest</td><td><?php echo $currency_symbol; ?> <?php echo number_format($net_accrued_interest, 2); ?></td></tr>
                         <tr><td>Total Interest Paid to Date</td><td><?php echo $currency_symbol; ?> <?php echo number_format($paid_interest, 2); ?></td></tr>
-                        <tr class="total"><td>Current Value (Net)</td><td><?php echo $currency_symbol; ?> <?php echo number_format($deposit->current_principal + $net_accrued_interest, 2); ?></td></tr>
+                        <tr class="total"><td>Current Value (Net)</td><td><?php echo $currency_symbol; ?> <?php echo number_format($closing_balance + $net_accrued_interest, 2); ?></td></tr>
                     </table>
                     <p style="color: #5f6368; font-size: 12px; margin-top: 12px;">
                         <i class="fas fa-info-circle"></i> WHT (Withholding Tax) at <?php echo $wht_rate; ?>% is deducted from interest earnings as per tax regulations.

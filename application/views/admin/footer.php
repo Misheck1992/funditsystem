@@ -3766,5 +3766,6 @@ if (isset($GLOBALS['page_scripts'])) {
     echo $GLOBALS['page_scripts'];
 }
 ?>
+<script src="<?php echo base_url('admin_assets/js/report-exports.js'); ?>"></script>
 </body>
 </html>

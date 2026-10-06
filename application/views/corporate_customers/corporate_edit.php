@@ -213,12 +213,12 @@ $existing_shareholders = get_all_shareholders($id);
                                     </select>
                                     <?php
                                     $corp_phone_display = '';
-                                    if (!empty($phone_number)) {
+                                    if (!empty($phone_number) && !is_array($phone_number)) {
                                         $corp_phone_display = preg_replace('/^\+\d{1,3}/', '', $phone_number);
                                     }
                                     ?>
                                     <input type="text" class="form-control" name="phone_number_input" id="phone_number_input"
-                                           placeholder="9XXXXXXXX" value="<?php echo $corp_phone_display; ?>"
+                                           placeholder="9XXXXXXXX" value="<?php echo html_escape($corp_phone_display); ?>"
                                            pattern="[789][0-9]{3,}" minlength="4" required
                                            title="Enter at least 4 digits starting with 7, 8, or 9" />
                                 </div>
@@ -288,6 +288,21 @@ $existing_shareholders = get_all_shareholders($id);
                                     <small class="text-muted">Current file: <?php echo basename($tax_id_doc); ?></small>
                                 <?php endif; ?>
                             </div>
+
+                            <?php
+                            $additional_documents = array(
+                                'director_nrc_copies' => 'Copies of NRCs for the Directors',
+                                'articles_of_association' => 'Articles of Association',
+                                'business_profile' => 'Business Profile',
+                                'pacra_printout' => 'PACRA Printout',
+                            );
+                            foreach ($additional_documents as $field => $label): ?>
+                                <div class='form-group col-4'>
+                                    <br><label><?php echo $label; ?> <span class='text-muted'>(Optional)</span></label>
+                                    <input type='file' name='<?php echo $field; ?>' accept='.pdf,.doc,.docx,.jpg,.jpeg,.png' class='form-control'>
+                                    <?php if (!empty($$field)): ?><small class='text-muted'>Current file: <?php echo basename($$field); ?></small><?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
 
                         </div>
                     </div>

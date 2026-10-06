@@ -62,7 +62,7 @@
                         </tr>
                         <tr>
                             <th style="text-align: right;">Branch</th>
-                            <td><?php echo $Branch; ?></td>
+                            <td><?php echo html_escape($this->Branches_model->get_name_by_reference($Branch)); ?></td>
                         </tr>
                         <tr>
                             <th style="text-align: right;">Financial Year End</th>
@@ -164,25 +164,38 @@
                         <tr>
                             <th style="text-align: right; width: 25%;">Company Certificate</th>
 
-                            <td><a href="<?php echo base_url('uploads/').$company_certificate ?>">Download attachment</a></td>
+                            <td><?php echo !empty($company_certificate) ? '<a href="' . site_url('corporate_customers/download_document/' . $id . '/company_certificate') . '">Download attachment</a>' : 'Not provided'; ?></td>
 
 
                         </tr>
                         <tr>
                             <th style="text-align: right;">Proof of Address</th>
 
-                            <td><a href="<?php echo base_url('uploads/'). $proof_physical_address ?>">Download attachment</a></td>
+                            <td><?php echo !empty($proof_physical_address) ? '<a href="' . site_url('corporate_customers/download_document/' . $id . '/proof_physical_address') . '">Download attachment</a>' : 'Not provided'; ?></td>
                         </tr>
                         <tr>
                             <th style="text-align: right;">Financial Statements</th>
 
-                            <td><a href="<?php echo base_url('uploads/'). $financial_statement ?>">Download attachment</a></td>
+                            <td><?php echo !empty($financial_statement) ? '<a href="' . site_url('corporate_customers/download_document/' . $id . '/financial_statement') . '">Download attachment</a>' : 'Not provided'; ?></td>
                         </tr>
                         <tr>
                             <th style="text-align: right;">Tax Clearance</th>
                            
-                            <td><a href="<?php echo base_url('uploads/'). $tax_id_doc ?>">Download attachment</a></td>
+                            <td><?php echo !empty($tax_id_doc) ? '<a href="' . site_url('corporate_customers/download_document/' . $id . '/tax_id_doc') . '">Download attachment</a>' : 'Not provided'; ?></td>
                         </tr>
+                        <?php
+                        $additional_documents = array(
+                            'director_nrc_copies' => 'Copies of NRCs for the Directors',
+                            'articles_of_association' => 'Articles of Association',
+                            'business_profile' => 'Business Profile',
+                            'pacra_printout' => 'PACRA Printout',
+                        );
+                        foreach ($additional_documents as $field => $label): ?>
+                            <tr>
+                                <th style="text-align: right;"><?php echo $label; ?></th>
+                                <td><?php echo !empty($$field) ? '<a href="' . site_url('corporate_customers/download_document/' . $id . '/' . $field) . '">Download attachment</a>' : 'Not provided'; ?></td>
+                            </tr>
+                        <?php endforeach; ?>
                     </table>
                 </div>
             </div>
@@ -232,7 +245,13 @@
                                 <td><?php echo isset($shareholder->idtype) ? $shareholder->idtype : 'N/A' ?></td>
                                 <td><?php echo isset($shareholder->idnumber) ? $shareholder->idnumber : 'N/A' ?></td>
                                 <td><?php echo $shareholder->percentage_value ?></td>
-                                <td><a href="<?php echo base_url('uploads/').'147detailed_approach.pdf' ?>">Download KYC</a></td>
+                                <td>
+                                    <?php if (!empty($shareholder->idfile)): ?>
+                                        <a href="<?php echo site_url('corporate_customers/download_shareholder_kyc/' . $id . '/' . $shareholder->shareholder_id); ?>">Download KYC</a>
+                                    <?php else: ?>
+                                        Not provided
+                                    <?php endif; ?>
+                                </td>
 
                             </tr>
                             <?php

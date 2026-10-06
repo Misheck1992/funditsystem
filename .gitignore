@@ -1,0 +1,13 @@
+# Local credentials and configuration backups
+application/config/*.local.php
+application/config/*.tar.gz
+application/*.tar.gz
+.env
+.env.*
+!.env.example
+
+# Editor settings and temporary Office files
+.idea/
+.claude/settings.local.json
+~$*
+**/~$*

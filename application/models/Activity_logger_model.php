@@ -19,22 +19,26 @@ class Activity_logger_model extends CI_Model
     function get_all()
     {
         $this->db->order_by('activity_logger.server_time', $this->order);
-        $this->db->select("*")->from($this->table);
-		$this->db->join('employees','employees.id=activity_logger.user_id');
+        $this->db->select("activity_logger.*, CASE WHEN activity_logger.activity LIKE 'Customer Portal login:%' THEN CONCAT('Customer Portal - ', TRIM(SUBSTRING_INDEX(SUBSTRING(activity_logger.activity, CHAR_LENGTH('Customer Portal login: ') + 1), ' [IP:', 1))) WHEN activity_logger.activity LIKE 'Customer Portal:%' THEN CONCAT('Customer Portal - ', TRIM(SUBSTRING_INDEX(SUBSTRING(activity_logger.activity, CHAR_LENGTH('Customer Portal: ') + 1), ' viewed ', 1))) WHEN activity_logger.user_id = 0 OR activity_logger.activity LIKE 'API:%' THEN 'Customer Portal / Public API' ELSE COALESCE(NULLIF(TRIM(CONCAT(employees.Firstname, ' ', employees.Lastname)), ''), CONCAT('System/User #', activity_logger.user_id)) END AS actor_name", FALSE)->from($this->table);
+		$this->db->join('employees', 'employees.id=activity_logger.user_id', 'left');
         return $this->db->get()->result();
     }
 function get_all_filter($status,$from,$to)
 	{
 $this->db->order_by('activity_logger.server_time', $this->order);
-		$this->db->select("*")
+		$this->db->select("activity_logger.*, CASE WHEN activity_logger.activity LIKE 'Customer Portal login:%' THEN CONCAT('Customer Portal - ', TRIM(SUBSTRING_INDEX(SUBSTRING(activity_logger.activity, CHAR_LENGTH('Customer Portal login: ') + 1), ' [IP:', 1))) WHEN activity_logger.activity LIKE 'Customer Portal:%' THEN CONCAT('Customer Portal - ', TRIM(SUBSTRING_INDEX(SUBSTRING(activity_logger.activity, CHAR_LENGTH('Customer Portal: ') + 1), ' viewed ', 1))) WHEN activity_logger.user_id = 0 OR activity_logger.activity LIKE 'API:%' THEN 'Customer Portal / Public API' ELSE COALESCE(NULLIF(TRIM(CONCAT(employees.Firstname, ' ', employees.Lastname)), ''), CONCAT('System/User #', activity_logger.user_id)) END AS actor_name", FALSE)
 		
 			->from($this->table)
-			->join('employees','employees.id=activity_logger.user_id');
-	
-		if($from !="" && $to !=""){
-			$this->db->where('activity_logger.activity_cate="'.$status.'" AND activity_logger.server_time BETWEEN "'. date('Y-m-d', strtotime($from)). '" and "'. date('Y-m-d', strtotime($to)).'"');
-
-		}
+			->join('employees', 'employees.id=activity_logger.user_id', 'left');
+        if ($status !== '' && $status !== null && $status !== 'All') {
+            $this->db->where('activity_logger.activity_cate', $status);
+        }
+        if ($from !== '' && $from !== null) {
+            $this->db->where('activity_logger.server_time >=', date('Y-m-d 00:00:00', strtotime($from)));
+        }
+        if ($to !== '' && $to !== null) {
+            $this->db->where('activity_logger.server_time <=', date('Y-m-d 23:59:59', strtotime($to)));
+        }
 	
 		return $this->db->get()->result();
 	}

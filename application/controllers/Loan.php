@@ -39,6 +39,8 @@ class Loan extends CI_Controller
 		$this->load->model('File_folder_mapping_model');
 		$this->load->model('Loan_notes_model');
 		$this->load->model('Collateral_model');
+		$this->load->model('Branches_model');
+		$this->load->model('Bank_model');
 
     }
     public function file_add(){
@@ -746,6 +748,31 @@ $request_id = $this->db->insert_id();
         // Validate required fields
         if(empty($this->input->post('customer'))){
             $this->toaster->error('Error: Please select a customer');
+            redirect($redirect_url);
+            return;
+        }
+
+        // Never rely on the dropdown alone: reject unapproved customers even if
+        // the request was submitted manually.
+        $customer_id = $this->input->post('customer');
+        if ($customer_type === 'individual') {
+            $approved_customer = $this->db
+                ->where('id', $customer_id)
+                ->where('approval_status', 'Approved')
+                ->get('individual_customers')
+                ->row();
+        } elseif ($customer_type === 'institution' || $customer_type === 'corporate') {
+            $approved_customer = $this->db
+                ->where('id', $customer_id)
+                ->where('approval_status', 'Approved')
+                ->get('corporate_customers')
+                ->row();
+        } else {
+            $approved_customer = null;
+        }
+
+        if (!$approved_customer) {
+            $this->toaster->error('Error: The selected customer must be approved before a loan can be created');
             redirect($redirect_url);
             return;
         }
@@ -2269,19 +2296,19 @@ exit();
         $menu_toggle['toggles'] = 23;
 
 
-        $user = $this->input->get('user');
-        $product = $this->input->get('product');
+        $user = $this->input->get('user') ?: 'All';
+        $product = $this->input->get('product') ?: 'All';
         $status = 'All';
         $from = $this->input->get('from');
         $to = $this->input->get('to');
         $search = $this->input->get('search');
         if($search=="filter"){
-            $data['loan_data'] = $this->Loan_model->get_filter($user,$product,$status,$from,$to);
+            $data['loan_data'] = $this->Loan_model->get_disbursed_filter($user,$product,$from,$to);
             $this->load->view('admin/header', $menu_toggle);
             $this->load->view('loan/disbursed_track', $data);
             $this->load->view('admin/footer');
         }elseif($search=='pdf'){
-            $data['loan_data'] = $this->Loan_model->get_filter($user,$product,$status,$from,$to);
+            $data['loan_data'] = $this->Loan_model->get_disbursed_filter($user,$product,$from,$to);
             $data['officer'] = ($user=="All") ? "All Officers" : get_by_id('employees','id',$user)->Firstname;
             $data['product'] =($product=="All") ? "All Products" : get_by_id('loan_products','loan_product_id',$product)->product_name;
             $data['from'] = $from;
@@ -2289,6 +2316,10 @@ exit();
             $this->load->library('Pdf');
             $html = $this->load->view('loan/loan_report_pdf', $data,true);
             $this->pdf->createPDF($html, "loan report as on".date('Y-m-d'), true,'A4','landscape');
+            return;
+        }elseif($search=='excel'){
+            $data['loan_data'] = $this->Loan_model->get_disbursed_filter($user,$product,$from,$to);
+            $this->export_loan_database_excel('Disbursed_Loans_Report', 'loan/disbursed_track', $data, 'data-table');
         }else{
             $this->load->view('admin/header', $menu_toggle);
             $this->load->view('loan/disbursed_track', $data);
@@ -2328,6 +2359,16 @@ exit();
         $this->load->view('loan/track', $data);
         $this->load->view('admin/footer');
     }
+
+	// Dedicated first stage of the three-step loan-edit workflow.
+	function restructure(){
+		$data['loan_data'] = $this->Loan_model->get_all('');
+		$data['restructure_mode'] = true;
+		$menu_toggle['toggles'] = 23;
+		$this->load->view('admin/header', $menu_toggle);
+		$this->load->view('loan/track', $data);
+		$this->load->view('admin/footer');
+	}
 
 
     function deleteloan_view(){
@@ -2376,6 +2417,10 @@ exit();
             $this->load->view('loan/searchresult_rbm', $data);
             $this->load->view('admin/footer');
 
+        } elseif ($search === 'excel') {
+            $this->exportExcel();
+        } else {
+            redirect('loan/exportExceView');
         }
     }
     function individual_track(){
@@ -3977,338 +4022,319 @@ exit();
 	function loan_application(){
 		$menu_toggle['toggles'] = 23;
 		$data['customers'] =$this->Individual_customers_model->get_all_active();
+		$data['corporate_customers'] = $this->db
+			->where('category', 'client')
+			->where('approval_status', 'Approved')
+			->order_by('id', 'DESC')
+			->get('corporate_customers')
+			->result();
+		$data['off_taker_customers'] = $this->db
+			->where('category', 'off_taker')
+			->where('approval_status', 'Approved')
+			->order_by('id', 'DESC')
+			->get('corporate_customers')
+			->result();
 		$this->load->view('admin/header', $menu_toggle);
 		$this->load->view('loan/loan_application', $data);
 		$this->load->view('admin/footer');
 	}
-    function create_act_edit(){
+	function create_act_edit(){
         $row = get_by_id('approval_edits','approval_edits_id',$this->session->userdata('loan_data'));
+		$approval_payload = $row ? json_decode($row->new_info) : null;
+		if (!$row
+			|| strcasecmp((string)$row->type, 'Loan edit') !== 0
+			|| strcasecmp((string)$row->state, 'Approved') !== 0
+			|| !$approval_payload
+			|| ($approval_payload->edit_workflow ?? '') !== 'rebuild_replay_v2') {
+			$this->toaster->error('Loan edit cannot run before final approval.');
+			redirect('loan/edit_approve');
+			return;
+		}
         $data_new = json_decode($row->new_info);
-        $this->Loan_model->add_loan_edit($row->id,$data_new->loan_number,$data_new->loan_principal, $data_new->loan_period, $data_new->loan_interest, $data_new->sy_loan_product, $data_new->loan_date,$data_new->sy_loan_customer,$data_new->customer_type,$data_new->loan_worthness_file,$data_new->narration,$data_new->sy_added_by);
+		$existing_loan = $this->Loan_model->get_by_id($row->id);
+		if (!$existing_loan) {
+			$this->toaster->error('Loan edit failed: original loan was not found.');
+			redirect('loan/track');
+			return;
+		}
+		$existing_repayments = $this->_capture_repayments_for_loan_edit($existing_loan->loan_number);
+
+		$this->db->trans_start();
+		$this->Loan_model->add_loan_edit($row->id,$data_new->loan_number,$data_new->loan_principal, $data_new->loan_period, $data_new->loan_interest, $data_new->sy_loan_product, $data_new->loan_date,$data_new->sy_loan_customer,$data_new->customer_type,$data_new->loan_worthness_file,$data_new->narration,$data_new->sy_added_by);
+		$this->Loan_model->update($row->id, array(
+			'currency'       => $data_new->currency ?? $existing_loan->currency,
+			'processing_fee' => $data_new->processing_fee ?? $existing_loan->processing_fee,
+			'off_taker'      => $data_new->off_taker ?? $existing_loan->off_taker,
+		));
+		$this->db->where('loan_id', $row->id)->delete('transactions');
+		$rebuilt_loan = $this->Loan_model->get_by_id($row->id);
+		if (!empty($existing_repayments)) {
+			if ($rebuilt_loan && $rebuilt_loan->calculation_type === 'Bullet Payment') {
+				$this->db->trans_rollback();
+				$this->toaster->error('Automatic payment replay is not supported for Bullet Payment loans.');
+				redirect('loan/track');
+				return;
+			}
+			try {
+				$this->_replay_repayments_after_loan_edit($row->id, $existing_repayments);
+			} catch (Exception $e) {
+				$this->db->trans_rollback();
+				$this->toaster->error('Loan edit failed: ' . $e->getMessage());
+				redirect('loan/track');
+				return;
+			}
+		}
+		$this->db->trans_complete();
+		if ($this->db->trans_status() === FALSE) {
+			$this->toaster->error('Loan edit failed while rebuilding payment allocations.');
+			redirect('loan/track');
+			return;
+		}
         $this->toaster->success('Success, loan edit was authorised  pending authorisation');
         redirect('loan/track');
 
 
-    }
-    public function edit_action(){
-        $this->load->database();
-        $this->db->trans_start();
+	}
 
+	/**
+	 * Capture the immutable cash history before an edited loan is rebuilt.
+	 * Reversal entries cancel their original transaction and are not replayed.
+	 */
+	private function _capture_repayments_for_loan_edit($loan_number)
+	{
+		$credits = $this->db
+			->where('account_number', $loan_number)
+			->where('credit >', 0)
+			->not_like('transaction_id', 'REV-', 'after')
+			->order_by('system_time', 'ASC')
+			->order_by('server_time', 'ASC')
+			->get('transaction')
+			->result();
+
+		$payments = array();
+		foreach ($credits as $credit) {
+			$reversal = $this->db
+				->where('transaction_id', 'REV-' . $credit->transaction_id)
+				->get('transaction')
+				->row();
+			if ($reversal) continue;
+
+			$payment_timestamp = !empty($credit->system_time) ? $credit->system_time : $credit->server_time;
+			$payments[] = array(
+				'transaction_id' => $credit->transaction_id,
+				'amount'         => (float)$credit->credit,
+				'paid_date'      => date('Y-m-d', strtotime($payment_timestamp)),
+			);
+		}
+
+		return $payments;
+	}
+
+	/** Replay existing cash receipts into a freshly generated schedule only. */
+	private function _replay_repayments_after_loan_edit($loan_id, array $payments)
+	{
+		foreach ($payments as $payment) {
+			$result = $this->_process_non_bullet_payment(
+				$loan_id,
+				$payment['amount'],
+				$payment['paid_date'],
+				$payment['transaction_id']
+			);
+			if (!$result) {
+				throw new Exception('Could not reapply payment ' . $payment['transaction_id']);
+			}
+		}
+	}
+
+	private function _initiate_loan_edit_request()
+	{
+		$loan_id = (int)$this->input->post('loan_id');
+		$row = $this->Loan_model->get_by_id($loan_id);
+		if (!$row) {
+			$this->toaster->error('Loan not found.');
+			redirect('loan/restructure');
+			return false;
+		}
+
+		$pending_candidates = $this->db
+			->where('id', $loan_id)
+			->where('type', 'Loan edit')
+			->where_in('state', array('Initiated', 'recommended'))
+			->get('approval_edits')
+			->result();
+		$pending = false;
+		foreach ($pending_candidates as $candidate) {
+			$candidate_payload = json_decode($candidate->new_info);
+			if ($candidate_payload && ($candidate_payload->edit_workflow ?? '') === 'rebuild_replay_v2') {
+				$pending = true;
+				break;
+			}
+		}
+		if ($pending) {
+			$this->toaster->error('This loan already has a pending edit request.');
+			redirect('loan/restructure');
+			return false;
+		}
+
+		$value = function($name, $fallback = '') {
+			$posted = $this->input->post($name);
+			return $posted !== false && $posted !== null && $posted !== '' ? $posted : $fallback;
+		};
+		$officer_id = $value('user', $row->loan_added_by);
+		$new_info = array(
+			'edit_workflow'       => 'rebuild_replay_v2',
+			'loan_id'             => $loan_id,
+			'loan_number'         => $row->loan_number,
+			'loan_principal'      => $value('amount', $row->loan_principal),
+			'loan_period'         => $value('months', $row->loan_period),
+			'loan_interest'       => $value('interest', $row->loan_interest),
+			'sy_loan_product'     => $value('loan_type', $row->loan_product),
+			'loan_date'           => $value('loan_date', $row->loan_date),
+			'sy_loan_customer'    => $value('customer', $row->loan_customer),
+			'customer_type'       => $value('customer_type', $row->customer_type),
+			'loan_worthness_file' => $row->worthness_file,
+			'narration'           => $value('narration', $row->narration),
+			'sy_added_by'         => $officer_id,
+			'currency'            => $value('currency', $row->currency),
+			'processing_fee'      => $value('processing_fee', $row->processing_fee),
+			'off_taker'           => $value('off_taker', $row->off_taker),
+		);
+
+		auth_logger(array(
+			'type'         => 'Loan edit',
+			'old_info'     => json_encode($row),
+			'new_info'     => json_encode($new_info),
+			'id'           => $loan_id,
+			'summary'      => $row->loan_number,
+			'Initiated_by' => $this->session->userdata('user_id'),
+		));
+
+		$this->toaster->success('Loan edit initiated successfully and sent for recommendation.');
+		redirect('loan/restructure');
+		return true;
+	}
+
+    /** Save corrections on a returned loan without replacing its identity/workflow record. */
+    private function _save_sent_back_loan_edit($loan_id)
+    {
+        $row = $this->Loan_model->get_by_id((int) $loan_id);
+        if (!$row || (int) ($row->sent_back ?? 0) !== 1) throw new Exception('Only a loan returned for correction can be resubmitted here.');
+
+        $posted = function ($name, $fallback = null) {
+            $value = $this->input->post($name);
+            return ($value === null || $value === false) ? $fallback : $value;
+        };
+        $values = array(
+            'loan_principal' => $posted('amount', $row->loan_principal), 'loan_period' => $posted('months', $row->loan_period),
+            'loan_interest' => $posted('interest', $row->loan_interest), 'loan_product' => $posted('loan_type', $row->loan_product),
+            'loan_date' => $posted('loan_date', $row->loan_date), 'loan_customer' => $posted('customer', $row->loan_customer),
+            'customer_type' => $posted('customer_type', $row->customer_type), 'narration' => $posted('narration', $row->narration),
+            'currency' => $posted('currency', $row->currency), 'off_taker' => $posted('off_taker', $row->off_taker),
+            'processing_fee' => $posted('processing_fee', $row->processing_fee),
+            'crb_search' => $posted('crb_search', $row->crb_search), 'pacra_search' => $posted('pacra_search', $row->pacra_search),
+            'previous_facilities' => $posted('previous_facilities', $row->previous_facilities),
+            'past_loans_comment' => $posted('past_loans_comment', $row->past_loans_comment),
+            'security_notes' => $posted('security_notes', $row->security_notes),
+            'bank_statement_notes' => $posted('bank_statement_notes', $row->bank_statement_notes),
+            'about_transaction' => $posted('about_transaction', $row->about_transaction),
+            'risk_analysis' => $posted('risk_analysis', $row->risk_analysis),
+        );
+        if ((float) $values['loan_principal'] <= 0 || (int) $values['loan_period'] <= 0) throw new Exception('Loan amount and period must be greater than zero.');
+
+        $payments = $this->_capture_repayments_for_loan_edit($row->loan_number);
+        $has_allocations = $this->db->where('loan_id', $row->loan_id)->where('paid_amount >', 0)->count_all_results('payement_schedules') > 0;
+        if ($has_allocations && empty($payments)) throw new Exception('Existing repayments could not be matched to the cash ledger. Reconcile the loan before editing.');
+
+        $changes = array();
+        $before = array();
+        foreach ($values as $field => $value) {
+            $old = isset($row->$field) ? $row->$field : null;
+            $before[$field] = $old;
+            if ((string) $old !== (string) $value) $changes[$field] = array('from' => $old, 'to' => $value);
+        }
+        if (empty($changes)) throw new Exception('No loan changes were submitted.');
+
+        $this->db->trans_begin();
         try {
-            $loan_id = $this->input->post('loan_id');
-            $row = $this->Loan_model->get_by_id($loan_id);
+            $this->Loan_model->add_loan_edit($row->loan_id, $row->loan_number, $values['loan_principal'], $values['loan_period'],
+                $values['loan_interest'], $values['loan_product'], $values['loan_date'], $values['loan_customer'],
+                $values['customer_type'], $row->worthness_file, $values['narration'], $row->loan_added_by);
 
-            if (!$row) {
-                throw new Exception('Loan not found');
-            }
+            $extras = $values;
+            foreach (array('loan_principal','loan_period','loan_interest','loan_product','loan_date','loan_customer','customer_type','narration') as $field) unset($extras[$field]);
+            $extras['sent_back'] = 0; $extras['sent_back_comment'] = null; $extras['sent_back_by'] = null; $extras['sent_back_date'] = null;
+            $this->Loan_model->update($row->loan_id, $extras);
 
-            // Always use the DB loan number so the user always sees the same number
-            $original_loan_number = $row->loan_number;
+            $this->db->where('loan_id', $row->loan_id)->delete('transactions');
+            if (!empty($payments)) $this->_replay_repayments_after_loan_edit($row->loan_id, $payments);
 
-            // For fields only present in the individual form, fall back to the
-            // original loan values so the group form (which omits them) is safe.
-            $amount          = $this->input->post('amount')          !== FALSE ? $this->input->post('amount')          : $row->loan_principal;
-            $months          = $this->input->post('months')          !== FALSE ? $this->input->post('months')          : $row->loan_period;
-            $interest        = $this->input->post('interest')        !== FALSE ? $this->input->post('interest')        : $row->loan_interest;
-            $loan_type       = $this->input->post('loan_type')       !== FALSE ? $this->input->post('loan_type')       : $row->loan_product;
-            $loan_date       = $this->input->post('loan_date')       !== FALSE ? $this->input->post('loan_date')       : $row->loan_date;
-            $customer        = $this->input->post('customer')        !== FALSE ? $this->input->post('customer')        : $row->loan_customer;
-            $customer_type   = $this->input->post('customer_type')   !== FALSE ? $this->input->post('customer_type')   : $row->customer_type;
-            $narration       = $this->input->post('narration')       !== FALSE ? $this->input->post('narration')       : $row->narration;
-            $currency        = $this->input->post('currency')        !== FALSE ? $this->input->post('currency')        : $row->currency;
-            $off_taker       = $this->input->post('off_taker')       !== FALSE ? $this->input->post('off_taker')       : $row->off_taker;
-            $processing_fee  = $this->input->post('processing_fee')  !== FALSE ? $this->input->post('processing_fee')  : $row->processing_fee;
-            $appraisal_data  = array(
-                'crb_search'           => $this->input->post('crb_search')           !== FALSE ? $this->input->post('crb_search')           : $row->crb_search,
-                'pacra_search'         => $this->input->post('pacra_search')         !== FALSE ? $this->input->post('pacra_search')         : $row->pacra_search,
-                'previous_facilities'  => $this->input->post('previous_facilities')  !== FALSE ? $this->input->post('previous_facilities')  : $row->previous_facilities,
-                'past_loans_comment'   => $this->input->post('past_loans_comment')   !== FALSE ? $this->input->post('past_loans_comment')   : $row->past_loans_comment,
-                'security_notes'       => $this->input->post('security_notes')       !== FALSE ? $this->input->post('security_notes')       : $row->security_notes,
-                'bank_statement_notes' => $this->input->post('bank_statement_notes') !== FALSE ? $this->input->post('bank_statement_notes') : $row->bank_statement_notes,
-                'about_transaction'    => $this->input->post('about_transaction')    !== FALSE ? $this->input->post('about_transaction')    : $row->about_transaction,
-                'risk_analysis'        => $this->input->post('risk_analysis')        !== FALSE ? $this->input->post('risk_analysis')        : $row->risk_analysis,
-            );
-
-            // Remove old account and schedules before recreating
-            $this->db->where('account_number', $original_loan_number)->delete('account');
-            $this->db->where('loan_id', $loan_id)->delete('payement_schedules');
-
-            // Create the new loan — this recalculates all schedules
-            $result = $this->Loan_model->add_loan(
-                $original_loan_number,
-                $amount,
-                $months,
-                $interest,
-                $loan_type,
-                $loan_date,
-                $customer,
-                $customer_type,
-                $row->worthness_file,
-                $narration,
-                $this->session->userdata('user_id'),
-                '',
-                '',
-                $currency,
-                $off_taker,
-                $processing_fee,
-                $appraisal_data
-            );
-
-            if (!$result || !isset($result['loan_id'])) {
-                throw new Exception('Failed to create updated loan');
-            }
-
-            // add_loan always auto-generates a new loan number — restore the original
-            $this->db->where('loan_id', $result['loan_id'])->update('loan', array('loan_number' => $original_loan_number));
-            $this->db->where('account_number', $result['loan_number'])->update('account', array('account_number' => $original_loan_number));
-
-            // Preserve the original loan status (e.g. INITIATED, SENT_BACK)
-            $this->db->where('loan_id', $result['loan_id'])->update('loan', array('loan_status' => $row->loan_status));
-
-            // Migrate existing files and folders to the new loan record
-            $this->db->where('loan_id', $loan_id)->update('loan_files', array('loan_id' => $result['loan_id']));
-            $this->db->where('owner_id', $loan_id)->update('file_folders', array('owner_id' => $result['loan_id']));
-
-            // Replace bank statements: delete old ones, then insert from form
-            $this->db->where('loan_id', $loan_id)->delete('bank_statements');
-            $credits = $this->input->post('personal_credit');
-            $debits  = $this->input->post('personal_debit');
-            $months  = $this->input->post('personal_statement_month');
+            $credits = $this->input->post('personal_credit'); $debits = $this->input->post('personal_debit'); $months = $this->input->post('personal_statement_month');
             if (is_array($credits) && is_array($debits) && is_array($months)) {
-                for ($i = 0; $i < count($credits); $i++) {
-                    $credit = isset($credits[$i]) ? $credits[$i] : null;
-                    $debit  = isset($debits[$i])  ? $debits[$i]  : null;
-                    $month  = isset($months[$i])  ? $months[$i]  : null;
-                    if (empty($credit) && empty($debit) && empty($month)) continue;
-                    $this->db->insert('bank_statements', array(
-                        'loan_id'        => $result['loan_id'],
-                        'statement_type' => 'personal',
-                        'credit'         => $credit ? str_replace(',', '', $credit) : 0,
-                        'debit'          => $debit  ? str_replace(',', '', $debit)  : 0,
-                        'month'          => $month,
-                        'year'           => date('Y'),
-                        'added_by'       => $this->session->userdata('user_id'),
-                        'date_added'     => date('Y-m-d H:i:s'),
-                    ));
+                $this->db->where('loan_id', $row->loan_id)->delete('bank_statements');
+                $count = max(count($credits), count($debits), count($months));
+                for ($i = 0; $i < $count; $i++) {
+                    $credit = $credits[$i] ?? ''; $debit = $debits[$i] ?? ''; $month = $months[$i] ?? '';
+                    if ($credit === '' && $debit === '' && $month === '') continue;
+                    $this->db->insert('bank_statements', array('loan_id' => $row->loan_id, 'statement_type' => 'personal',
+                        'credit' => (float) str_replace(',', '', $credit), 'debit' => (float) str_replace(',', '', $debit),
+                        'month' => $month, 'year' => date('Y'), 'added_by' => $this->session->userdata('user_id'), 'date_added' => date('Y-m-d H:i:s')));
                 }
             }
 
-            // Delete the old loan record
-            $this->Loan_model->delete($loan_id);
+            $detail = array();
+            foreach ($changes as $field => $change) $detail[] = $field . ': [' . $change['from'] . '] to [' . $change['to'] . ']';
+            $description = implode('; ', $detail);
+            log_activity(array('user_id' => (int) $this->session->userdata('user_id'),
+                'activity' => 'Corrected and resubmitted loan ' . $row->loan_number . ' at status ' . $row->loan_status . '. Changes: ' . $description,
+                'activity_cate' => 'loan_edit', 'old_data' => json_encode($before), 'new_data' => json_encode($values)));
+            $this->Loan_approval_trail_model->insert(array('loan_id' => $row->loan_id, 'user_id' => (int) $this->session->userdata('user_id'),
+                'action' => 'CORRECTED_RESUBMITTED', 'comment' => 'Returned-loan corrections saved: ' . $description,
+                'from_status' => $row->loan_status, 'to_status' => $row->loan_status, 'date_stamp' => date('Y-m-d H:i:s')));
 
-            $logger = array(
-                'type'         => 'Loan Edit',
-                'old_info'     => json_encode($row),
-                'new_info'     => json_encode($result),
-                'id'           => $result['loan_id'],
-                'summary'      => 'Edited loan ' . $original_loan_number,
-                'Initiated_by' => $this->session->userdata('user_id'),
-            );
-            auth_logger($logger);
-
-            $this->db->trans_complete();
-
-            if ($this->db->trans_status() === FALSE) {
-                throw new Exception('Transaction failed');
-            }
-
-            $this->toaster->success('Loan updated successfully. Payment schedule recalculated.');
-            redirect('loan/track');
-
-        } catch (Exception $e) {
+            if ($this->db->trans_status() === false) throw new Exception('Database rejected one or more loan changes.');
+            $this->db->trans_commit();
+            return true;
+        } catch (Throwable $e) {
             $this->db->trans_rollback();
-            $this->toaster->error('Failed to update loan: ' . $e->getMessage());
-            redirect('loan/edit_single_loan_request/' . $this->input->post('loan_id'));
+            throw $e;
         }
     }
-
-    public function  edit_corporate_action(){
-        // Load database library for transaction support
-        $this->load->database();
-        
-        // Start database transaction
-        $this->db->trans_start();
-        
+    public function edit_action(){
+        $submitted_loan = $this->Loan_model->get_by_id((int) $this->input->post('loan_id'));
+        if (!$submitted_loan || (int) ($submitted_loan->sent_back ?? 0) !== 1) {
+            $this->_initiate_loan_edit_request();
+            return;
+        }
         try {
-            // Get the original loan data
-            $loan_id = $this->input->post('loan_id');
-            $original_loan_number = $this->input->post('original_loan_number');
-            $row = $this->Loan_model->get_by_id($loan_id);
-            
-            if (!$row) {
-                throw new Exception('Loan not found');
-            }
-            
-            // Prepare data for new loan (based on create_act implementation)
-            $loan_number = str_replace(' ', '', $original_loan_number); // Keep same loan number
-            $amount = $this->input->post('amount');
-            $months = $this->input->post('months');
-            $interest = $this->input->post('interest');
-            $loan_type = $this->input->post('loan_type');
-            $loan_date = $this->input->post('loan_date');
-            $customer = $this->input->post('customer');
-            $customer_type = $this->input->post('customer_type');
-            $narration = $this->input->post('narration');
-            $currency = $this->input->post('currency');
-            $off_taker = $this->input->post('off_taker');
-            $processing_fee = $this->input->post('processing_fee');
-            $appraisal_data = array(
-                'crb_search'          => $this->input->post('crb_search'),
-                'pacra_search'        => $this->input->post('pacra_search'),
-                'previous_facilities' => $this->input->post('previous_facilities'),
-                'past_loans_comment'  => $this->input->post('past_loans_comment'),
-                'security_notes'      => $this->input->post('security_notes'),
-                'bank_statement_notes'=> $this->input->post('bank_statement_notes'),
-                'about_transaction'   => $this->input->post('about_transaction'),
-                'risk_analysis'       => $this->input->post('risk_analysis'),
-            );
-            
-            // Delete associated records before deleting the loan to avoid duplicate key errors
-            // Delete account record if it exists
-            $this->db->where('account_number', $loan_number);
-            $this->db->delete('account');
-            
-            // Delete payment schedules
-            $this->db->where('loan_id', $loan_id);
-            $this->db->delete('payement_schedules');
-            
-            // Create new loan with same loan number BEFORE deleting old loan
-            $result = $this->Loan_model->add_loan(
-                $loan_number,
-                $amount,
-                $months,
-                $interest,
-                $loan_type,
-                $loan_date,
-                $customer,
-                $customer_type,
-                '', // worthness_file
-                $narration,
-                $this->session->userdata('user_id'),
-                '', // payment_method
-                '', // fee_amount
-                $currency,
-                $off_taker,
-                $processing_fee,
-                $appraisal_data
-            );
-            
-            if (!$result) {
-                throw new Exception('Failed to create new loan');
-            }
-
-            // Restore the original loan number (add_loan always generates a new one)
-            $this->db->where('loan_id', $result['loan_id'])->update('loan', array('loan_number' => $loan_number));
-            $this->db->where('account_number', $result['loan_number'])->update('account', array('account_number' => $loan_number));
-            $result['loan_number'] = $loan_number;
-
-            // Update existing loan files to reference the new loan_id
-            $this->db->where('loan_id', $loan_id);
-            $this->db->update('loan_files', array('loan_id' => $result['loan_id']));
-
-            // Update existing loan folders to reference the new loan_id
-            $this->db->where('owner_id', $loan_id);
-            $this->db->update('file_folders', array('owner_id' => $result['loan_id']));
-
-            // Finally delete the old loan
-            $this->Loan_model->delete($loan_id);
-            
-            // Handle file uploads if any
-//            $number_of_files_uploaded = count($_FILES['corporate_loan_files']['name']);
-//            if ($number_of_files_uploaded > 0 && $_FILES['corporate_loan_files']['name'][0] != '') {
-//                $this->load->library('upload');
-//
-//                // Create directory if it doesn't exist
-//                $imagePath = APPPATH . '../uploads/' . $result['loan_number'];
-//                if (!is_dir($imagePath)) {
-//                    mkdir($imagePath, 0777, true);
-//                }
-//
-//                for ($i = 0; $i < $number_of_files_uploaded; $i++) {
-//                    if ($_FILES['corporate_loan_files']['name'][$i] != '') {
-//                        $_FILES['userfile']['name'] = $_FILES['corporate_loan_files']['name'][$i];
-//                        $_FILES['userfile']['type'] = $_FILES['corporate_loan_files']['type'][$i];
-//                        $_FILES['userfile']['tmp_name'] = $_FILES['corporate_loan_files']['tmp_name'][$i];
-//                        $_FILES['userfile']['error'] = $_FILES['corporate_loan_files']['error'][$i];
-//                        $_FILES['userfile']['size'] = $_FILES['corporate_loan_files']['size'][$i];
-//
-//                        $config = array(
-//                            'file_name' => $_FILES['userfile']['name'],
-//                            'allowed_types' => '*',
-//                            'max_size' => 200000,
-//                            'overwrite' => FALSE,
-//                            'upload_path' => $imagePath
-//                        );
-//
-//                        $this->upload->initialize($config);
-//
-//                        if ($this->upload->do_upload()) {
-//                            $uploaded_data = $this->upload->data();
-//                            $file_data = array(
-//                                'loan_id' => $result['loan_id'],
-//                                'file_name' => $uploaded_data['file_name'],
-//                                'real_file' => $config['file_name'],
-//                            );
-//                            $this->Loan_files_model->insert($file_data);
-//                        }
-//                    }
-//                }
-//            }
-//
-//            // Handle collateral files if any
-//            $conames = $this->input->post('coname');
-//            $types = $this->input->post('type');
-//            $serials = $this->input->post('serial');
-//            $cvalues = $this->input->post('cvalue');
-//            $descs = $this->input->post('desc');
-//
-//            if (!empty($conames)) {
-//                for ($i = 0; $i < count($conames); $i++) {
-//                    if (!empty($conames[$i])) {
-//                        // Handle collateral data insertion here if you have a collateral model
-//                        // This would need to be implemented based on your collateral table structure
-//                    }
-//                }
-//            }
-//
-            // Add reference to original loan
-            $edit_reference = array(
-                'original_loan_id' => $loan_id,
-                'new_loan_id' => $result['loan_id'],
-                'edit_date' => date('Y-m-d H:i:s'),
-                'edited_by' => $this->session->userdata('user_id'),
-                'edit_reason' => 'Corporate loan update'
-            );
-            
-            // Log the edit operation
-            $logger = array(
-                'type' => 'Corporate Loan Edit',
-                'old_info' => json_encode($row),
-                'new_info' => json_encode($result),
-                'id' => $result['loan_id'],
-                'summary' => 'Edited loan ' . $loan_number,
-                'Initiated_by' => $this->session->userdata('user_id')
-            );
-            auth_logger($logger);
-            
-            // Complete transaction
-            $this->db->trans_complete();
-            
-            if ($this->db->trans_status() === FALSE) {
-                throw new Exception('Transaction failed');
-            }
-            
-            $this->toaster->success('Loan updated successfully. Previous loan archived and new loan created.');
+            $this->_save_sent_back_loan_edit($submitted_loan->loan_id);
+            $this->toaster->success('Loan corrections saved and resubmitted successfully.');
             redirect('loan/track');
-            
-        } catch (Exception $e) {
-            // Rollback transaction on error
-            $this->db->trans_rollback();
-            $this->toaster->error('Failed to update loan: ' . $e->getMessage());
-            redirect('loan/edit_single_loan_request/' . $loan_id);
+        } catch (Throwable $e) {
+            $this->toaster->error('Failed to save loan corrections: ' . $e->getMessage());
+            redirect('loan/edit_single_loan_request/' . $submitted_loan->loan_id);
         }
+        return;
+
     }
-    
+
+    public function edit_corporate_action(){
+        $submitted_loan = $this->Loan_model->get_by_id((int) $this->input->post('loan_id'));
+        if (!$submitted_loan || (int) ($submitted_loan->sent_back ?? 0) !== 1) {
+            $this->_initiate_loan_edit_request();
+            return;
+        }
+        try {
+            $this->_save_sent_back_loan_edit($submitted_loan->loan_id);
+            $this->toaster->success('Loan corrections saved and resubmitted successfully.');
+            redirect('loan/track');
+        } catch (Throwable $e) {
+            $this->toaster->error('Failed to save loan corrections: ' . $e->getMessage());
+            redirect('loan/edit_single_loan_request/' . $submitted_loan->loan_id);
+        }
+        return;
+
+    }
+
     public function delete_loan_action($loan_id){
         // Load database library for transaction support
         $this->load->database();
@@ -5097,10 +5123,21 @@ $row = $this->Loan_model->get_by_id_group($id);
         // Recommend requires the recommend permission; all other decisions
         // (reject / first / second / final approve) require approval rights.
         $required_perm = ($action == 'RECOMMENDED') ? 'Loan/recommend' : 'loan/unified_approval';
-        if(!has_access($required_perm)){
+        $can_reject_at_disbursement = $action === 'REJECT' && has_access('loan/approved');
+        if(!has_access($required_perm) && !$can_reject_at_disbursement){
             $this->toaster->error('You do not have permission to perform this action.');
             redirect($_SERVER['HTTP_REFERER']);
             return;
+        }
+
+        if ($action === 'REJECT') {
+            $pending_loan = $this->db->get_where('loan', array('loan_id' => $id))->row();
+            $rejectable_statuses = array('RECOMMENDED', 'APPROVED_FIRST', 'APPROVED_SECOND', 'APPROVED', 'CLIENT_SIGNED');
+            if (!$pending_loan || !in_array(strtoupper((string) $pending_loan->loan_status), $rejectable_statuses, TRUE) || trim((string) $comment) === '') {
+                $this->toaster->error('A valid loan awaiting disbursement or approval and a rejection reason are required.');
+                redirect(isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : site_url('loan/approved'));
+                return;
+            }
         }
 
         // Check for adjacent approval actions by same user
@@ -5115,7 +5152,7 @@ $row = $this->Loan_model->get_by_id_group($id);
         $last_action = $this->db->get()->row();
 
         // Define adjacent actions that cannot be done by same user
-        // Note: INITIATED → RECOMMENDED is allowed by same user
+        // Note: INITIATED â†’ RECOMMENDED is allowed by same user
         $adjacent_actions = array(
             'RECOMMENDED' => 'APPROVED_FIRST',
             'APPROVED_FIRST' => 'APPROVED_SECOND',
@@ -5271,8 +5308,9 @@ $row = $this->Loan_model->get_by_id_group($id);
      * Send loan for disbursement after client has signed documents
      */
     function send_for_disburse($id) {
-        // Enforce role-based permission server-side (disbursement rights)
-        if(!has_access('loan/approved')){
+        // Loan officers upload the signed client copy and hand the loan to disbursers.
+        // The actual disbursement remains protected by loan/approved.
+        if(!has_access('loan/loan_application')){
             $this->toaster->error('You do not have permission to perform this action.');
             redirect($_SERVER['HTTP_REFERER']);
             return;
@@ -5731,9 +5769,20 @@ $row = $this->Loan_model->get_by_id_group($id);
     }
     function single_reject()
     {
-        $by_date = 'rejected_date';
-        $loan_id = $this->input->post('loan_id');
-        $reasons = $this->input->post('rejectedReasons');
+        if (!has_access('loan/unified_approval') && !has_access('loan/approved')) {
+            $this->toaster->error('You do not have permission to reject this loan.');
+            redirect(isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : site_url('loan/track'));
+            return;
+        }        $by_date = 'rejected_date';
+        $loan_id = (int) $this->input->post('loan_id');
+        $reasons = trim((string) $this->input->post('rejectedReasons', TRUE));
+        $loan = $this->Loan_model->get_by_id($loan_id);
+        $rejectable_statuses = array('RECOMMENDED', 'APPROVED_FIRST', 'APPROVED_SECOND', 'APPROVED', 'CLIENT_SIGNED');
+        if (!$loan || !in_array(strtoupper($loan->loan_status), $rejectable_statuses, TRUE) || $reasons === '') {
+            $this->toaster->error('A valid pending loan and rejection reason are required.');
+            redirect(isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : site_url('loan/track'));
+            return;
+        }
 
 
 
@@ -7096,6 +7145,13 @@ $row = $this->Loan_model->get_by_id_group($id);
             $this->load->library('Pdf');
             $html = $this->load->view('loan/loan_report_pdf', $data,true);
             $this->pdf->createPDF($html, "loan report as on".date('Y-m-d'), true,'A4','landscape');
+        } elseif ($search === 'excel') {
+            $query = http_build_query(array(
+                'search' => 'excel', 'loan_status' => $status ?: 'All',
+                'loan_product' => $product ?: 'All', 'loan_officer' => $user ?: 'All',
+                'from_date' => $from, 'to_date' => $to
+            ));
+            redirect('reports/portfolio_listing?' . $query);
         } else {
             // No search parameter - redirect to main report
             redirect('loan/loan_report');
@@ -7103,94 +7159,11 @@ $row = $this->Loan_model->get_by_id_group($id);
     }
     function exportExcel()
     {
-        $export_type ='CSV';
-        // file name
-        $filename = 'RBM_loanReport' . date('Ymd') . '.csv';
-        header("Content-Description: File Transfer");
-        header("Content-Disposition: attachment; filename=$filename");
-        header("Content-Type: application/csv; ");
-        // get data
-
-        $usersData = rbm_report();
-        // file creation
-        $file = fopen('php://output', 'w');
-        $header = array(
-            "Salutation ",
-            "Surname ",
-            "First Name ",
-            "Middle Name" ,
-            "	Maiden Name" ,
-            "Gender" ,
-            "	Marital Status"	,
-            "No. of Dependents" ,
-            "Date of Birth"	,
-            "National ID No.",
-            "ID Type",
-            "ID No.",
-            "	Nationality",
-            "	Village" ,
-            " T/A" ,
-            " Home District",
-            "Resident Permit No.",
-            "Phone No."	,
-            "Postal Address" ,
-            "Email Address" ,
-            "Residential Address" ,
-            "Residential District",
-            "Plot No.	",
-            "Profession/Occupation",
-            "Employer Name ",
-            "Employer Address",
-            "	Employer Phone No.",
-            "Employment Date" ,
-            "	Branch Code/Name",
-            "	Loan Reference No.",
-            "Old Loan Reference No.",
-            "Currency  "	,
-            "Approved Amount",
-            "	Approved Amount(MWK)",
-            "Disbursed" ,
-            "Amount"	,
-            "Disbursed Amount (MWK)"	,
-            " Disbursement Date",
-            "Maturity Date",
-            " Borrower Type",
-            "Group Name",
-            " Group No.",
-            "Product Type",
-            "Payment Terms",
-            "Collateral Status",
-            "Reserve Bank Classification",
-            "	Account Status",
-            "	Account Status Change Date"	,
-            " Scheduled Repayment Amount",
-            "Scheduled Repayment Amount(MWK)",
-            "Total Amount Paid To Date",
-            "Total Amount Paid To Date(MWK)"	,
-            "Current Balance	Current Balance(MWK)",
-            "	Available Credit",
-            "	Available Credit(MWK)",
-            "Amount In Arrears",
-            "Amount In Arrears(MWK)",
-            "	Days In Arrears	",
-            "No. of Installments In Arrears ",
-            "	Default Date",
-            " Pay Off/Termination" ,
-            "Date	Reason For Closure"	,
-            "First Payment Date",
-            "	Last Payment Date",
-            "Last Payment Amount" ,
-            "Last Payment Amount (MWK)"
-
-        );
-        fputcsv($file, $header);
-        foreach ($usersData as $key => $line) {
-            fputcsv($file, $line);
-        }
-        fclose($file);
-        exit();
+        $from = trim((string) $this->input->get('from'));
+        $to = trim((string) $this->input->get('to'));
+        $data['loanreports'] = $this->Loan_model->crb_report_data($from, $to);
+        $this->export_loan_database_excel('CRB_Report', '', $data);
     }
-
     function exportExceView()
     {
         $from = $this->input->get('from');
@@ -7243,6 +7216,13 @@ $row = $this->Loan_model->get_by_id_group($id);
             $this->load->library('Pdf');
             $html = $this->load->view('loan/loan_report_pdf', $data,true);
             $this->pdf->createPDF($html, "loan report as on".date('Y-m-d'), true,'A4','landscape');
+        } elseif ($search === 'excel') {
+            $result = $this->Payement_schedules_model->get_filter_projection($from, $to);
+            $amount = $this->Payement_schedules_model->get_filter_projections($from, $to);
+            $pri = $this->Payement_schedules_model->get_filter_projection_principal($from, $to);
+            $inter = $this->Payement_schedules_model->get_filter_projection_interest($from, $to);
+            $data = array('amount' => $amount['amount'], 'interest' => $inter['interest'], 'principal' => $pri['principal'], 'paid_amount' => $result['paid_amount']);
+            $this->export_loan_database_excel('Loan_Projection_Report', 'loan/loan_report_projections', $data);
         }
 
     }
@@ -7473,7 +7453,7 @@ public function get_loan_product_details() {
 			return;
 		}
 
-		// Guard: amount must match the calculated payoff (±0.01 tolerance)
+		// Guard: amount must match the calculated payoff (Â±0.01 tolerance)
 		$breakdown = $this->Payement_schedules_model->calculate_payoff_amount($loan_id, $paid_date);
 		if (abs($amount - $breakdown['total_payoff']) > 0.01) {
 			$this->toaster->error('Settlement amount does not match the calculated payoff of ' .
@@ -7569,11 +7549,11 @@ public function get_loan_product_details() {
 	/**
 	 * Compute bullet loan payoff with compound interest on arrears.
 	 *
-	 * Before maturity: simple interest on principal (principal × rate × months elapsed).
+	 * Before maturity: simple interest on principal (principal Ã— rate Ã— months elapsed).
 	 * After maturity:  interest compounds monthly on OUTSTANDING BALANCE (after payments).
-	 *   - At maturity the total owed = principal + (principal × rate × term)
+	 *   - At maturity the total owed = principal + (principal Ã— rate Ã— term)
 	 *   - Payments reduce the outstanding balance BEFORE compounding
-	 *   - Each full month past maturity: balance = balance × (1 + rate)
+	 *   - Each full month past maturity: balance = balance Ã— (1 + rate)
 	 *   - Remaining days: daily pro-rata on the current compounded balance
 	 */
 	private function _compute_bullet_payoff($loan_id, $payoff_date)
@@ -7613,8 +7593,8 @@ public function get_loan_product_details() {
 		$daily_rate              = 0;
 
 		if ($payoff_date_obj <= $maturity_date_obj) {
-			// ── BEFORE OR AT MATURITY ──
-			// Month 1 (days 1–30): always 1 full month flat.
+			// â”€â”€ BEFORE OR AT MATURITY â”€â”€
+			// Month 1 (days 1â€“30): always 1 full month flat.
 			// Month 2+ (day 31+): whole months at monthly rate + daily accrual for remaining days.
 			$total_days_elapsed = max(1, $loan_date_obj->diff($payoff_date_obj)->days);
 			$daily_rate         = $monthly_rate / 30;
@@ -7656,7 +7636,7 @@ public function get_loan_product_details() {
 			$total_payoff = round($remaining_principal + $real_interest_balance, 2);
 
 		} else {
-			// ── AFTER MATURITY – COMPOUND INTEREST ON OUTSTANDING BALANCE ──
+			// â”€â”€ AFTER MATURITY â€“ COMPOUND INTEREST ON OUTSTANDING BALANCE â”€â”€
 			$days_past_maturity = $maturity_date_obj->diff($payoff_date_obj)->days;
 			$full_months_past   = floor($days_past_maturity / 30);
 			$remaining_days     = $days_past_maturity % 30;
@@ -7666,7 +7646,7 @@ public function get_loan_product_details() {
 			$outstanding_at_maturity = $maturity_total - $amount_paid;
 			if ($outstanding_at_maturity < 0) $outstanding_at_maturity = 0;
 
-			$calculation_explanation = "After maturity – compound interest on OUTSTANDING balance:\n" .
+			$calculation_explanation = "After maturity â€“ compound interest on OUTSTANDING balance:\n" .
 				"Principal: " . number_format($principal, 2) . "\n" .
 				"Original interest ({$term} months): " . number_format($original_interest, 2) . "\n" .
 				"Total at maturity: " . number_format($maturity_total, 2) . "\n" .
@@ -7684,7 +7664,7 @@ public function get_loan_product_details() {
 				$running_balance += $month_interest;
 				$calculation_explanation .= "Month {$m} arrears: " . number_format($balance_before, 2) .
 					" x " . ($monthly_rate * 100) . "% = " . number_format($month_interest, 2) .
-					" → Balance: " . number_format($running_balance, 2) . "\n";
+					" â†’ Balance: " . number_format($running_balance, 2) . "\n";
 			}
 
 			// Pro-rate remaining days
@@ -7694,7 +7674,7 @@ public function get_loan_product_details() {
 				$running_balance += $partial_interest;
 				$calculation_explanation .= "Remaining {$remaining_days} days: " . number_format($daily_interest, 2) .
 					"/day x {$remaining_days} = " . number_format($partial_interest, 2) .
-					" → Balance: " . number_format($running_balance, 2) . "\n";
+					" â†’ Balance: " . number_format($running_balance, 2) . "\n";
 			}
 
 			$running_balance = round($running_balance, 2);
@@ -7781,10 +7761,14 @@ public function get_loan_product_details() {
 		$days_elapsed            = 0;
 		$explanation             = '';
 
+		$is_reducing = ($loan->calculation_type === 'Reducing Balance');
+		$reducing_rate = floatval($loan->loan_interest) / 100;
+		$principal_paid_before = 0.0;
+
 		foreach ($schedules as $s) {
 			if ($s->status === 'PAID') continue;
 
-			$remaining_principal += floatval($s->principal);
+			$remaining_principal += max(0, floatval($s->principal) - floatval($s->principal_paid ?? 0));
 
 			// Period start = previous schedule's due date, or loan_date for period 1
 			$period_start_obj = null;
@@ -7808,10 +7792,52 @@ public function get_loan_product_details() {
 			}
 
 			// Period has started
-			$period_interest = floatval($s->interest);
+			// Reducing-balance interest must follow the actual outstanding principal,
+			// not the original amortization balance. Any unpaid principal is therefore
+			// carried into the next reached repayment period.
+			if ($is_reducing) {
+				$principal_paid_before = 0.0;
+				foreach ($schedules as $prior) {
+					if (intval($prior->payment_number) < intval($s->payment_number)) {
+						$principal_paid_before += min(floatval($prior->principal), floatval($prior->principal_paid ?? 0));
+					}
+				}
+				$outstanding_principal = max(0, floatval($loan->loan_principal) - $principal_paid_before);
+				$base_interest = round($outstanding_principal * $reducing_rate, 2);
+
+				// Five full calendar days after the due date are interest-free.
+				// Accrual starts on day six and is capped at the next repayment date,
+				// whose own reducing-balance period then takes over.
+				$accrual_end = clone $payoff_date_obj;
+				foreach ($schedules as $next) {
+					if (intval($next->payment_number) === intval($s->payment_number) + 1) {
+						$next_due = new DateTime($next->payment_schedule);
+						if ($next_due < $accrual_end) $accrual_end = $next_due;
+						break;
+					}
+				}
+				$grace_end = clone $due_date_obj;
+				$grace_end->modify('+5 days');
+				$overdue_days = $accrual_end > $grace_end ? $grace_end->diff($accrual_end)->days : 0;
+				$overdue_interest = round(($outstanding_principal * $reducing_rate / 30) * $overdue_days, 2);
+				$period_interest = $base_interest + $overdue_interest;
+				$interest_already_paid = max(0, floatval($s->paid_amount) - floatval($s->principal_paid ?? 0));
+				$period_interest = max($period_interest, $interest_already_paid);
+			} else {
+				$period_interest = floatval($s->interest);
+			}
 			$daily_rate      = $period_interest / 30;
 
-			if ($payoff_date_obj <= $due_date_obj) {
+			if ($is_reducing) {
+				// One periodic charge per repayment period reached. Do not repeatedly
+				// add daily interest to each earlier overdue schedule.
+				$accrued = $period_interest;
+				$days_elapsed = $period_start_obj->diff($payoff_date_obj)->days;
+				$explanation .= "Reducing-balance period {$s->payment_number}: outstanding principal=" .
+					number_format($outstanding_principal, 2) . ", base interest=" . number_format($base_interest, 2) .
+					", overdue days after 5-day grace={$overdue_days}, overdue interest=" .
+					number_format($overdue_interest, 2) . ", total interest=" . number_format($accrued, 2) . "\n";
+			} elseif ($payoff_date_obj <= $due_date_obj) {
 				// On or before the due date — charge the full scheduled interest (first-month flat rule)
 				// This ensures the modal matches the amortization schedule exactly on the due date
 				$accrued      = $period_interest;
@@ -7875,6 +7901,8 @@ public function get_loan_product_details() {
 		});
 
 		$payoff_date_obj = new DateTime($paid_date);
+		$is_reducing     = ($loan->calculation_type === 'Reducing Balance');
+		$reducing_rate   = floatval($loan->loan_interest) / 100;
 		$remaining       = $amount_paid;
 		$last_pay_num    = 1;
 		$allocations     = array(); // payment_number => amount_applied
@@ -7890,15 +7918,44 @@ public function get_loan_product_details() {
 		};
 
 		// Returns what is owed for one schedule row as of payoff_date, minus already-paid
-		$get_period_due = function($s) use ($payoff_date_obj, $get_period_start) {
+		$get_reducing_interest = function($s) use ($schedules, $loan, $reducing_rate, $payoff_date_obj) {
+			$principal_paid_before = 0.0;
+			foreach ($schedules as $prior) {
+				if (intval($prior->payment_number) < intval($s->payment_number)) {
+					$principal_paid_before += min(floatval($prior->principal), floatval($prior->principal_paid ?? 0));
+				}
+			}
+			$outstanding_principal = max(0, floatval($loan->loan_principal) - $principal_paid_before);
+			$base_interest = round($outstanding_principal * $reducing_rate, 2);
+			$due_date = new DateTime($s->payment_schedule);
+			$accrual_end = clone $payoff_date_obj;
+			foreach ($schedules as $next) {
+				if (intval($next->payment_number) === intval($s->payment_number) + 1) {
+					$next_due = new DateTime($next->payment_schedule);
+					if ($next_due < $accrual_end) $accrual_end = $next_due;
+					break;
+				}
+			}
+			$grace_end = clone $due_date;
+			$grace_end->modify('+5 days');
+			$overdue_days = $accrual_end > $grace_end ? $grace_end->diff($accrual_end)->days : 0;
+			$overdue_interest = round(($outstanding_principal * $reducing_rate / 30) * $overdue_days, 2);
+			$calculated_interest = $base_interest + $overdue_interest;
+			$interest_already_paid = max(0, floatval($s->paid_amount) - floatval($s->principal_paid ?? 0));
+			return max($calculated_interest, $interest_already_paid);
+		};
+
+		$get_period_due = function($s) use ($payoff_date_obj, $get_period_start, $is_reducing, $get_reducing_interest) {
 			$period_start_obj = $get_period_start($s);
 			if ($payoff_date_obj <= $period_start_obj) {
 				// Future period: principal only (interest waived)
-				return max(0, floatval($s->principal) - floatval($s->paid_amount));
+				return max(0, floatval($s->principal) - floatval($s->principal_paid ?? 0));
 			}
 			$due_date_obj    = new DateTime($s->payment_schedule);
-			$period_interest = floatval($s->interest);
-			if ($payoff_date_obj <= $due_date_obj) {
+			$period_interest = $is_reducing ? $get_reducing_interest($s) : floatval($s->interest);
+			if ($is_reducing) {
+				$accrued = $period_interest;
+			} elseif ($payoff_date_obj <= $due_date_obj) {
 				$accrued = $period_interest;  // flat scheduled interest within period
 			} else {
 				$days_overdue = $due_date_obj->diff($payoff_date_obj)->days;
@@ -7910,13 +7967,16 @@ public function get_loan_product_details() {
 		// Returns the interest accrued for one schedule as of payoff_date (0 for a period
 		// that has not started — interest not yet earned). Used to attribute a payment
 		// between interest (charged per contract) and principal (reduced by surplus).
-		$get_period_accrued = function($s) use ($payoff_date_obj, $get_period_start) {
+		$get_period_accrued = function($s) use ($payoff_date_obj, $get_period_start, $is_reducing, $get_reducing_interest) {
 			$period_start_obj = $get_period_start($s);
 			if ($payoff_date_obj <= $period_start_obj) {
 				return 0.0; // future period — interest not yet accrued
 			}
 			$due_date_obj    = new DateTime($s->payment_schedule);
-			$period_interest = floatval($s->interest);
+			$period_interest = $is_reducing ? $get_reducing_interest($s) : floatval($s->interest);
+			if ($is_reducing) {
+				return $period_interest;
+			}
 			if ($payoff_date_obj <= $due_date_obj) {
 				return $period_interest; // within period — flat scheduled interest
 			}
@@ -7956,7 +8016,10 @@ public function get_loan_product_details() {
 				// accrued), the schedule stays PARTIAL PAID so its interest is still
 				// collected per contract when it later falls due.
 				$new_paid      = floatval($s->paid_amount) + $period_due;
-				$fully_settled = ($new_paid >= floatval($s->amount) - $tolerance);
+				$period_started = ($payoff_date_obj > $get_period_start($s));
+				$fully_settled = $is_reducing
+					? $period_started
+					: ($new_paid >= floatval($s->amount) - $tolerance);
 				$this->db->where('loan_id', $loan_id)
 					->where('payment_number', $s->payment_number)
 					->update('payement_schedules', [
@@ -7975,13 +8038,19 @@ public function get_loan_product_details() {
 				$last_pay_num = $s->payment_number;
 			} else {
 				// Partial payment on this period.
-				// Attribution rule: settle outstanding (accrued) interest first, the
-				// remainder reduces principal. For a future schedule the accrued
-				// interest is 0, so the whole surplus reduces principal.
-				$accrued              = $get_period_accrued($s);
-				$interest_outstanding = max(0, $accrued - (floatval($s->paid_amount) - floatval($s->principal_paid)));
-				$principal_portion    = max(0, $remaining - $interest_outstanding);
-				$new_principal_paid   = min(floatval($s->principal), floatval($s->principal_paid) + $principal_portion);
+				$accrued = $get_period_accrued($s);
+				if ($is_reducing) {
+					// Reducing Balance policy: every repayment reduces principal first.
+					// Only the portion left after the scheduled principal is cleared is
+					// attributed to interest.
+					$principal_outstanding = max(0, floatval($s->principal) - floatval($s->principal_paid ?? 0));
+					$principal_portion = min($remaining, $principal_outstanding);
+				} else {
+					// Preserve the existing interest-first policy for other methods.
+					$interest_outstanding = max(0, $accrued - (floatval($s->paid_amount) - floatval($s->principal_paid)));
+					$principal_portion = max(0, $remaining - $interest_outstanding);
+				}
+				$new_principal_paid = min(floatval($s->principal), floatval($s->principal_paid ?? 0) + $principal_portion);
 
 				$this->db->where('loan_id', $loan_id)
 					->where('payment_number', $s->payment_number)
@@ -9573,4 +9642,136 @@ public function get_loan_product_details() {
 		$this->toaster->success('Loan completed successfully and submitted for approval');
 		redirect('Loan/created_loans');
 	}
+    /** Export the controller's fresh database result without rendering/parsing an HTML view. */
+    private function export_loan_database_excel($filename, $view, array $data, $table_id = null)
+    {
+        $records = array();
+        foreach (array('loan_data', 'loanreports', 'projections', 'report_data') as $key) {
+            if (isset($data[$key]) && is_array($data[$key])) { $records = $data[$key]; break; }
+        }
+        if ($filename === 'Loan_Projection_Report') {
+            $records = array((object) $data);
+        }
+        $mapped = array();
+        $get = function ($record, $key, $default = '') {
+            if (is_object($record) && isset($record->$key)) return $record->$key;
+            if (is_array($record) && array_key_exists($key, $record)) return $record[$key];
+            return $default;
+        };
+        $customerName = function ($record) use ($get) {
+            $type = $get($record, 'customer_type'); $id = $get($record, 'loan_customer');
+            if ($type === 'group') { $c = $this->Groups_model->get_by_id($id); return $c ? $c->group_name : 'Unknown group'; }
+            if ($type === 'institution' || $type === 'corporate') { $c = get_by_id('corporate_customers','id',$id); return $c ? $c->EntityName : 'Unknown corporate customer'; }
+            $c = $this->Individual_customers_model->get_by_id($id); return $c ? trim($c->Firstname.' '.$c->Lastname) : 'Unknown customer';
+        };
+        if ($filename === 'Disbursed_Loans_Report') {
+            foreach ($records as $record) {
+                $type=$get($record,'customer_type'); $id=$get($record,'loan_customer');
+                if ($type === 'institution' || $type === 'corporate') $c=get_by_id('corporate_customers','id',$id);
+                elseif ($type === 'group') $c=$this->Groups_model->get_by_id($id);
+                else $c=$this->Individual_customers_model->get_by_id($id);
+                $bank=$this->Bank_model->check($id); $branch=$get($record,'branch_name','Not assigned');
+                $mapped[]=array('Branch'=>$branch,'Account Number'=>$bank->account_number ?? '-','Account Name'=>$bank->account_name ?? '-','Bank Name'=>$bank->bank_name ?? '-','Customer'=>$customerName($record),'Loan Product'=>$get($record,'product_name'),'Transaction Amount'=>(float)$get($record,'disbursed_amount',0),'Disbursed Date'=>$get($record,'disbursed_date'),'Loan Number'=>$get($record,'loan_number'),'Narration'=>trim(strip_tags(html_entity_decode((string)$get($record,'narration',''),ENT_QUOTES,'UTF-8'))));
+            }
+            $records=$mapped;
+        } elseif ($filename === 'Loan_Portfolio_Report') {
+            foreach ($records as $record) $mapped[]=array('Loan Number'=>$get($record,'loan_number'),'Product'=>$get($record,'product_name'),'Customer'=>$customerName($record),'Loan Date'=>$get($record,'loan_date'),'Principal'=>(float)$get($record,'loan_principal',0),'Period'=>$get($record,'loan_period').' '.$get($record,'period_type'),'Interest Rate'=>(float)$get($record,'loan_interest',0),'Total Amount'=>(float)$get($record,'loan_amount_total',0),'Officer'=>trim($get($record,'efname').' '.$get($record,'elname')),'Status'=>$get($record,'loan_status'));
+            $records=$mapped;
+        } elseif ($filename === 'CRB_Report') {
+            $number = 1;
+            foreach ($records as $record) $mapped[] = $this->crb_export_row($record, $number++);
+            $records=$mapped;
+        } elseif ($filename === 'Loan_Projection_Report') {
+            foreach ($records as $record) $mapped[]=array('Total Loan Amount Disbursed'=>(float)$get($record,'loan_amount_total',$get($record,'total_loan',0)),'Total Principal Disbursed'=>(float)$get($record,'loan_principal',$get($record,'principal',0)),'Total Loan Interest'=>(float)$get($record,'loan_interest_amount',$get($record,'interest',0)),'Total Loans Collected'=>(float)$get($record,'paid_amount',$get($record,'collected',0)));
+            $records=$mapped;
+        }
+        $headers = array();
+        $normalized = array();
+        foreach ($records as $record) {
+            if (is_object($record)) $record = get_object_vars($record);
+            if (!is_array($record)) $record = array('value' => $record);
+            $flat = array();
+            foreach ($record as $key => $value) {
+                if (is_object($value)) $value = get_object_vars($value);
+                if (is_array($value)) $value = json_encode($value);
+                $flat[(string)$key] = $value;
+                if (!in_array((string)$key, $headers, true)) $headers[] = (string)$key;
+            }
+            $normalized[] = $flat;
+        }
+        $safe = trim(preg_replace('/[^A-Za-z0-9_-]+/', '_', $filename), '_') . '_' . date('Y-m-d') . '.xls';
+        header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $safe . '"');
+        header('Cache-Control: max-age=0');
+        echo '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>';
+        echo '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#D9EAF7" ss:Pattern="Solid"/></Style><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style></Styles><Worksheet ss:Name="Report"><Table>';
+        $write = function (array $values, $header = false) {
+            echo '<Row>';
+            foreach ($values as $value) {
+                if ($value === null) $value = '';
+                if (is_bool($value)) $value = $value ? 'Yes' : 'No';
+                $type = (is_int($value) || is_float($value)) ? 'Number' : 'String';
+                $clean = strip_tags(html_entity_decode((string)$value, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                $clean = preg_replace('/\x{00C2}\x{00A0}|\x{00A0}/u', ' ', $clean);
+                $clean = preg_replace('/[^\x09\x0A\x0D\x20-\x{D7FF}\x{E000}-\x{FFFD}]/u', '', $clean);
+                $clean = trim(preg_replace('/[\t\r\n ]+/u', ' ', $clean));
+                echo '<Cell' . ($header ? ' ss:StyleID="Header"' : '') . '><Data ss:Type="' . $type . '">' . htmlspecialchars($clean, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</Data></Cell>';
+            }
+            echo '</Row>';
+        };
+        if ($headers) $write(array_map(function ($h) { return ucwords(str_replace(array('_', '-'), ' ', $h)); }, $headers), true);
+        foreach ($normalized as $record) {
+            $row = array(); foreach ($headers as $header) $row[] = array_key_exists($header, $record) ? $record[$header] : '';
+            $write($row);
+        }
+        echo '</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane></WorksheetOptions></Worksheet></Workbook>';
+        exit;    }
+
+    /** Map the complete database CRB record in the same order as the HTML report. */
+    private function crb_export_row($record, $number)
+    {
+        $v = function ($key, $default = '') use ($record) {
+            if (is_object($record) && isset($record->$key)) return $record->$key;
+            if (is_array($record) && array_key_exists($key, $record)) return $record[$key];
+            return $default;
+        };
+        $principal = (float) $v('loan_principal', 0);
+        $disbursedAmount = (float) $v('disbursed_amount', 0);
+        if ($disbursedAmount <= 0) $disbursedAmount = $principal;
+        $totalPaid = (float) $v('total_paid', 0);
+        $balance = (float) $v('current_balance', max(0, (float)$v('loan_amount_total', 0) - $totalPaid));
+        $arrears = (float) $v('amount_in_arrears', 0);
+        $closedDate = $v('closed_date');
+        return array(
+            'No.' => (int)$number, 'Salutation' => $v('Title'), 'Surname' => $v('Lastname'),
+            'First Name' => $v('Firstname'), 'Middle Name' => $v('Middlename'), 'Maiden Name' => '',
+            'Gender' => $v('Gender'), 'Marital Status' => $v('marital'), 'No. of Dependents' => $v('number_of_dependents'),
+            'Date of Birth' => str_replace('-', '', (string)$v('DateOfBirth')), 'National ID No.' => $v('IDNumber'),
+            'ID Type' => $v('IDType'), 'ID No.' => $v('IDNumber'), 'Nationality' => $v('Country'),
+            'Village' => $v('village'), 'T/A' => $v('Province'), 'Home District' => $v('home_district'),
+            'Resident Permit No.' => $v('resident_permit_number', $v('AddressLine2')), 'Phone No.' => $v('PhoneNumber'),
+            'Postal Address' => $v('AddressLine1'), 'Email Address' => $v('EmailAddress'),
+            'Residential Address' => $v('AddressLine2'), 'Residential District' => $v('home_district', $v('AddressLine2')),
+            'Plot No.' => $v('plot_number'), 'Profession/Occupation' => $v('Profession'), 'Employer Name' => $v('employer_name'),
+            'Employer Address' => $v('employer_address'), 'Employer Phone No.' => $v('employer_phone'), 'Employment Date' => $v('employment_date'),
+            'Branch Code/Name' => $v('branch_name', 'Not assigned'), 'Loan Reference No.' => $v('loan_number'),
+            'Old Loan Reference No.' => $v('old_loan_reference'), 'Currency' => $v('currency_code', $v('currency_name')),
+            'Approved Amount' => $principal, 'Approved Amount (ZMW)' => $principal, 'Disbursed' => $v('disbursed'),
+            'Amount' => $disbursedAmount, 'Disbursed Amount (ZMW)' => $disbursedAmount,
+            'Disbursement Date' => $v('disbursed_date'), 'Maturity Date' => $v('maturity_date'),
+            'Borrower Type' => $v('customer_type'), 'Group Name' => $v('group_name'), 'Group No.' => $v('group_code'),
+            'Product Type' => $v('product_name'), 'Payment Terms' => $v('loan_period'),
+            'Collateral Status' => $v('collateral_status'), 'Reserve Bank Classification' => $v('crb_search'),
+            'Account Status' => $v('loan_status'), 'Account Status Change Date' => $closedDate,
+            'Scheduled Repayment Amount' => (float)$v('loan_amount_term', 0), 'Scheduled Repayment Amount (ZMW)' => (float)$v('loan_amount_term', 0),
+            'Total Amount Paid To Date' => $totalPaid, 'Total Amount Paid To Date (ZMW)' => $totalPaid,
+            'Current Balance Current Balance (ZMW)' => $balance, 'Available Credit' => 0.0, 'Available Credit (ZMW)' => 0.0,
+            'Amount In Arrears' => $arrears, 'Amount In Arrears (ZMW)' => $arrears,
+            'Days In Arrears' => (int)$v('days_in_arrears', 0), 'No. of Installments In Arrears' => (int)$v('installments_in_arrears', 0),
+            'Default Date' => $v('default_date'), 'Pay Off/Termination' => $closedDate,
+            'Date Reason For Closure' => $v('closing_notes'), 'First Payment Date' => $v('first_payment_date'),
+            'Last Payment Date' => $v('last_payment_date'), 'Last Payment Amount' => (float)$v('last_payment_amount', 0),
+            'Last Payment Amount (ZMW)' => (float)$v('last_payment_amount', 0)
+        );
+    }
 }

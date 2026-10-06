@@ -1,7 +1,7 @@
 <?php
 $loan_types = $this->Loan_products_model->get_all();
-$corporate = get_all_by_id('corporate_customers','category','client');
-$offtakercorporate = get_all_by_id('corporate_customers','category','off_taker');
+$corporate = isset($corporate_customers) ? $corporate_customers : array();
+$offtakercorporate = isset($off_taker_customers) ? $off_taker_customers : array();
 $currencies  = get_all('currencies ');
 $get_settings = get_by_id('settings','settings_id', '1');
 

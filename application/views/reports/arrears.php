@@ -36,7 +36,9 @@ $products = get_all('loan');
 						Date to:<input type="text" class="dpicker" name="to" value="<?php  echo $this->input->get('to')?>" >
 						<button type="submit" name="search" value="filter">Filter</button>
 						<button type="submit" name="search" value="pdf"><i class="fa fa-file-pdf text-danger"></i></button>
-<!--						<button type="submit" name="search" value="excel"><i class="fa fa-file-excel text-success"></i></button>-->
+                        <button type="submit" name="search" value="excel" class="btn btn-success btn-sm">
+                            <i class="fa fa-file-excel"></i> Excel
+                        </button>
 					</div>
 				</fieldset>
 			</form>

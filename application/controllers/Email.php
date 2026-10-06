@@ -10,6 +10,7 @@ class Email extends CI_Controller
         parent::__construct();
         $this->load->database();
         $this->load->helper('common_queries');
+        $this->load->helper('mithenga');
 
         // Check if user is logged in
         if (!$this->session->userdata('user_id')) {
@@ -210,6 +211,7 @@ class Email extends CI_Controller
         $sent = 0;
         $failed = 0;
         $errors = array();
+        $whatsapp_messages = array();
 
         foreach ($recipients as $recipient) {
             $email = $recipient->email;
@@ -226,12 +228,14 @@ class Email extends CI_Controller
                 array($name, $name, $email, $email),
                 $message
             );
+            $phone = mithenga_phone_for_email($email);
+            if ($phone !== '') $whatsapp_messages[] = array('to' => $phone, 'text' => mithenga_text_from_email($subject, $personalized_message));
 
             // Send email
             if ($use_template) {
-                $result = send_templated_email($email, $subject, $personalized_message);
+                $result = send_templated_email($email, $subject, $personalized_message, array('whatsapp' => false));
             } else {
-                $result = send_smtp_email($email, $subject, $personalized_message);
+                $result = send_smtp_email($email, $subject, $personalized_message, array('whatsapp' => false));
             }
 
             if ($result['success']) {
@@ -247,12 +251,14 @@ class Email extends CI_Controller
             usleep(100000); // 0.1 second
         }
 
+        $whatsapp_result = empty($whatsapp_messages) ? NULL : send_mithenga_whatsapp_bulk($whatsapp_messages);
         echo json_encode(array(
             'success' => true,
             'message' => "Bulk email completed. Sent: $sent, Failed: $failed",
             'sent' => $sent,
             'failed' => $failed,
-            'errors' => array_slice($errors, 0, 5) // Only return first 5 errors
+            'errors' => array_slice($errors, 0, 5), // Only return first 5 errors
+            'whatsapp' => $whatsapp_result
         ));
     }
 
@@ -934,6 +940,7 @@ class Email extends CI_Controller
         $sent = 0;
         $failed = 0;
         $errors = array();
+        $whatsapp_messages = array();
 
         foreach ($recipients as $recipient) {
             $email = $recipient['email'];
@@ -960,9 +967,11 @@ class Email extends CI_Controller
                 array($email, $email, $email, $email),
                 $personalized_message
             );
+            $phone = mithenga_phone_for_email($email);
+            if ($phone !== '') $whatsapp_messages[] = array('to' => $phone, 'text' => mithenga_text_from_email($subject, $personalized_message));
 
             // Send email with attachments
-            $options = array('attachments' => $attachments);
+            $options = array('attachments' => $attachments, 'whatsapp' => false);
             if ($use_template) {
                 $result = send_templated_email($email, $subject, $personalized_message, $options);
             } else {
@@ -988,12 +997,14 @@ class Email extends CI_Controller
         // Clear session data
         $this->session->unset_userdata('excel_recipients');
 
+        $whatsapp_result = empty($whatsapp_messages) ? NULL : send_mithenga_whatsapp_bulk($whatsapp_messages);
         echo json_encode(array(
             'success' => true,
             'message' => "Bulk email completed. Sent: $sent, Failed: $failed",
             'sent' => $sent,
             'failed' => $failed,
-            'errors' => array_slice($errors, 0, 5)
+            'errors' => array_slice($errors, 0, 5),
+            'whatsapp' => $whatsapp_result
         ));
     }
 

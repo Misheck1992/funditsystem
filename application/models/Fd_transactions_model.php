@@ -164,6 +164,21 @@ class Fd_transactions_model extends CI_Model
     /**
      * Get transactions for statement
      */
+    /**
+     * Get the principal balance immediately before a statement period.
+     */
+    function get_balance_before($deposit_id, $date)
+    {
+        $this->db->select('principal_after');
+        $this->db->where('deposit_id', $deposit_id);
+        $this->db->where('DATE(created_at) <', $date);
+        $this->db->order_by('created_at', 'DESC');
+        $this->db->order_by($this->id, 'DESC');
+        $row = $this->db->get($this->table, 1)->row();
+
+        return $row ? (float) $row->principal_after : 0;
+    }
+
     function get_for_statement($deposit_id, $from_date = null, $to_date = null)
     {
         $this->db->where('deposit_id', $deposit_id);

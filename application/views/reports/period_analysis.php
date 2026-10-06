@@ -30,7 +30,7 @@
 			<table class="table table-bordered">
 				<tr>
 					<td>(a) Total ZMW value of loans disbursed during the period</td>
-					<td style="text-align: left;"> ZMW<?php echo number_format($total_loan_principal->total,2) ?></td>
+					<td style="text-align: left;"> ZMW<?php echo number_format((float) ($total_loan_principal->total ?? 0), 2) ?></td>
 				</tr>
 				<tr>
 					<td>(b) Total Number of loans disbursed during the period</td>

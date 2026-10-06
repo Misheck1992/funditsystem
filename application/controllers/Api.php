@@ -7,6 +7,7 @@ class Api extends CI_Controller
     function __construct()
     {
         parent::__construct();
+        $this->load->helper('mithenga');
         $this->load->model('Individual_customers_model');
         $this->load->model('Proofofidentity_model');
         $this->load->model('Bank_model');
@@ -141,8 +142,11 @@ class Api extends CI_Controller
         // Get input data
         $input = $this->_get_input();
 
-        // Required fields
-        $required_fields = array('email');
+        $channel = isset($input['channel']) ? strtolower(trim($input['channel'])) : 'email';
+        if (!in_array($channel, array('email', 'whatsapp'), TRUE)) {
+            $this->_response(array('status' => 'error', 'message' => 'Channel must be email or whatsapp'), 400);
+        }
+        $required_fields = array($channel === 'whatsapp' ? 'phone' : 'email');
         $missing = $this->_validate_required($input, $required_fields);
 
         if (!empty($missing)) {
@@ -153,20 +157,25 @@ class Api extends CI_Controller
             ), 400);
         }
 
-        $email = trim($input['email']);
+        $email = isset($input['email']) ? trim($input['email']) : '';
+        $phone = isset($input['phone']) ? normalize_mithenga_phone($input['phone']) : '';
         $purpose = isset($input['purpose']) ? trim($input['purpose']) : 'verification';
 
         // Validate email format
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($channel === 'email' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->_response(array(
                 'status' => 'error',
                 'message' => 'Invalid email format'
             ), 400);
         }
+        if ($channel === 'whatsapp' && strlen($phone) < 10) {
+            $this->_response(array('status' => 'error', 'message' => 'Invalid WhatsApp phone number'), 400);
+        }
+        $identity = $channel === 'whatsapp' ? 'whatsapp:' . $phone : strtolower($email);
 
         // Check rate limiting - max 5 OTPs per email in last 10 minutes
         $ten_minutes_ago = date('Y-m-d H:i:s', strtotime('-10 minutes'));
-        $recent_count = $this->db->where('email', $email)
+        $recent_count = $this->db->where('email', $identity)
             ->where('created_at >', $ten_minutes_ago)
             ->count_all_results('otp');
 
@@ -178,7 +187,7 @@ class Api extends CI_Controller
         }
 
         // Invalidate any existing unused OTPs for this email/purpose
-        $this->db->where('email', $email)
+        $this->db->where('email', $identity)
             ->where('purpose', $purpose)
             ->where('is_verified', 0)
             ->update('otp', array('is_verified' => -1)); // -1 = invalidated
@@ -189,8 +198,8 @@ class Api extends CI_Controller
 
         // Save OTP to database
         $otp_data = array(
-            'email' => $email,
-            'phone' => null,
+            'email' => $identity,
+            'phone' => $channel === 'whatsapp' ? $phone : null,
             'otp_code' => $otp_code,
             'purpose' => $purpose,
             'is_verified' => 0,
@@ -227,17 +236,23 @@ class Api extends CI_Controller
         ';
 
         // Send email using the existing email helper
-        $email_result = send_templated_email($email, 'Your Verification Code - ' . $company_name, $email_body);
+        if ($channel === 'whatsapp') {
+            $delivery = send_mithenga_whatsapp($phone, '*' . $company_name . ' Verification Code*' . PHP_EOL . PHP_EOL . 'Your OTP is: *' . $otp_code . '*' . PHP_EOL . 'It expires in 10 minutes. Do not share it with anyone.');
+            $delivery_error = isset($delivery['error']) ? $delivery['error'] : '';
+        } else {
+            $delivery = send_templated_email($email, 'Your Verification Code - ' . $company_name, $email_body, array('whatsapp' => false));
+            $delivery_error = isset($delivery['message']) ? $delivery['message'] : '';
+        }
 
-        if (!$email_result['success']) {
-            log_message('error', 'Failed to send OTP email to ' . $email . ': ' . $email_result['message']);
-            // OTP is saved in DB — proceed with warning instead of failing
+        if (!$delivery['success']) {
+            log_message('error', 'Failed to send OTP via ' . $channel . ' to ' . $identity . ': ' . $delivery_error);
+            // OTP is saved in DB â€” proceed with warning instead of failing
         }
 
         // Log the activity
         $logger = array(
-            'user_id' => 72,
-            'activity' => 'API: OTP sent to ' . $email . ' for ' . $purpose,
+            'user_id' => 0,
+            'activity' => 'API: OTP sent via ' . $channel . ' to ' . $identity . ' for ' . $purpose,
             'activity_cate' => 'otp_sent'
         );
         $this->db->insert('activity_logger', $logger);
@@ -245,10 +260,13 @@ class Api extends CI_Controller
         // Success response
         $this->_response(array(
             'status' => 'success',
-            'message' => $email_result['success'] ? 'OTP sent successfully to your email' : 'OTP generated but email delivery failed. Check SMTP settings.',
-            'email_sent' => $email_result['success'],
+            'message' => $delivery['success'] ? 'OTP sent successfully via ' . $channel : 'OTP generated but delivery failed.',
+            'channel' => $channel,
+            'email_sent' => $channel === 'email' && $delivery['success'],
+            'whatsapp_sent' => $channel === 'whatsapp' && $delivery['success'],
             'data' => array(
-                'email' => $this->_mask_email($email),
+                'email' => $channel === 'email' ? $this->_mask_email($email) : null,
+                'phone' => $channel === 'whatsapp' ? $this->_mask_phone($phone) : null,
                 'purpose' => $purpose,
                 'expires_in' => '10 minutes',
                 'expires_at' => $expires_at
@@ -278,12 +296,13 @@ class Api extends CI_Controller
         // Get input data
         $input = $this->_get_input();
 
-        // Required fields
-        if (empty($input['email'])) {
+        $channel = isset($input['channel']) ? strtolower(trim($input['channel'])) : 'email';
+        $identity_field = $channel === 'whatsapp' ? 'phone' : 'email';
+        if (!in_array($channel, array('email', 'whatsapp'), TRUE) || empty($input[$identity_field])) {
             $this->_response(array(
                 'status' => 'error',
                 'message' => 'Missing required fields',
-                'missing_fields' => array('email')
+                'missing_fields' => array($identity_field)
             ), 400);
         }
 
@@ -298,12 +317,14 @@ class Api extends CI_Controller
             ), 400);
         }
 
-        $email = trim($input['email']);
+        $email = isset($input['email']) ? trim($input['email']) : '';
+        $phone = isset($input['phone']) ? normalize_mithenga_phone($input['phone']) : '';
+        $identity = $channel === 'whatsapp' ? 'whatsapp:' . $phone : strtolower($email);
         $otp_code = trim($otp_value);
         $purpose = isset($input['purpose']) ? trim($input['purpose']) : 'verification';
 
         // Find the OTP record
-        $otp = $this->db->where('email', $email)
+        $otp = $this->db->where('email', $identity)
             ->where('purpose', $purpose)
             ->where('is_verified', 0)
             ->where('expires_at >', date('Y-m-d H:i:s'))
@@ -351,18 +372,26 @@ class Api extends CI_Controller
 
         // Log the activity
         $logger = array(
-            'user_id' => 72,
-            'activity' => 'API: OTP verified for ' . $email . ' (' . $purpose . ')',
+            'user_id' => 0,
+            'activity' => 'API: OTP verified for ' . $identity . ' (' . $purpose . ')',
             'activity_cate' => 'otp_verified'
         );
         $this->db->insert('activity_logger', $logger);
 
         // Check if customer exists in individual_customers (case-insensitive)
-        $existing_customer = $this->db->where('LOWER(TRIM(EmailAddress))', strtolower(trim($email)))->get('individual_customers')->row();
-
+        if ($channel === 'whatsapp') {
+            $raw_phone = trim($input['phone']);
+            $local_phone = strlen($phone) >= 9 ? '0' . substr($phone, -9) : $phone;
+            $phone_variants = array_values(array_unique(array_filter(array($raw_phone, $phone, '+' . $phone, $local_phone))));
+            $existing_customer = $this->db->where_in('PhoneNumber', $phone_variants)->get('individual_customers')->row();
+        } else {
+            $existing_customer = $this->db->where('LOWER(TRIM(EmailAddress))', strtolower(trim($email)))->get('individual_customers')->row();
+        }
         // Build response data
         $response_data = array(
-            'email' => $email,
+            'email' => $channel === 'email' ? $email : ($existing_customer ? $existing_customer->EmailAddress : null),
+            'phone' => $channel === 'whatsapp' ? $phone : ($existing_customer ? $existing_customer->PhoneNumber : null),
+            'channel' => $channel,
             'purpose' => $purpose,
             'verified' => true,
             'verified_at' => date('Y-m-d H:i:s'),
@@ -421,11 +450,17 @@ class Api extends CI_Controller
         return $masked_name . '@' . $domain;
     }
 
+    private function _mask_phone($phone)
+    {
+        $phone = (string) $phone;
+        return strlen($phone) > 4 ? str_repeat('*', strlen($phone) - 4) . substr($phone, -4) : $phone;
+    }
+
     /**
      * Register Individual Customer
      * POST /api/register_customer
      *
-     * Required fields: Firstname, Lastname, Gender, DateOfBirth, PhoneNumber, Country
+     * Required fields: Title, Firstname, Lastname, Gender, DateOfBirth, PhoneNumber, Country, Branch
      * Optional fields: Title, Middlename, EmailAddress, AddressLine1, AddressLine2, AddressLine3,
      *                  Province, City, district, village, marital, chiefta, ResidentialStatus,
      *                  Profession, SourceOfIncome, GrossMonthlyIncome, Branch,
@@ -453,7 +488,7 @@ class Api extends CI_Controller
             . ' | Email: ' . (isset($input['Email']) ? $input['Email'] : 'NOT SET'));
 
         // Required fields for registration
-        $required_fields = array('Title', 'Firstname', 'Lastname', 'Gender', 'DateOfBirth', 'PhoneNumber', 'Country');
+        $required_fields = array('Title', 'Firstname', 'Lastname', 'Gender', 'DateOfBirth', 'PhoneNumber', 'Country', 'Branch');
         $missing = $this->_validate_required($input, $required_fields);
 
         if (!empty($missing)) {
@@ -463,6 +498,14 @@ class Api extends CI_Controller
                 'missing_fields' => $missing
             ), 400);
         }
+
+        // Validate and normalize the selected branch using the same Code stored by staff registration.
+        $this->load->model('Branches_model');
+        $branch = $this->Branches_model->get_by_reference($input['Branch']);
+        if (!$branch) {
+            $this->_response(array('status' => 'error', 'message' => 'Invalid branch selected'), 400);
+        }
+        $branch_code = isset($branch->Code) ? $branch->Code : $input['Branch'];
 
         // Check if phone number already exists
         $existing = $this->db->where('PhoneNumber', $input['PhoneNumber'])->get('individual_customers')->row();
@@ -474,7 +517,7 @@ class Api extends CI_Controller
             ), 409);
         }
 
-        // Normalize email field — accept email, Email, or EmailAddress
+        // Normalize email field â€” accept email, Email, or EmailAddress
         if (empty($input['EmailAddress'])) {
             if (!empty($input['email'])) {
                 $input['EmailAddress'] = $input['email'];
@@ -523,12 +566,12 @@ class Api extends CI_Controller
             'Profession' => isset($input['Profession']) ? $input['Profession'] : '',
             'SourceOfIncome' => isset($input['SourceOfIncome']) ? $input['SourceOfIncome'] : '',
             'GrossMonthlyIncome' => isset($input['GrossMonthlyIncome']) ? $input['GrossMonthlyIncome'] : 0,
-            'Branch' => isset($input['Branch']) ? $input['Branch'] : '',
+            'Branch' => $branch_code,
             'kinFullname' => isset($input['kinFullname']) ? $input['kinFullname'] : '',
             'kinPhonenumber' => isset($input['kinPhonenumber']) ? $input['kinPhonenumber'] : '',
             'customer_type' => 'individual',
-            'approval_status' => 'CREATED',  // Set status to CREATED
-            'added_by' => 72,  // Default API user
+            'approval_status' => 'Not Approved',
+            'added_by' => 0,  // Reserved marker for Customer Portal registrations
             'CreatedOn' => date('Y-m-d H:i:s'),
             'LastUpdatedOn' => date('Y-m-d H:i:s')
         );
@@ -566,20 +609,31 @@ class Api extends CI_Controller
             'account_type' => 1,
             'account_type_product' => 2,
             'account_status' => 'Pending',
-            'added_by' => 72
+            'added_by' => 0
         );
         $this->Account_model->insert($account_data);
 
         // Log the activity
         $logger = array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Registered customer ' . $customer_data['Firstname'] . ' ' . $customer_data['Lastname'],
             'activity_cate' => 'customer_registration'
         );
         $this->db->insert('activity_logger', $logger);
 
         // Notify all users with customer creation rights
-        $this->_notify_customer_creation_users($customer_data, $clientid);
+        $this->_notify_customer_creation_users($customer_data, $clientid, $customer_id);
+
+        // Confirm portal registration to the customer through both email and
+        // WhatsApp (the central email transport resolves the stored phone).
+        if (!empty($customer_data['EmailAddress']) && filter_var($customer_data['EmailAddress'], FILTER_VALIDATE_EMAIL)) {
+            $registration_body = '<h2>Registration Received</h2>'
+                . '<p>Hello ' . htmlspecialchars($customer_data['Firstname']) . ',</p>'
+                . '<p>Your FundIt registration was received successfully and is pending approval.</p>'
+                . '<p><strong>Client ID:</strong> ' . htmlspecialchars($clientid) . '</p>'
+                . '<p>We will notify you when your account status changes.</p>';
+            send_templated_email($customer_data['EmailAddress'], 'FundIt Registration Received', $registration_body);
+        }
 
         // Success response
         $this->_response(array(
@@ -592,7 +646,7 @@ class Api extends CI_Controller
                 'full_name' => $customer_data['Firstname'] . ' ' . $customer_data['Lastname'],
                 'phone_number' => $customer_data['PhoneNumber'],
                 'email' => $customer_data['EmailAddress'],
-                'status' => 'CREATED',
+                'status' => 'Not Approved',
                 'created_on' => $customer_data['CreatedOn']
             )
         ), 201);
@@ -711,16 +765,16 @@ class Api extends CI_Controller
     /**
      * Notify all users with customer creation rights about a new registration
      */
-    private function _notify_customer_creation_users($customer_data, $clientid)
+    private function _notify_customer_creation_users($customer_data, $clientid, $customer_id)
     {
-        // Find all employees whose role has access to Individual_customers/create
+        // Find all employees whose role has access to customer approvals
         $users = $this->db->select('e.id, e.Firstname, e.Lastname, e.EmailAddress', FALSE)
             ->distinct()
             ->from('employees e')
             ->join('roles r', 'r.id = e.Role')
             ->join('access a', 'a.roleid = r.id')
             ->join('menuitems mi', 'mi.id = a.controllerid')
-            ->where('LOWER(mi.method)', 'individual_customers/create')
+            ->where('LOWER(mi.method)', 'individual_customers/approve')
             ->where('e.EmailAddress !=', '')
             ->get()
             ->result();
@@ -734,6 +788,9 @@ class Api extends CI_Controller
 
         $full_name = $customer_data['Firstname'] . ' ' . $customer_data['Lastname'];
         $subject = 'New Customer Registration - ' . $full_name;
+        $approval_url = base_url('individual_customers/approve');
+        $this->load->model('Branches_model');
+        $branch_name = $this->Branches_model->get_name_by_reference($customer_data['Branch']);
 
         $email_body = '
             <h2 style="color: #1e3a5f;">New Customer Registered</h2>
@@ -758,17 +815,20 @@ class Api extends CI_Controller
                 <tr style="background: #f8fafc;">
                     <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Country</td>
                     <td style="padding: 10px; border: 1px solid #e2e8f0;">' . htmlspecialchars($customer_data['Country']) . '</td>
+                </tr>                <tr>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Branch</td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;">' . htmlspecialchars($branch_name) . '</td>
                 </tr>
                 <tr>
                     <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Status</td>
-                    <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="background: #fef3c7; color: #92400e; padding: 3px 10px; border-radius: 12px; font-size: 13px;">CREATED</span></td>
+                    <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="background: #fef3c7; color: #92400e; padding: 3px 10px; border-radius: 12px; font-size: 13px;">PENDING APPROVAL</span></td>
                 </tr>
                 <tr style="background: #f8fafc;">
                     <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">Registered On</td>
                     <td style="padding: 10px; border: 1px solid #e2e8f0;">' . $customer_data['CreatedOn'] . '</td>
                 </tr>
             </table>
-            <p style="color: #666;">Please log in to the system to review and approve this customer.</p>
+            <p style="margin: 24px 0;"><a href="' . $approval_url . '" style="display: inline-block; background: #059669; color: #ffffff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Review &amp; Approve Customer</a></p><p style="color: #666;">Please log in to the system to review and approve or reject this customer.</p>
         ';
 
         foreach ($users as $user) {
@@ -967,12 +1027,12 @@ class Api extends CI_Controller
 
         if (!$email_result['success']) {
             log_message('error', 'Failed to send enquiry email to ' . $recipient . ': ' . $email_result['message']);
-            // Enquiry is saved in DB — proceed with warning instead of failing the request
+            // Enquiry is saved in DB â€” proceed with warning instead of failing the request
         }
 
         // Log the activity
         $logger = array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Website enquiry received from ' . $name . ' <' . $email . '>',
             'activity_cate' => 'website_enquiry'
         );
@@ -1497,7 +1557,7 @@ class Api extends CI_Controller
 
         // Log the activity
         $logger = array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Loan application created - ' . $result['loan_number'] . ' for ' . $customer_name,
             'activity_cate' => 'loan_application'
         );
@@ -1878,7 +1938,7 @@ class Api extends CI_Controller
 
         $collaterals_data = array();
 
-        // By loan_id — get collaterals linked to a specific loan
+        // By loan_id â€” get collaterals linked to a specific loan
         if (!empty($loan_id)) {
             $linked = $this->Collateral_model->get_loan_collaterals($loan_id);
 
@@ -2083,7 +2143,7 @@ class Api extends CI_Controller
         }
 
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Collateral "' . $data['collateral_name'] . '" added for customer #' . $customer_id,
             'activity_cate' => 'collateral_add'
         ));
@@ -2174,7 +2234,7 @@ class Api extends CI_Controller
         $this->Collateral_model->update($collateral_id, $update_data);
 
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Collateral #' . $collateral_id . ' updated',
             'activity_cate' => 'collateral_update'
         ));
@@ -2232,14 +2292,14 @@ class Api extends CI_Controller
         if (!empty($active_links)) {
             $this->_response(array(
                 'status' => 'error',
-                'message' => 'Cannot delete collateral — it is linked to ' . count($active_links) . ' active loan(s). Release the links first.'
+                'message' => 'Cannot delete collateral â€” it is linked to ' . count($active_links) . ' active loan(s). Release the links first.'
             ), 400);
         }
 
         $this->Collateral_model->delete($collateral_id);
 
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Collateral #' . $collateral_id . ' "' . $collateral->collateral_name . '" deleted',
             'activity_cate' => 'collateral_delete'
         ));
@@ -2313,7 +2373,7 @@ class Api extends CI_Controller
         ));
 
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Collateral #' . $collateral_id . ' linked to loan #' . $loan->loan_number . ' (' . number_format($amount_utilized, 2) . ')',
             'activity_cate' => 'collateral_link'
         ));
@@ -2363,7 +2423,7 @@ class Api extends CI_Controller
         $this->Collateral_model->update_link_status($link->id, 'RELEASED', 0);
 
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Collateral #' . $collateral_id . ' released from loan #' . $loan_id,
             'activity_cate' => 'collateral_unlink'
         ));
@@ -2529,8 +2589,8 @@ class Api extends CI_Controller
 
         // Log the activity
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
-            'activity' => 'API: FD details retrieved for ' . $email,
+            'user_id' => 0,
+            'activity' => 'Customer Portal: ' . $individual->Firstname . ' ' . $individual->Lastname . ' (' . $individual->ClientId . ') viewed linked fixed-deposit accounts',
             'activity_cate' => 'fd_self_service'
         ));
 
@@ -2552,74 +2612,118 @@ class Api extends CI_Controller
      */
     public function get_fd_statement()
     {
-        // Accept GET query params, POST form data, or JSON body
         $input = array_merge($this->input->get() ?: array(), $this->_get_input() ?: array());
         $email = isset($input['email']) ? trim($input['email']) : '';
         $customer_id = isset($input['customer_id']) ? trim($input['customer_id']) : '';
         $deposit_id = isset($input['deposit_id']) ? intval($input['deposit_id']) : 0;
-        $from_date = isset($input['from_date']) ? trim($input['from_date']) : null;
-        $to_date = isset($input['to_date']) ? trim($input['to_date']) : null;
 
         if (empty($email) && empty($customer_id)) {
             $this->_response(array('status' => 'error', 'message' => 'Please provide email or customer_id'), 400);
         }
-
         if (empty($deposit_id)) {
             $this->_response(array('status' => 'error', 'message' => 'Missing required field: deposit_id'), 400);
         }
 
-        // Find individual customer
         if (!empty($customer_id)) {
             $individual = get_by_id('individual_customers', 'id', $customer_id);
         } else {
             $individual = $this->db->where('LOWER(TRIM(EmailAddress))', strtolower(trim($email)))->get('individual_customers')->row();
         }
-
         if (!$individual) {
             $this->_response(array('status' => 'error', 'message' => 'No customer account found'), 404);
         }
 
-        // Get the deposit
         $deposit = $this->Fd_deposits_model->get_by_id($deposit_id);
         if (!$deposit) {
             $this->_response(array('status' => 'error', 'message' => 'Deposit not found'), 404);
         }
 
-        // Verify the deposit belongs to an FD customer linked to this individual
         $fd_customer = $this->Fd_customers_model->get_by_id($deposit->customer_id);
         if (!$fd_customer || $fd_customer->personal_linkage != $individual->id) {
             $this->_response(array('status' => 'error', 'message' => 'You do not have access to this deposit'), 403);
         }
 
-        // Get transactions/statement
-        $transactions = $this->Fd_transactions_model->get_for_statement($deposit_id, $from_date, $to_date);
+        $today = date('Y-m-d');
+        $from_date = !empty($input['from_date']) ? trim($input['from_date']) : $deposit->start_date;
+        $to_date = !empty($input['to_date']) ? trim($input['to_date']) : $today;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from_date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to_date)) {
+            $this->_response(array('status' => 'error', 'message' => 'Dates must use YYYY-MM-DD format'), 400);
+        }
+        if ($to_date > $today) {
+            $to_date = $today;
+        }
+        if ($from_date > $to_date) {
+            $this->_response(array('status' => 'error', 'message' => 'From date cannot be after the as-at date'), 400);
+        }
 
-        $txn_data = array();
-        $running_balance = 0;
-        foreach ($transactions as $txn) {
-            // Track running balance based on transaction type
-            if (in_array($txn->transaction_type, array('DEPOSIT', 'TOP_UP', 'MERGE_IN'))) {
-                $running_balance += $txn->amount;
-            } else {
-                $running_balance -= $txn->amount;
+        // Support both current and older fd_transactions schemas.
+        $has_principal_after = $this->db->field_exists('principal_after', 'fd_transactions');
+        $opening_balance = 0;
+        if ($has_principal_after) {
+            $opening_row = $this->db->select('principal_after')
+                ->where('deposit_id', $deposit_id)
+                ->where('DATE(created_at) <', $from_date)
+                ->order_by('created_at', 'DESC')
+                ->order_by('id', 'DESC')
+                ->get('fd_transactions', 1)
+                ->row();
+            $opening_balance = $opening_row ? (float) $opening_row->principal_after : 0;
+        } else {
+            $prior_transactions = $this->db->where('deposit_id', $deposit_id)
+                ->where('DATE(created_at) <', $from_date)
+                ->order_by('created_at', 'ASC')
+                ->order_by('id', 'ASC')
+                ->get('fd_transactions')
+                ->result();
+            foreach ($prior_transactions as $prior) {
+                if (in_array($prior->transaction_type, array('DEPOSIT', 'TOP_UP', 'MERGE_IN'), TRUE)) {
+                    $opening_balance += (float) $prior->amount;
+                } elseif (in_array($prior->transaction_type, array('PRINCIPAL_WITHDRAWAL', 'CLOSURE', 'MERGE_OUT'), TRUE)) {
+                    $opening_balance -= (float) $prior->amount;
+                }
             }
-
+        }        $this->db->where('deposit_id', $deposit_id);
+        $this->db->where('DATE(created_at) >=', $from_date);
+        $this->db->where('DATE(created_at) <=', $to_date);
+        $this->db->order_by('created_at', 'ASC');
+        $this->db->order_by('id', 'ASC');
+        $transactions = $this->db->get('fd_transactions')->result();
+        $txn_data = array();
+        $running_balance = $opening_balance;
+        foreach ($transactions as $txn) {
+            if ($has_principal_after && isset($txn->principal_after)) {
+                $running_balance = (float) $txn->principal_after;
+            } elseif (in_array($txn->transaction_type, array('DEPOSIT', 'TOP_UP', 'MERGE_IN'), TRUE)) {
+                $running_balance += (float) $txn->amount;
+            } elseif (in_array($txn->transaction_type, array('PRINCIPAL_WITHDRAWAL', 'CLOSURE', 'MERGE_OUT'), TRUE)) {
+                $running_balance -= (float) $txn->amount;
+            }
             $txn_data[] = array(
                 'ref' => $txn->transaction_ref,
                 'type' => $txn->transaction_type,
-                'amount' => $txn->amount,
+                'amount' => (float) $txn->amount,
                 'date' => $txn->created_at,
-                'notes' => $txn->notes,
+                'notes' => isset($txn->notes) ? $txn->notes : '',
                 'balance' => $running_balance
             );
         }
+        $closing_balance = !empty($txn_data) ? $running_balance : $opening_balance;
+        if (empty($transactions) && $from_date <= $deposit->start_date && $to_date >= $deposit->start_date) {
+            $closing_balance = (float) $deposit->current_principal;
+        }
 
-        // Log the activity
-        $this->db->insert('activity_logger', array(
-            'user_id' => 72,
-            'activity' => 'API: FD statement retrieved for deposit #' . $deposit->deposit_number . ' by ' . $email,
-            'activity_cate' => 'fd_self_service'
-        ));
+        // Calculate accrued interest locally for compatibility with deployed helper versions.
+        $interest_from = isset($deposit->last_accrual_date) && !empty($deposit->last_accrual_date) ? $deposit->last_accrual_date : $deposit->start_date;
+        $interest_to = (!empty($deposit->maturity_date) && $deposit->maturity_date < $to_date) ? $deposit->maturity_date : $to_date;
+        $interest_days = strtotime($interest_to) >= strtotime($interest_from)
+            ? (int) floor((strtotime($interest_to) - strtotime($interest_from)) / 86400)
+            : 0;
+        $accrued_interest = $closing_balance * ((float) $deposit->interest_rate / 100) * ($interest_days / 365);
+        $wht_rate = 15;
+        $wht_amount = $accrued_interest * ($wht_rate / 100);
+        $net_accrued_interest = $accrued_interest - $wht_amount;
+
+        // Do not allow optional activity logging to block statement delivery.
 
         $this->_response(array(
             'status' => 'success',
@@ -2628,7 +2732,7 @@ class Api extends CI_Controller
                 'deposit' => array(
                     'id' => $deposit->id,
                     'deposit_number' => $deposit->deposit_number,
-                    'principal' => $deposit->current_principal,
+                    'principal' => $closing_balance,
                     'interest_rate' => $deposit->interest_rate,
                     'start_date' => $deposit->start_date,
                     'maturity_date' => $deposit->maturity_date,
@@ -2638,17 +2742,18 @@ class Api extends CI_Controller
                     'customer_number' => $fd_customer->customer_number,
                     'name' => $fd_customer->first_name . ' ' . $fd_customer->last_name
                 ),
-                'period' => array(
-                    'from' => $from_date,
-                    'to' => $to_date
-                ),
+                'period' => array('from' => $from_date, 'to' => $to_date),
                 'transactions' => $txn_data,
-                'opening_balance' => !empty($txn_data) ? $txn_data[0]['balance'] - (in_array($transactions[0]->transaction_type, array('DEPOSIT', 'TOP_UP', 'MERGE_IN')) ? $transactions[0]->amount : -$transactions[0]->amount) : 0,
-                'closing_balance' => !empty($txn_data) ? end($txn_data)['balance'] : 0
+                'opening_balance' => $opening_balance,
+                'closing_balance' => $closing_balance,
+                'accrued_interest' => $accrued_interest,
+                'wht_rate' => $wht_rate,
+                'wht_amount' => $wht_amount,
+                'net_accrued_interest' => $net_accrued_interest,
+                'current_value' => $closing_balance + $net_accrued_interest
             )
         ), 200);
     }
-
     /**
      * Get Full FD Report
      * GET /Api/get_fd_report?customer_id=xxx
@@ -2740,7 +2845,7 @@ class Api extends CI_Controller
                         'type' => $txn->transaction_type,
                         'amount' => $txn->amount,
                         'date' => $txn->created_at,
-                        'notes' => $txn->notes,
+                        'notes' => isset($txn->notes) ? $txn->notes : '',
                         'balance' => $running_balance
                     );
                 }
@@ -2794,7 +2899,7 @@ class Api extends CI_Controller
 
         // Log the activity
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Full FD report retrieved for customer #' . $individual->id,
             'activity_cate' => 'fd_self_service'
         ));
@@ -2860,7 +2965,7 @@ class Api extends CI_Controller
             $this->_response(array('status' => 'error', 'message' => 'Missing required fields', 'missing_fields' => $missing), 400);
         }
 
-        // Identify the registering individual — accept customer_id or email
+        // Identify the registering individual â€” accept customer_id or email
         $individual = null;
         if (!empty($input['customer_id'])) {
             $individual = get_by_id('individual_customers', 'id', $input['customer_id']);
@@ -2885,7 +2990,7 @@ class Api extends CI_Controller
         // Generate unique client ID
         $clientid = 'BIZ' . rand(100, 999) . rand(1000, 9999);
 
-        // Prepare corporate customer data — all fields from the create form
+        // Prepare corporate customer data â€” all fields from the create form
         $corporate_data = array(
             'ClientId' => $clientid,
             'EntityName' => $input['EntityName'],
@@ -3033,7 +3138,7 @@ class Api extends CI_Controller
 
         // Log the activity
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Registered business "' . $corporate_data['EntityName'] . '" with ' . count($shareholders_result) . ' shareholders, linked to individual #' . $individual->id,
             'activity_cate' => 'business_registration'
         ));
@@ -3103,11 +3208,14 @@ class Api extends CI_Controller
             // Build the corporate record
             $corp_data = $this->_build_corporate_response($corp, $base_upload_url);
 
-            // Split by category
+            // Every corporate entity explicitly linked to the individual is a
+            // manageable business profile in the customer portal. Keep the
+            // off-taker collection as an additional classification, but do not
+            // remove those entities from the main businesses collection; the
+            // portal uses businesses.length to decide whether setup is required.
+            $businesses[] = $corp_data;
             if ($corp->category === 'off_taker') {
                 $off_takers[] = $corp_data;
-            } else {
-                $businesses[] = $corp_data;
             }
         }
 
@@ -3168,7 +3276,7 @@ class Api extends CI_Controller
         foreach ($branches as $b) {
             $result[] = array(
                 'id' => $b->id,
-                'code' => $b->BranchCode,
+                'code' => isset($b->Code) ? (string) $b->Code : (string) $b->BranchCode,
                 'name' => $b->BranchName
             );
         }
@@ -3478,7 +3586,7 @@ class Api extends CI_Controller
 
         // Log activity
         $this->db->insert('activity_logger', array(
-            'user_id' => 72,
+            'user_id' => 0,
             'activity' => 'API: Corporate loan #' . $loan->loan_number . ' applied for ' . $corporate->EntityName . ' by individual #' . $individual->id,
             'activity_cate' => 'loan_application'
         ));
@@ -3761,6 +3869,30 @@ class Api extends CI_Controller
                 );
             }
 
+            // Loan statement: use the same payment credits shown in the admin
+            // repayment view. REV-* rows are ledger corrections, not payments.
+            $payment_transactions_raw = $this->db
+                ->where('account_number', $loan->loan_number)
+                ->where('credit !=', 0)
+                ->not_like('transaction_id', 'REV-', 'after')
+                ->order_by('system_time', 'ASC')
+                ->get('transaction')
+                ->result();
+
+            $payment_transactions = array();
+            foreach ($payment_transactions_raw as $transaction) {
+                $proof = isset($transaction->proof) ? $transaction->proof : '';
+                $payment_transactions[] = array(
+                    'amount' => (float)$transaction->credit,
+                    'transaction_ref' => $transaction->transaction_id,
+                    'reason' => isset($transaction->reason) ? $transaction->reason : '',
+                    'date' => $transaction->system_time,
+                    'cashier_account' => isset($transaction->coresponding_account) ? $transaction->coresponding_account : '',
+                    'proof' => $proof,
+                    'proof_url' => !empty($proof) ? base_url('uploads/' . $proof) : null
+                );
+            }
+
             $result[] = array(
                 'loan_id' => (int)$loan->loan_id,
                 'loan_number' => $loan->loan_number,
@@ -3788,6 +3920,7 @@ class Api extends CI_Controller
                     'next_due_date' => $next_due_date
                 ),
                 'repayment_schedule' => $schedules,
+                'payment_transactions' => $payment_transactions,
                 'collaterals' => $collaterals
             );
         }

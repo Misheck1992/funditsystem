@@ -563,9 +563,13 @@ $officer = get_all('employees');
                                         <a href="<?php echo base_url('loan/client_summary/').urlencode($loan->loan_id); ?>" class="btn-action btn-summary" title="Client Summary">
                                             <i class="fa fa-user"></i>
                                         </a>
-                                        <?php if($loan->loan_status == 'INITIATED' || (isset($loan->sent_back) && $loan->sent_back == 1)): ?>
+                                        <?php
+                                        $can_edit_from_restructure = !empty($restructure_mode)
+                                            && !in_array(strtoupper((string)$loan->loan_status), array('CLOSED', 'WRITTEN_OFF', 'DELETED', 'ARCHIVED'));
+                                        if($can_edit_from_restructure || $loan->loan_status == 'INITIATED' || (isset($loan->sent_back) && $loan->sent_back == 1)):
+                                        ?>
                                         <a href="<?php echo base_url('loan/edit_single_loan_request/').urlencode($loan->loan_id); ?>" class="btn-action btn-edit" title="Edit Loan">
-                                            <i class="fa fa-edit"></i>
+                                            <i class="fa fa-edit"></i> Edit
                                         </a>
                                         <?php endif; ?>
                                         <?php if($loan->loan_status == 'INITIATED' || $loan->loan_status == 'REJECTED'): ?>

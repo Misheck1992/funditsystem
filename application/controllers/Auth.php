@@ -7,6 +7,7 @@ public function __construct()
 {
 	parent::__construct();
 	$this->load->library('form_validation');
+	$this->load->helper('mithenga');
 	$this->load->model('User_access_model');
 	$this->load->model('Sytem_date_model');
 	$this->load->model('Access_model');
@@ -126,7 +127,7 @@ $row = get_by_id('approval_edits','approval_edits',$id);
                     
 
 
-                    $sendemail =  send_email($to, $body);
+                    $sendemail = send_email($to, $body);
                     if($sendemail){
 
                         $data = array(
@@ -178,9 +179,32 @@ $row = get_by_id('approval_edits','approval_edits',$id);
 
     public function reset_password_user()
     {
-
-
         $this->output->set_header('X-Content-Type-Options: nosniff');
+        $link_reset = $this->session->userdata('admin_password_reset');
+        if (is_array($link_reset)) {
+            $employee_id = (int) $this->input->post('employeeid', TRUE);
+            $password = (string) $this->input->post('password', TRUE);
+            $confirmation = (string) $this->input->post('confirm_password', TRUE);
+            $account = $this->User_access_model->check_user_code($link_reset['code'], $employee_id, '');
+            $valid_link = $employee_id === (int) $link_reset['employee'] && $account
+                && verify_mithenga_reset_signature($employee_id, $link_reset['code'], $link_reset['expires'], $link_reset['signature']);
+            $valid_password = strlen($password) >= 8
+                && preg_match('/[a-z]/', $password) && preg_match('/[A-Z]/', $password)
+                && preg_match('/\d/', $password) && preg_match('/[@$!%*?&]/', $password);
+
+            if (!$valid_link || $password !== $confirmation || !$valid_password) {
+                $this->session->unset_userdata('admin_password_reset');
+                $this->session->set_flashdata('error', 'The reset link is invalid or the password does not meet the required rules.');
+                redirect(site_url('Auth/forget_password'));
+                return;
+            }
+            $this->User_access_model->update_auth($employee_id, array('Password' => sha1($password), 'reset_code' => NULL, 'is_logged_in' => 'No'));
+            $this->session->unset_userdata('admin_password_reset');
+            $this->session->set_flashdata('message', 'Your password was changed successfully. You can now sign in.');
+            redirect(site_url('Auth'));
+            return;
+        }
+
         $dd = get_by_id('employees', 'id', $this->input->post('employeeid'));
 
         $hashedPassword = password_hash($this->input->post('password', TRUE), PASSWORD_BCRYPT);
@@ -225,6 +249,63 @@ $row = get_by_id('approval_edits','approval_edits',$id);
 
 
 
+    }
+
+    public function password_reset_link()
+    {
+        $employee_id = (int) $this->input->get('employee', TRUE);
+        $reset_code = (string) $this->input->get('code', TRUE);
+        $expires = (int) $this->input->get('expires', TRUE);
+        $signature = (string) $this->input->get('signature', TRUE);
+        $account = $this->User_access_model->check_user_code($reset_code, $employee_id, '');
+
+        if (!$account || !verify_mithenga_reset_signature($employee_id, $reset_code, $expires, $signature)) {
+            $this->session->set_flashdata('error', 'This password reset link is invalid, expired, or has already been used.');
+            redirect(site_url('Auth/forget_password'));
+            return;
+        }
+        $this->session->set_userdata('admin_password_reset', array(
+            'employee' => $employee_id,
+            'code' => $reset_code,
+            'expires' => $expires,
+            'signature' => $signature,
+        ));
+        $this->load->view('forget_reset_password', array(
+            'employeeid' => $employee_id,
+            'acccesscode' => $account['AccessCode'],
+        ));
+    }
+
+    public function complete_password_reset_link()
+    {
+        $employee_id = (int) $this->input->post('employeeid', TRUE);
+        $reset_code = (string) $this->input->post('reset_code', TRUE);
+        $expires = (int) $this->input->post('expires', TRUE);
+        $signature = (string) $this->input->post('signature', TRUE);
+        $password = (string) $this->input->post('password', TRUE);
+        $confirmation = (string) $this->input->post('confirm_password', TRUE);
+        $account = $this->User_access_model->check_user_code($reset_code, $employee_id, '');
+
+        if (!$account || !verify_mithenga_reset_signature($employee_id, $reset_code, $expires, $signature)) {
+            $this->session->set_flashdata('error', 'This password reset link is invalid, expired, or has already been used.');
+            redirect(site_url('Auth/forget_password'));
+            return;
+        }
+        $valid_password = strlen($password) >= 8
+            && preg_match('/[a-z]/', $password) && preg_match('/[A-Z]/', $password)
+            && preg_match('/\d/', $password) && preg_match('/[@$!%*?&]/', $password);
+        if ($password !== $confirmation || !$valid_password) {
+            $this->session->set_flashdata('error', 'Use at least 8 characters with uppercase, lowercase, a number, and a symbol.');
+            redirect(site_url('Auth/forget_password'));
+            return;
+        }
+        $this->User_access_model->update_auth($employee_id, array(
+            'Password' => sha1($password),
+            'reset_code' => NULL,
+            'is_logged_in' => 'No',
+        ));
+        $this->session->set_flashdata('message', 'Your password was changed successfully. You can now sign in.');
+        redirect(site_url('Auth'));
     }
 
 function update_state(){

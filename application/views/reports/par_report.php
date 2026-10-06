@@ -104,33 +104,37 @@ $products = get_all('loan_products');
 
                                         $totalprincipal=$t_principal + $row->total_principal_not_paid;
                                         $tarrears=$u_payment + $row->total_amount_not_paid;
+                                        $preview_url = '';
                                         if($row->customer_type=='group'){
 
                                             $preview_url = "Customer_groups/members/";
                                         }elseif($row->customer_type=='individual'){
 
                                             $preview_url = "Individual_customers/view/";
+                                        }elseif(in_array($row->customer_type, array('institution', 'corporate'), true)){
+
+                                            $preview_url = "Corporate_customers/view/";
                                         }
                                         ?>
 
                                         <tr>
                                             <td<?php  ?>><a href="<?php echo base_url();?>loan/view/<?php echo $row->loan_id ;?>"><?php echo $row->loan_number ;?></a></td>
-                                            <td><a href="<?php echo base_url($preview_url).$row->loan_customer?>""><?php echo $row->customer_name?></a></td>
+                                            <td><a href="<?php echo $preview_url !== '' ? base_url($preview_url . $row->loan_customer) : '#'; ?>"><?php echo $row->customer_name?></a></td>
                                             <td><a href="<?php  echo base_url().'Employees/read/'.$row->loan_added_by;?>"><?php echo $row->eFirstname.' '.$row->eLastname ?></a></td>
                                            <td><?php echo $row->product_name; ?></td>
-                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format($row->loan_principal, 2, '.', ','); $t_payment += $row->loan_principal; ?></td>
+                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format((float) ($row->loan_principal ?? 0), 2, '.', ','); $t_payment += $row->loan_principal; ?></td>
 
-                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format($row->total_amount_not_paid, 2, '.', ','); $u_payment += $row->total_amount_not_paid; ?></td>
+                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format((float) ($row->total_amount_not_paid ?? 0), 2, '.', ','); $u_payment += $row->total_amount_not_paid; ?></td>
 
-                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format($row->total_principal_not_paid, 2, '.', ','); $t_principal += $row->total_principal_not_paid;?></td>
-                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format($row->total_interest_not_paid, 2, '.', ','); $t_interest += $row->total_interest_not_paid; ?></td>
-                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format($row->total_amount_not_paid, 2, '.', ','); $t_balance += $row->total_amount_not_paid; ?></td>
+                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format((float) ($row->total_principal_not_paid ?? 0), 2, '.', ','); $t_principal += $row->total_principal_not_paid;?></td>
+                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format((float) ($row->total_interest_not_paid ?? 0), 2, '.', ','); $t_interest += $row->total_interest_not_paid; ?></td>
+                                            <td<?php  ?>><?php echo $this->config->item('currency_symbol') . number_format((float) ($row->total_amount_not_paid ?? 0), 2, '.', ','); $t_balance += $row->total_amount_not_paid; ?></td>
                                             <td><?php
 
                                                 $u=$uga + $row->total_amount_not_paid;
                                                 $date=date("Y-m-d H:i:s");
                                                 $dateOne = new DateTime($date);
-                                                $dateTwo = new DateTime($row->max_date);
+                                                $dateTwo = !empty($row->max_date) ? new DateTime($row->max_date) : clone $dateOne;
 
                                                 $diff = $dateTwo->diff($dateOne)->format("%a");
 

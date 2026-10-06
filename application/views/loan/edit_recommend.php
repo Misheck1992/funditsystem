@@ -44,16 +44,31 @@
                 $n =1;
                 foreach ($loand as $loans)
                 {
+					$edit_payload = json_decode($loans->new_info);
+					if (!$edit_payload || ($edit_payload->edit_workflow ?? '') !== 'rebuild_replay_v2') {
+						continue;
+					}
                     $loan = get_by_id('loan','loan_id',$loans->id);
+					// Historical edit requests may reference loans removed by the old
+					// recreate-on-submit workflow. Do not render an invalid request.
+					if (!$loan) {
+						continue;
+					}
+					$customer_name = 'Unknown customer';
+					$preview_url = '#';
                     if($loan->customer_type=='group'){
                         $group = $this->Groups_model->get_by_id($loan->loan_customer);
 
-                        $customer_name = $group->group_name.'('.$group->group_code.')';
+						$customer_name = $group ? $group->group_name.'('.$group->group_code.')' : $customer_name;
                         $preview_url = "Customer_groups/members/";
                     }elseif($loan->customer_type=='individual'){
                         $indi = $this->Individual_customers_model->get_by_id($loan->loan_customer);
-                        $customer_name = $indi->Firstname.' '.$indi->Lastname;
+						$customer_name = $indi ? $indi->Firstname.' '.$indi->Lastname : $customer_name;
                         $preview_url = "Individual_customers/view/";
+					}elseif($loan->customer_type=='institution'){
+						$institution = $this->Corporate_customers_model->get_by_id($loan->loan_customer);
+						$customer_name = $institution ? $institution->EntityName : $customer_name;
+						$preview_url = "Corporate_customers/read/";
                     }
                     ?>
                     <tr>

@@ -1,6 +1,6 @@
 <div class="main-content">
 	<div class="page-header">
-		<h2 class="header-title">All Loans</h2>
+		<h2 class="header-title">CRB Report</h2>
 		<div class="header-sub-title">
 			<nav class="breadcrumb breadcrumb-dash">
 				<a href="<?php echo base_url('Admin')?>" class="breadcrumb-item"><i class="anticon anticon-home m-r-5"></i>Home</a>
@@ -23,7 +23,7 @@
                     
                    
                     
-                                    <button class="btn btn-sm btn-primary rounded-0 btn-primary bg-gradient bg-primary" id="exportTableCSV">Export to Excel</button>
+                                    <button type="submit" name="search" value="excel" class="btn btn-sm btn-primary rounded-0 btn-primary bg-gradient bg-primary" id="exportTableCSV">Export to Excel</button>
                        
                 </form>
             </div>
@@ -162,10 +162,7 @@
         <td></td>
      <td>   <?php  
      
-      $custbranch=get_by_id('branches','Code',$r->Branch );
-								if(!empty($custbranch)){
-								echo  $custbranch->BranchName;
-								}
+      echo html_escape($r->branch_name ?? 'Not assigned');
 								
 					
     ?></td>
@@ -277,7 +274,7 @@
 								$total_b = 0;
 								foreach ($payments as $ppp){
 									if($ppp->status == "NOT PAID"){
-										$total_b +=$pp->amount;
+										$total_b += (float) ($ppp->amount ?? 0);
 									}
 
 								}
@@ -291,7 +288,7 @@
                 	 $arreasamount=get_amount_of_arreas($r->loan_id,1);
                 	 if(!empty($arreasamount))
 								{
-									echo number_format( $arreasamount-> amount_arrears,2);
+									echo number_format((float) ($arreasamount->amount_arrears ?? 0), 2);
 								}
 								?>
 								</td>
@@ -301,7 +298,7 @@
  $arreasamount=get_amount_of_arreas($r->loan_id,1);
                 	 if(!empty($arreasamount))
 								{
-									echo number_format( $arreasamount-> amount_arrears,2);
+									echo number_format((float) ($arreasamount->amount_arrears ?? 0), 2);
 								}
 								?>
                 		</td>
@@ -349,13 +346,13 @@
 								?></td>
                 	<td> 	<?php
                 		if(!empty($paymentslast)){
-									echo number_format($paymentslast->amount,2);
+									echo number_format((float) ($paymentslast->amount ?? 0), 2);
                 		}
 								?></td>
                 		<td>	<?php
                 	
 									if(!empty($paymentslast)){
-								echo number_format($paymentslast->amount,2);
+								echo number_format((float) ($paymentslast->amount ?? 0), 2);
 									}
 								?></td>
                 	</tr>

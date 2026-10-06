@@ -21,6 +21,8 @@
                     
                      </select> Status: <select name="status" id="" class="select2">
                         <option value="logging">Log in</option>
+                        <option value="customer_portal_login">Customer portal login</option>
+                        <option value="fd_self_service">Customer fixed-deposit activity</option>
                         <option value="customer_registration">customer registration</option>
                          <option value="customer_approval">customer approved</option>
                           <option value="group_registration">group registration</option>
@@ -53,7 +55,10 @@
             <tr>
 	<th>#</th>
 		<th>User Id</th>
-		<th>Activity</th>
+		<th>Category</th>
+		<th>Activity details</th>
+		<th>Before</th>
+		<th>After</th>
 		<th>System Time</th>
 		<th>Server Time</th>
 
@@ -68,8 +73,11 @@
                 ?>
                 <tr>
 			<td><?php echo ++$start ?></td>
-			<td><?php echo $activity_logger->Firstname ." ".$activity_logger->Lastname?></td>
-			<td><?php echo $activity_logger->activity ?></td>
+			<td><?php echo htmlspecialchars(isset($activity_logger->actor_name) ? $activity_logger->actor_name : 'Unknown actor'); ?></td>
+			<td><?php echo htmlspecialchars($activity_logger->activity_cate ?? '-'); ?></td>
+			<td style="white-space: normal; min-width: 420px;"><?php echo nl2br(htmlspecialchars($activity_logger->activity)); ?></td>
+            <td><details><summary>View</summary><pre style="white-space:pre-wrap;max-width:360px;"><?php echo htmlspecialchars($activity_logger->old_data ?? '{}'); ?></pre></details></td>
+            <td><details><summary>View</summary><pre style="white-space:pre-wrap;max-width:360px;"><?php echo htmlspecialchars($activity_logger->new_data ?? '{}'); ?></pre></details></td>
 			<td><?php echo $activity_logger->system_time ?></td>
 			<td><?php echo $activity_logger->server_time ?></td>
 

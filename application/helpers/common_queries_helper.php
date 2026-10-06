@@ -300,16 +300,31 @@ function send_smtp_email($to, $subject, $body, $options = array()) {
     $ci->load->database();
     $ci->load->library('email');
 
+    // Every mapped email recipient also receives the notification on WhatsApp.
+    // Callers can explicitly opt out with array('whatsapp' => false), which is
+    // used when a portal customer deliberately selects email-only OTP delivery.
+    $whatsapp_result = NULL;
+    if (!isset($options['whatsapp']) || $options['whatsapp'] !== false) {
+        $ci->load->helper('mithenga');
+        $phone = mithenga_phone_for_email($to);
+        if ($phone !== '') {
+            $whatsapp_result = send_mithenga_whatsapp($phone, mithenga_text_from_email($subject, $body));
+            if (!$whatsapp_result['success']) {
+                log_message('error', 'Parallel WhatsApp notification failed for ' . $to . ': ' . $whatsapp_result['error']);
+            }
+        }
+    }
+
     // Get SMTP settings from database
     $settings = $ci->db->get_where('settings', array('settings_id' => 1))->row();
 
     if (!$settings) {
-        return array('success' => false, 'message' => 'Email settings not found in database');
+        return array('success' => false, 'message' => 'Email settings not found in database', 'whatsapp' => $whatsapp_result);
     }
 
     // Check if SMTP settings are configured
     if (empty($settings->email_host) || empty($settings->email_user) || empty($settings->email_pass)) {
-        return array('success' => false, 'message' => 'SMTP settings are not configured. Please configure email settings.');
+        return array('success' => false, 'message' => 'SMTP settings are not configured. Please configure email settings.', 'whatsapp' => $whatsapp_result);
     }
 
     $host       = $settings->email_host;
@@ -392,7 +407,7 @@ function send_smtp_email($to, $subject, $body, $options = array()) {
 
         if ($emailLib->send()) {
             log_message('info', 'Email sent via ' . $attempt['label']);
-            return array('success' => true, 'message' => 'Email sent successfully');
+            return array('success' => true, 'message' => 'Email sent successfully', 'whatsapp' => $whatsapp_result);
         }
 
         $last_error = strip_tags($emailLib->print_debugger(array('headers')));
@@ -403,7 +418,8 @@ function send_smtp_email($to, $subject, $body, $options = array()) {
     return array(
         'success' => false,
         'message' => 'SMTP failed (' . $host . '): ' . substr($last_error, 0, 300),
-        'debug'   => $last_error
+        'debug'   => $last_error,
+        'whatsapp' => $whatsapp_result
     );
 }
 
@@ -1045,9 +1061,16 @@ function rbm_report(){
     $ci->load->database();
 //	$ci->load->model('Dbc_users_model');
 
-    $sql="SELECT * from individual_customers 
-    inner join  proofofidentity on proofofidentity.ClientID=individual_customers.ClientID 
-    INNER JOIN loan ON loan.loan_customer=individual_customers.id ORDER by loan.loan_id DESC limit 0,300";
+    $sql="SELECT individual_customers.*, proofofidentity.*, loan.*, loan_products.product_name,
+        COALESCE(branch_by_id.BranchName, branch_by_code.BranchName, branch_by_branch_code.BranchName, 'Not assigned') AS branch_name
+        FROM individual_customers
+        INNER JOIN proofofidentity ON proofofidentity.ClientID = individual_customers.ClientID
+        INNER JOIN loan ON loan.loan_customer = individual_customers.id AND loan.customer_type = 'individual'
+        LEFT JOIN loan_products ON loan_products.loan_product_id = loan.loan_product
+        LEFT JOIN branches branch_by_id ON branch_by_id.id = individual_customers.Branch
+        LEFT JOIN branches branch_by_code ON branch_by_code.Code = individual_customers.Branch
+        LEFT JOIN branches branch_by_branch_code ON branch_by_branch_code.BranchCode = individual_customers.Branch
+        ORDER BY loan.loan_id DESC LIMIT 0,300";
     return $query = $ci->db->query($sql)->result();
 }
 

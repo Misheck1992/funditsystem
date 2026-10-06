@@ -39,12 +39,12 @@
                         }
                         ?>
                     </select> Date from:
-                    <input type="date" name="from"> Date to: <input type="date" name="to"> <input type="submit" value="filter" name="search"><input type="submit" value="export excel" name="search"><input type="submit" name="search" value="export pdf">
+                    <input type="date" name="from" value="<?php echo html_escape($this->input->get('from')); ?>"> Date to: <input type="date" name="to" value="<?php echo html_escape($this->input->get('to')); ?>"> <button type="submit" value="filter" name="search" class="btn btn-primary">Filter</button> <button type="submit" value="excel" name="search" class="btn btn-success">Export Excel</button> <button type="submit" value="pdf" name="search" class="btn btn-danger">Export PDF</button>
                 </form>
             </div>
             <br>
             <hr>
-            <div style="overflow-y: auto"">
+            <div style="overflow-y: auto">
             <table  id="data-table" class="tableCss">
                 <thead>
                 <tr>
@@ -71,45 +71,46 @@
 
 
                     foreach ($loan_data as $l){
+                        $customer_name = 'Unknown customer';
+                        $preview_url = '';
+                        $branch_reference = null;
+                        if ($l->customer_type == 'group') {
+                            $customer = $this->Groups_model->get_by_id($l->loan_customer);
+                            if ($customer) {
+                                $customer_name = $customer->group_name . ' (' . $customer->group_code . ')';
+                                $preview_url = 'Customer_groups/members/';
+                                $branch_reference = $customer->Branch ?? null;
+                            }
+                        } elseif ($l->customer_type == 'individual') {
+                            $customer = $this->Individual_customers_model->get_by_id($l->loan_customer);
+                            if ($customer) {
+                                $customer_name = trim($customer->Firstname . ' ' . $customer->Lastname);
+                                $preview_url = 'Individual_customers/view/';
+                                $branch_reference = $customer->Branch ?? null;
+                            }
+                        } elseif ($l->customer_type == 'institution') {
+                            $customer = get_by_id('corporate_customers', 'id', $l->loan_customer);
+                            if ($customer) {
+                                $customer_name = $customer->EntityName . ' - ' . $customer->RegistrationNumber;
+                                $preview_url = 'Corporate_customers/read/';
+                                $branch_reference = $customer->Branch ?? null;
+                            }
+                        }
+                        $bank = $this->Bank_model->check($l->loan_customer);
                         ?>
                         <tr>
-                            <td><?php echo $n;?></td>
-                            <td><?php //echo $n;?></td>
-
-                            <td>
-                                <?php
-                                if($l->customer_type=='group'){
-                                    $group = $this->Groups_model->get_by_id($l->loan_customer);
-
-                                    $customer_name = $group->group_name.'('.$group->group_code.')';
-                                    $preview_url = "Customer_groups/members/";
-                                }elseif($l->customer_type=='individual'){
-                                    $indi = $this->Individual_customers_model->get_by_id($l->loan_customer);
-                                    if(!empty($indi)) {
-                                        $customer_name = $indi->Firstname . ' ' . $indi->Lastname;
-                                        $preview_url = "Individual_customers/view/";
-                                    }
-                                }
-                                elseif($l->customer_type=='institution'){
-                                    $inst = get_by_id('corporate_customers','id',$l->loan_customer);
-                                    $customer_name = $inst->EntityName.' - '.$inst->RegistrationNumber.' ('.$inst->	entity_type.')';
-                                    $preview_url = "Corporate_customers/read/";
-                                }
-                                ?>
-                            </td>
-
-                            <td><?php //echo $n;?></td>
-                            <td><?php //echo $n;?></td>
-                            <td><a href="<?php echo base_url($preview_url).$l->loan_customer?>""><?php echo $customer_name?></a></td>
-                           <td><?php echo  $l->product_name;?></td>
-                            <td><?php echo $l->disbursed_amount;?></td>
-                            <td><?php echo $l->	disbursed_date;?></td>
-                            <td><?php //echo $l->	disbursed_date;?></td>
-                            <td><?php //echo $l->	disbursed_date;?></td>
-
-
+                            <td><?php echo $n; ?></td>
+                            <td><?php echo html_escape($l->branch_name ?? 'Not assigned'); ?></td>
+                            <td><?php echo html_escape($bank->account_number ?? '-'); ?></td>
+                            <td><?php echo html_escape($bank->account_name ?? '-'); ?></td>
+                            <td><?php echo html_escape($bank->bank_name ?? '-'); ?></td>
+                            <td><?php if ($preview_url !== '') { ?><a href="<?php echo base_url($preview_url) . $l->loan_customer; ?>"><?php echo html_escape($customer_name); ?></a><?php } else { echo html_escape($customer_name); } ?></td>
+                            <td><?php echo html_escape($l->product_name ?? '-'); ?></td>
+                            <td><?php echo number_format((float) ($l->disbursed_amount ?? 0), 2); ?></td>
+                            <td><?php echo html_escape($l->disbursed_date ?? '-'); ?></td>
+                            <td><?php echo html_escape($l->loan_number ?? '-'); ?></td>
+                            <td><?php echo html_escape($l->narration ?? '-'); ?></td>
                         </tr>
-
                         <?php
                         $n ++;
                     }
